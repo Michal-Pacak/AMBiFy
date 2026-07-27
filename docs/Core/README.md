@@ -49,3 +49,9 @@ Unlike feature modules, Core components are not business features. They provide 
 ---
 
 🏁 **Continue with any Core component above.**
+
+---
+
+## Continue Reading
+
+➡ **[Authentication →](Authentication.md)**

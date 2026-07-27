@@ -30,3 +30,7 @@ Each module is documented independently and can evolve without affecting the pla
 | [Inventory](Inventory.md) | Household inventory | ⏳ |
 | [Documents](Documents.md) | Shared document storage | ⏳ |
 | [Smart Home](SmartHome.md) | Home automation | 🔮 |
+
+---
+
+🏠 **[Back to README](../../README.md)**
