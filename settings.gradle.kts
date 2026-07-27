@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Pacaki_Board"
+rootProject.name = "AMBiFy"
 include(":app")
