@@ -59,4 +59,8 @@ The permission system should support:
 
 ---
 
-➡ **Next document:** [Modules →](05_Modules.md)
+## Next Step
+
+Continue with the detailed documentation of individual modules.
+
+➡ **[Modules Index →](Modules/README.md)**
