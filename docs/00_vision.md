@@ -1,7 +1,20 @@
-# AMBiFy Platform
+# 🌍 Vision
 
-- Version: 1.0
-- Status: Draft
+> Version: **1.0**
+>
+> Status: **Draft**
+
+---
+
+← **[Back to README](../README.md)**
+
+---
+
+## Purpose
+
+This document describes the long-term vision of the **AMBiFy** platform.
+
+It defines **where the project is heading**, not how individual features are implemented.
 
 ---
 
@@ -29,7 +42,7 @@ The platform consists of independent modules sharing one common Core.
 2. One login.
 3. One organization database.
 4. Independent feature modules.
-5. Offline-capable.
+5. Offline-capable architecture.
 6. Cloud synchronization.
 7. Multi-language.
 8. Modern Material Design.
@@ -40,3 +53,17 @@ The platform consists of independent modules sharing one common Core.
 ## Long Term Goal
 
 Become a modular productivity platform where users install only the functionality they need.
+
+---
+
+## Related Documents
+
+| Document | Description |
+|----------|-------------|
+| [README](../README.md) | Project overview |
+| [Architecture](01_Architecture.md) | Platform architecture |
+| [Roadmap](02_Roadmap.md) | Development roadmap |
+
+---
+
+➡ **Next document:** [Architecture →](01_Architecture.md)
