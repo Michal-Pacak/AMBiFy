@@ -1,4 +1,4 @@
-# 👥 User Roles
+# 🧩 Modules
 
 > Version: **1.0**
 >
@@ -12,39 +12,59 @@
 
 ## Purpose
 
-This document describes the roles and permission model used throughout the **AMBiFy** platform.
+This document describes the concept of feature modules within the **AMBiFy** platform.
+
+Feature modules provide business functionality while relying on the shared **Core Platform**.
 
 ---
 
-## Planned Roles
+## Module Architecture
 
-| Role | Description |
-|------|-------------|
-| Owner | Full control over the organization |
-| Administrator | Manages organization settings and members |
-| Member | Uses assigned modules |
-| Guest | Limited access when enabled |
+Every module is:
 
----
-
-## Permission Principles
-
-- Role-based access control (RBAC)
-- Least privilege
-- Module-specific permissions
-- Organization-wide consistency
+- Independent
+- Reusable
+- Built on the shared Core
+- Installed as part of the same application
+- Developed without direct dependencies on other feature modules
 
 ---
 
-## Future Extensions
+## Core Responsibilities
 
-The permission system should support:
+Feature modules rely on the Core Platform for:
 
-- Custom roles
-- Custom permissions
-- Module-level permissions
-- Temporary access
-- Invitation-based access
+- Authentication
+- Organization management
+- Permissions
+- Notifications
+- Synchronization
+- Database
+- API communication
+- Settings
+- Localization
+- Themes
+
+---
+
+## Module Principles
+
+Every module should:
+
+- Focus on a single business domain.
+- Have a clearly defined responsibility.
+- Avoid direct communication with other feature modules.
+- Use only public Core services.
+- Follow the project naming conventions.
+- Maintain a consistent user experience.
+
+---
+
+## Module Documentation
+
+Detailed documentation for individual modules is maintained separately.
+
+➡ **[Modules Index →](Modules/README.md)**
 
 ---
 
@@ -54,13 +74,8 @@ The permission system should support:
 |----------|-------------|
 | [README](../README.md) | Project overview |
 | [Architecture](01_Architecture.md) | Platform architecture |
-| [Naming Convention](03_Naming_Convention.md) | Naming standards |
-| [Modules](05_Modules.md) | Planned modules |
+| [User Roles](04_User_Roles.md) | Roles and permissions |
 
 ---
 
-## Next Step
-
-Continue with the detailed documentation of individual modules.
-
-➡ **[Modules Index →](Modules/README.md)**
+🏠 **Back to Project:** [README](../README.md)

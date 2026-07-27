@@ -82,6 +82,20 @@ Each feature module contains only:
 
 ---
 
+## Platform Documentation
+
+Detailed documentation is divided into two main areas.
+
+### Core Platform
+
+➡ **[Core Documentation →](Core/README.md)**
+
+### Feature Modules
+
+➡ **[Modules Overview →](05_Modules.md)**
+
+---
+
 ## Architecture Principles
 
 - One Core shared by all modules.
