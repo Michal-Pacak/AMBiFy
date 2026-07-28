@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="docs/images/ambify_logo.png" alt="AMBiFy Logo" width="320">
+    <img src="docs/images/ambif_logo.png" alt="AMBiFy Logo" width="320">
 </p>
 
 <h1 align="center">AMBiFy</h1>
