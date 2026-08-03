@@ -14,3 +14,5 @@ CONST-010 Every permanent decision must be recorded.
 CONST-011 MVP First Principle.
 CONST-012 Implementation First.
 CONST-013 Focus Protection.
+CONST-014 Product logo symbol is immutable except for scaling and theme-dependent color changes.
+CONST-015 Product wordmark may be adapted to the active theme, but the official spelling "AMBiFy" and letter capitalization must always be preserved.
