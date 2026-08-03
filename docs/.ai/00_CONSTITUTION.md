@@ -1,0 +1,16 @@
+# AMBiFy Constitution
+
+CONST-000 Constitution has highest priority.
+CONST-001 Constitution changes require explicit user approval.
+CONST-002 Producer is AMBiF.
+CONST-003 Product is AMBiFy.
+CONST-004 Producer logo is immutable.
+CONST-005 Official spelling is AMBiFy.
+CONST-006 GitHub is the Single Source of Truth.
+CONST-007 Accepted decisions are effective immediately during the current session.
+CONST-008 Repository is updated only through an approved Release.
+CONST-009 Luxury is the MVP reference theme.
+CONST-010 Every permanent decision must be recorded.
+CONST-011 MVP First Principle.
+CONST-012 Implementation First.
+CONST-013 Focus Protection.

@@ -1,10 +1,9 @@
 # AMBiFy AI Knowledge Base
 
-This directory is the persistent knowledge base for the AMBiFy project.
+Read order:
+1. 00_CONSTITUTION.md
+2. 11_MAIN_TASK.md
+3. 01_PROJECT_CONTEXT.md
+4. Remaining documents
 
-Knowledge hierarchy:
-1. Constitution
-2. Documentation
-3. Decisions
-4. Changelog
-5. Working Notes
+GitHub is the single source of truth.
