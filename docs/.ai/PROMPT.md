@@ -202,3 +202,6 @@ Do not skip steps.
 Do not make assumptions.
 
 Follow it exactly every time.
+
+## Release Workflow
+Always follow: Proposal -> Approval -> Apply changes -> Integrity Check -> Release ZIP.

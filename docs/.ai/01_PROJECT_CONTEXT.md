@@ -10,3 +10,13 @@ Priority:
 Release workflow:
 - Decisions apply immediately during session.
 - GitHub updated only after Release.
+
+
+## v0.1.0-alpha Decisions
+- Luxury is default theme.
+- Splash background is theme asset.
+- Splash UI built with Compose.
+- Branding masters remain outside Android resources.
+- Home button is centered AMBiFy logo.
+- Router: MainActivity -> Router -> Splash -> Login -> Home.
+- MVP: Splash -> Home -> Google Calendar.

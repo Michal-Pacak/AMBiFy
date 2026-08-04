@@ -32,3 +32,27 @@ val Typography = Typography(
     )
     */
 )
+// -----------------------------------------------------------------------------
+// Splash Screen Typography
+// -----------------------------------------------------------------------------
+
+val SplashTitleStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Light,
+    fontSize = 34.sp,
+    letterSpacing = 0.5.sp
+)
+
+val SplashMottoStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Normal,
+    fontSize = 16.sp,
+    letterSpacing = 0.2.sp
+)
+
+val SplashPoweredByStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Light,
+    fontSize = 12.sp,
+    letterSpacing = 0.3.sp
+)
