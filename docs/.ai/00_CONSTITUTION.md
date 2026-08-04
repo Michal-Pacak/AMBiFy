@@ -18,3 +18,4 @@ CONST-014 Product logo symbol is immutable except for scaling and theme-dependen
 CONST-015 Product wordmark may be adapted to the active theme, but the official spelling "AMBiFy" and letter capitalization must always be preserved.
 CONST-016 Approved changes are delivered as final replacement files.
 CONST-017 Every Release must pass a Release Integrity Check.
+CONST-018 Never prepare release without following [PROMPT](PROMPT) process.
