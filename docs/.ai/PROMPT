@@ -1,0 +1,204 @@
+AMBIFY AI RELEASE GATE
+
+This prompt is mandatory before preparing any Release package.
+
+Execute every step in order.
+
+Never skip any step.
+
+Never optimize, simplify or reinterpret this procedure.
+
+=========================================================
+STEP 1 - CURRENT SESSION
+=========================================================
+
+Collect every change explicitly approved by the user during the current session.
+
+Create an internal Pending Changes list.
+
+Do not include:
+- rejected ideas,
+- examples,
+- proposals,
+- assumptions.
+
+Only approved changes belong to the Pending Changes list.
+
+=========================================================
+STEP 2 - REPOSITORY
+=========================================================
+
+Analyze the CURRENT repository only.
+
+The repository is the Single Source of Truth.
+
+Ignore memories from previous sessions if they conflict with the repository.
+
+=========================================================
+STEP 3 - AI DOCUMENTS
+=========================================================
+
+Read every file from docs/.ai in numerical order.
+
+Read all files before performing any action.
+
+If any required AI document is unavailable:
+
+STOP.
+
+Report:
+
+"Current AI documentation is unavailable.
+Release preparation cannot continue."
+
+Do not continue.
+
+=========================================================
+STEP 4 - CONSTITUTION
+=========================================================
+
+Read the current Constitution.
+
+The Constitution has absolute priority.
+
+Before making ANY change verify that it does not violate the Constitution.
+
+If the Constitution cannot be read:
+
+STOP.
+
+Report:
+
+"Current Constitution is unavailable.
+Release preparation cannot continue."
+
+Do not continue.
+
+=========================================================
+STEP 5 - CONSTITUTION CHANGES
+=========================================================
+
+Never modify the Constitution automatically.
+
+Never prepare Constitution changes without explicit user approval.
+
+Never invent Constitution entries.
+
+Never invent Constitution numbering.
+
+Only apply Constitution changes that were explicitly approved during the current session.
+
+=========================================================
+STEP 6 - NUMBERING
+=========================================================
+
+Verify numbering before creating or modifying any document.
+
+Continue existing numbering only.
+
+Never invent missing numbers.
+
+=========================================================
+STEP 7 - FILE NAMING
+=========================================================
+
+Follow the existing repository naming convention.
+
+Never introduce a new naming convention.
+
+Never rename files unless explicitly approved.
+
+=========================================================
+STEP 8 - VALIDATION
+=========================================================
+
+Compare:
+
+1. Pending Changes
+2. Constitution
+3. docs/.ai
+4. Repository
+
+If any conflict exists:
+
+STOP.
+
+Explain the conflict.
+
+Do not continue.
+
+=========================================================
+STEP 9 - RELEASE
+=========================================================
+
+Generate ONLY final replacement files.
+
+Never generate:
+
+_APPEND
+_NEW
+_EXAMPLE
+_TEMP
+_V2
+
+Every generated file must replace an existing repository file or an explicitly approved new file.
+
+=========================================================
+STEP 10 - RELEASE ZIP
+=========================================================
+
+Generate a Release ZIP.
+
+Include ONLY approved modified files.
+
+Preserve the exact repository structure.
+
+=========================================================
+STEP 11 - RELEASE INTEGRITY CHECK
+=========================================================
+
+Verify the Release ZIP AFTER it has been created.
+
+Confirm:
+
+✓ Every approved file exists.
+
+✓ No approved file is missing.
+
+✓ No unexpected file exists.
+
+✓ Every path matches the repository.
+
+✓ Every filename matches the repository.
+
+If any verification fails:
+
+STOP.
+
+Do not deliver the Release.
+
+=========================================================
+STEP 12 - RELEASE MANIFEST
+=========================================================
+
+List every file contained in the Release ZIP.
+
+Nothing more.
+
+Nothing less.
+
+=========================================================
+FINAL RULE
+=========================================================
+
+The process above is mandatory.
+
+Do not optimize it.
+
+Do not simplify it.
+
+Do not skip steps.
+
+Do not make assumptions.
+
+Follow it exactly every time.
