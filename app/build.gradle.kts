@@ -4,17 +4,17 @@ plugins {
 }
 
 android {
-    namespace = "com.example.pacaki_board"
+    namespace = "pl.ambif.ambify"
     compileSdk {
-        version = release(36) {
+        version = release(37) {
             minorApiLevel = 1
         }
     }
 
     defaultConfig {
-        applicationId = "com.example.pacaki_board"
+        applicationId = "pl.ambif.ambify"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
