@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.dp
 
 object SplashDimensions {
 
-    val LogoSize = 200.dp
+    val LogoSize = 180.dp
 
     val LogoTitleSpacing = 1.dp
     val LogoHorizontalOffset = (-6).dp

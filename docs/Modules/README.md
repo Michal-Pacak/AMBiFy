@@ -22,7 +22,7 @@ Each module is documented independently and can evolve without affecting the pla
 
 | Module | Description | Status |
 |---------|-------------|:------:|
-| [Calendar](Calendar.md) | Shared calendar and scheduling | ⏳ |
+| [Calendar](Calendar.md) | Shared organization calendar and personal Google Calendar sync | 🚧 |
 | [Missions](Missions.md) | Tasks, points and rewards | ⏳ |
 | [Shopping](Shopping.md) | Shared shopping lists | ⏳ |
 | [Communication](Communication.md) | Messaging and discussions | ⏳ |
