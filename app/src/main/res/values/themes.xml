@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.AMBiFy" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.AMBiFy" parent="android:Theme.Material.NoActionBar">
+        <!-- Black window and an empty system splash, so launch goes straight into SplashScreen. -->
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:windowSplashScreenBackground">@color/black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
 </resources>

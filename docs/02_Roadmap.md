@@ -1,8 +1,8 @@
 # 🗺 Roadmap
 
-> Version: **1.0**
+> Version: **2.0**
 >
-> Status: **Draft**
+> Status: **Approved** (2026-10-14)
 
 ---
 
@@ -12,63 +12,103 @@
 
 ## Purpose
 
-This document describes the planned development roadmap for the **AMBiFy** platform.
+This document describes the development roadmap for the **AMBiFy** platform.
 
-It provides a high-level overview of the project's implementation phases and priorities.
-
----
-
-## Development Phases
-
-### Phase 1 — Foundation
-
-- [x] Project initialization
-- [x] GitHub repository
-- [x] Documentation structure
-- [ ] Core architecture
-- [ ] Authentication
-- [ ] Organization management
+Features are delivered in small, vertical stages. Every stage is one release (`v0.x`, git tag) approved by the owner, ends with an app running on a real phone and leaves room for improvements found while testing.
 
 ---
 
-### Phase 2 — Core Platform
+## Key Decisions
 
-- [ ] Members
-- [ ] Roles & Permissions
-- [ ] Notifications
-- [ ] Settings
-- [ ] Synchronization
-- [ ] Local database
-
----
-
-### Phase 3 — First Module
-
-- [ ] Calendar module
-- [ ] Event management
-- [ ] Shared calendars
-- [ ] Notifications
-- [ ] Google Calendar integration
+| Topic | Decision |
+|-------|----------|
+| Backend | Own server on the home server (`serverek`): Ktor + SQLite, LAN-only until stage 8 |
+| Repository | Monorepo: `:app` (Android), `:shared` (API models, permissions, module keys), `:server` (Ktor) |
+| First users | Parents first; children start as profiles without accounts and get accounts in stage 7 |
+| Calendar | AMBiFy's own calendar first, Google Calendar sync later |
+| Module priority | Calendar and Timetable |
 
 ---
 
-### Phase 4 — Platform Expansion
+## Stages
 
-- [ ] Missions
-- [ ] Shopping
-- [ ] Communication
-- [ ] Finance
-- [ ] Inventory
-- [ ] Documents
+### Stage 0 — Skeleton complete (v0.2)
+
+- [x] Brand logo at 83% height, launcher icon (Onyx), black launch screen
+- [x] Navigation bar: 2 + logo + 2, pull-up panel for further modules
+- [x] Module placeholders: Missions, Shopping, Communication, Timetable, School
+- [x] Roadmap updated
+
+### Stage 0.1 — Module bar carousel (v0.2.1)
+
+- [ ] Modules form one circular list; the collapsed bar shows four of them around the fixed logo
+- [ ] Swiping the collapsed bar left/right shifts the visible modules by one (resets on app restart)
+- [ ] Choosing a module from the panel collapses the bar and shows that module first
+- [ ] Module order stored on the phone (moves to the user account in stage 2)
+- [ ] Panel grip shown only when there are more than four modules
+
+### Stage 1 — Server foundation (v0.3)
+
+- [ ] `:shared` and `:server` modules, `GET /health`, migrations, tests
+- [ ] Deployment on the home server: systemd service, LAN-only nginx, daily database backup to the NAS
+- [ ] App: network layer, server address setting, connection status on the Account screen
+
+### Stage 2 — Accounts, organization, child profiles (v0.4)
+
+- [ ] Registration and login (Argon2, JWT access + refresh tokens)
+- [ ] Organization, members, invitation codes
+- [ ] Child profiles without accounts (linked to the student in Vulcan)
+- [ ] App flow: Splash → Login → Home; Account screen with members, invitations and child profiles
+- [ ] Module order saved per user on the server
+
+### Stage 3 — Roles & Permissions (v0.5)
+
+- [ ] Roles: Owner, Administrator, Member, Guest (family: parent = Owner/Admin, child = Member)
+- [ ] Per-module permission catalog in `:shared`, enforced by the server
+- [ ] Enabling/disabling modules per organization; navigation bar built from enabled and permitted modules
+
+### Stage 4 — Calendar v1 (v0.6)
+
+- [ ] Events: title, time, all-day, location, description, participants (members and child profiles)
+- [ ] Month view, day/week agenda, create/edit/delete, filter by person
+- [ ] Offline first: local database + synchronization (reused by later modules)
+
+### Stage 5 — Timetable from vulcan_digest (v0.7)
+
+- [ ] vulcan_digest exports the timetable to the AMBiFy server after its daily run
+- [ ] Timetable screen: tab per child, day/week view, current lesson highlighted, offline copy
+
+### Stage 6 — School & Dashboard (v0.8)
+
+- [ ] Structured school summaries (tests, homework, reminders) from vulcan_digest
+- [ ] School screen per child
+- [ ] Dashboard: today's events, children's lessons today/tomorrow, upcoming tests
+
+### Stage 7 — Children as users (v0.9)
+
+- [ ] Child profile becomes an account (login set by a parent)
+- [ ] Limited permissions managed by parents
+
+### Stage 8 — Access outside home (v1.0)
+
+- [ ] `ambify.pacak.waw.pl` over HTTPS, rate limiting, fail2ban
+- [ ] Admin panel of the NAS restricted to LAN before router ports are opened
+
+### Later
+
+Missions → Shopping → Communication → Google Calendar sync → push notifications → Finance, Documents.
 
 ---
 
-### Phase 5 — Future
+## Module Recipe
 
-- [ ] Smart Home
-- [ ] AI Assistant
-- [ ] Public API
-- [ ] Third-party integrations
+Every new module is delivered the same way:
+
+1. `:shared` — data models, module key, permissions.
+2. `:server` — tables (migration), API routes, permission checks, tests.
+3. `:app` — `features/<module>/{data, domain, ui}`, navigation entry, line icon.
+4. `docs/Modules/<Module>.md` and status in the [Modules Index](Modules/README.md).
+5. Release — tests, installation on a phone, screenshots, tag.
 
 ---
 
@@ -78,9 +118,10 @@ It provides a high-level overview of the project's implementation phases and pri
 |-----------|:------:|
 | Project Setup | ✅ |
 | Documentation | ✅ |
-| Core Platform | ⏳ |
-| Calendar Module | ⏳ |
-| First Public Release | 🔮 |
+| App Skeleton (v0.2) | ✅ |
+| Server & Accounts (v0.3–v0.5) | ⏳ |
+| Calendar & Timetable (v0.6–v0.7) | ⏳ |
+| Family Release (v1.0) | 🔮 |
 
 ---
 
@@ -91,6 +132,7 @@ It provides a high-level overview of the project's implementation phases and pri
 | [README](../README.md) | Project overview |
 | [Vision](00_Vision.md) | Product vision |
 | [Architecture](01_Architecture.md) | Platform architecture |
+| [User Roles](04_User_Roles.md) | Roles and permissions |
 | [Naming Convention](03_Naming_Convention.md) | Naming standards |
 
 ---

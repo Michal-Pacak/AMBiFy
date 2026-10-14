@@ -27,14 +27,20 @@ private const val LOGO_ASSET_DIRECTORY = "file:///android_asset/brand/"
 // (rightGrow finishes at 58%, pillars start collapsing at 70%).
 private const val FULL_LOGO_PROGRESS = 0.58
 
+// Logo bounds in the 600x600 SVG (x 110..490, y 152..480) plus a small margin for the edge stroke.
+// Aspect ratio 388:336 - size a cropped logo with the same ratio.
+private const val LOGO_BOUNDS_VIEW_BOX = "106 148 388 336"
+
 /**
  * Brand logo. The animated variant plays the build-up of the logo once,
  * stops on the fully visible logo and then calls [onAnimationFinished].
+ * [cropToLogo] drops the empty margin of the 600x600 artboard.
  */
 @Composable
 fun BrandLogo(
     modifier: Modifier = Modifier,
     animated: Boolean,
+    cropToLogo: Boolean = false,
     backgroundColor: Color = Color.Black,
     onAnimationFinished: () -> Unit = {},
     onAnimationError: (String) -> Unit = {},
@@ -42,7 +48,7 @@ fun BrandLogo(
     val context = LocalContext.current
     val latestOnAnimationFinished = rememberUpdatedState(onAnimationFinished)
     val latestOnAnimationError = rememberUpdatedState(onAnimationError)
-    val webView = remember(context, animated, backgroundColor) {
+    val webView = remember(context, animated, cropToLogo, backgroundColor) {
         WebView(context).apply {
             setBackgroundColor(backgroundColor.toArgb())
             isVerticalScrollBarEnabled = false
@@ -77,7 +83,7 @@ fun BrandLogo(
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
-                    view.evaluateJavascript(sizeSvgToViewportScript(), { result ->
+                    view.evaluateJavascript(sizeSvgToViewportScript(cropToLogo), { result ->
                         if (result == "true") {
                             if (animated) {
                                 view.evaluateJavascript(animationScript(), null)
@@ -208,11 +214,14 @@ private fun animationScript(): String = """
     })();
 """.trimIndent()
 
-private fun sizeSvgToViewportScript(): String = """
+private fun sizeSvgToViewportScript(cropToLogo: Boolean): String = """
     (function() {
         const svg = document.querySelector('svg');
         if (!svg || window.innerWidth <= 0 || window.innerHeight <= 0) {
             return false;
+        }
+        if ($cropToLogo) {
+            svg.setAttribute('viewBox', '$LOGO_BOUNDS_VIEW_BOX');
         }
         const width = window.innerWidth + 'px';
         const height = window.innerHeight + 'px';

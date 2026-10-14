@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AMBiFy themed (monochrome) icon: logo shapes only, tinted by the system. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.108"
+        android:scaleY="0.108"
+        android:translateX="21.6"
+        android:translateY="21.78">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M300,116.6 L357,224.2 L198,480 L110,480 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M319,346.6 L374,258.3 L490,480 L402,480 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M300,377 L364,480 L236,480 Z" />
+    </group>
+</vector>

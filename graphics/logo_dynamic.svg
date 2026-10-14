@@ -167,7 +167,7 @@
       }
 
       .anim-core {
-        transform-origin: 300px 443px;
+        transform-origin: 300px 449px;
         animation: coreCycle 5.2s cubic-bezier(0.25, 1, 0.5, 1) infinite;
       }
 
@@ -192,13 +192,13 @@
     
     <!-- 1. LEWY FILAR (Wzrost od dołu do góry) -->
     <g class="anim-pillar-left">
-      <path d="M 300 85 
-               L 357 202 
+      <path d="M 300 152.2 
+               L 357 249.3 
                L 198 480 
                L 110 480 Z" 
             fill="url(#ambifyGoldLeft)"/>
 
-      <path d="M 300 85 L 357 202 L 198 480 L 110 480 Z" 
+      <path d="M 300 152.2 L 357 249.3 L 198 480 L 110 480 Z" 
             fill="none" 
             stroke="url(#bevelAmbify)" 
             stroke-width="1.8" 
@@ -207,13 +207,13 @@
 
     <!-- 2. PRAWY FILAR (Schodzenie od góry do dołu) -->
     <g class="anim-pillar-right">
-      <path d="M 319 335 
-               L 374 239 
+      <path d="M 319 359.6 
+               L 374 280 
                L 490 480 
                L 402 480 Z" 
             fill="url(#ambifyGoldRight)"/>
 
-      <path d="M 319 335 L 374 239 L 490 480 L 402 480 Z" 
+      <path d="M 319 359.6 L 374 280 L 490 480 L 402 480 Z" 
             fill="none" 
             stroke="url(#bevelAmbify)" 
             stroke-width="1.8" 
@@ -226,10 +226,10 @@
   <!-- SZKARŁATNY RDZEŃ: EMANUJE ŚWIATŁEM I ZNIKA OSTATNI          -->
   <!-- ============================================================ -->
   <g class="anim-core">
-    <polygon points="300,368 364,480 236,480" 
+    <polygon points="300,387 364,480 236,480" 
              fill="url(#redGrad)"/>
     
-    <polygon points="300,368 364,480 236,480" 
+    <polygon points="300,387 364,480 236,480" 
              fill="none" 
              stroke="#FFA3A8" 
              stroke-width="1.2" 
