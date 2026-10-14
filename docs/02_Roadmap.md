@@ -41,11 +41,15 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 
 ### Stage 0.1 — Module bar carousel (v0.2.1)
 
-- [ ] Modules form one circular list; the collapsed bar shows four of them around the fixed logo
-- [ ] Swiping the collapsed bar left/right shifts the visible modules by one (resets on app restart)
-- [ ] Choosing a module from the panel collapses the bar and shows that module first
-- [ ] Module order stored on the phone (moves to the user account in stage 2)
-- [ ] Panel grip shown only when there are more than four modules
+- [x] Modules form one circular list; the collapsed bar shows four of them around the fixed logo
+- [x] Swiping the collapsed bar left/right moves the modules any distance and snaps to the nearest one (resets on app restart); near the logo modules shrink and fade as if turning around a sphere
+- [x] Choosing a module from the panel collapses the bar and shows that module first
+- [x] Long press in the open panel drags a module to a new place (confirmed by vibration)
+- [x] Module order stored on the phone (moves to the user account in stage 2)
+- [x] Panel grip shown only when there are more than four modules
+- [x] Bar labels: 11 sp, at most 2 lines x 10 characters ("Komunikacja" shown as "Czat")
+- [x] Dashboard: larger logo without a label, transparent around the symbol (1 px outline), level with the labels; flatter cradle
+- [x] Back on the Dashboard asks before closing the app
 
 ### Stage 1 — Server foundation (v0.3)
 

@@ -65,6 +65,17 @@ AMBiFy
 
 ---
 
+## Navigation Bar Labels
+
+Module names shown on the navigation bar (font size 11 sp, one fifth of the screen width per module):
+
+- At most **2 lines**, each at most **10 characters** (spaces count).
+- Lines break only between words; a single word may not exceed 10 characters.
+- Prefer one short, common word (`Kalendarz`, `Zakupy`, `Czat`); use two words only when one is not clear (`Plan lekcji`).
+- The rule is checked by a unit test (`ModuleOrderTest.barLabels_fitTheRule`), so a new module with a longer label fails the build checks.
+
+---
+
 ## Git Naming
 
 | Element | Example |

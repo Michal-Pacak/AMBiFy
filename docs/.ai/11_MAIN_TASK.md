@@ -3,10 +3,10 @@
 Roadmap: [02_Roadmap.md](../02_Roadmap.md) (approved 2026-10-14).
 
 Current stage:
-Stage 0 - Skeleton complete (v0.2)
+Stage 0.1 - Module bar carousel (v0.2.1)
 
 Next stage:
-Stage 0.1 - Module bar carousel (v0.2.1), UI to be approved before implementation
+Stage 1 - Server foundation (v0.3)
 
 Rules:
 - One stage = one release (git tag), approved by the owner before commit/push.

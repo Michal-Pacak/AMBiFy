@@ -31,10 +31,15 @@ private const val FULL_LOGO_PROGRESS = 0.58
 // Aspect ratio 388:336 - size a cropped logo with the same ratio.
 private const val LOGO_BOUNDS_VIEW_BOX = "106 148 388 336"
 
+// Cropped bounds with room for an outline around the symbol. Aspect ratio 408:356.
+private const val OUTLINED_LOGO_BOUNDS_VIEW_BOX = "96 138 408 356"
+
 /**
  * Brand logo. The animated variant plays the build-up of the logo once,
  * stops on the fully visible logo and then calls [onAnimationFinished].
  * [cropToLogo] drops the empty margin of the 600x600 artboard.
+ * With [outlineColor] the background is transparent and the symbol gets a 1 px outline
+ * of that color, so content behind the logo is hidden only by the symbol itself.
  */
 @Composable
 fun BrandLogo(
@@ -42,15 +47,16 @@ fun BrandLogo(
     animated: Boolean,
     cropToLogo: Boolean = false,
     backgroundColor: Color = Color.Black,
+    outlineColor: Color? = null,
     onAnimationFinished: () -> Unit = {},
     onAnimationError: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val latestOnAnimationFinished = rememberUpdatedState(onAnimationFinished)
     val latestOnAnimationError = rememberUpdatedState(onAnimationError)
-    val webView = remember(context, animated, cropToLogo, backgroundColor) {
+    val webView = remember(context, animated, cropToLogo, backgroundColor, outlineColor) {
         WebView(context).apply {
-            setBackgroundColor(backgroundColor.toArgb())
+            setBackgroundColor(if (outlineColor != null) android.graphics.Color.TRANSPARENT else backgroundColor.toArgb())
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
             isClickable = false
@@ -83,7 +89,7 @@ fun BrandLogo(
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
-                    view.evaluateJavascript(sizeSvgToViewportScript(cropToLogo), { result ->
+                    view.evaluateJavascript(sizeSvgToViewportScript(cropToLogo, outlined = outlineColor != null), { result ->
                         if (result == "true") {
                             if (animated) {
                                 view.evaluateJavascript(animationScript(), null)
@@ -131,6 +137,7 @@ fun BrandLogo(
                     <style>
                         html, body { width: 100%; height: 100%; min-height: 100vh; margin: 0; overflow: hidden; }
                         svg { position: absolute; inset: 0; display: block; width: 100vw; height: 100vh; }
+                        ${outlineColor?.let { outlineStyle(it) }.orEmpty()}
                     </style>
                 </head>
                 <body>$svg</body>
@@ -214,22 +221,35 @@ private fun animationScript(): String = """
     })();
 """.trimIndent()
 
-private fun sizeSvgToViewportScript(cropToLogo: Boolean): String = """
+/** Transparent page and a 1 px outline following the shape of the symbol. */
+private fun outlineStyle(color: Color): String {
+    val rgb = "rgb(${(color.red * 255).toInt()}, ${(color.green * 255).toInt()}, ${(color.blue * 255).toInt()})"
+    return "html, body { background: transparent; } " +
+        "svg { filter: drop-shadow(1px 0 0 $rgb) drop-shadow(-1px 0 0 $rgb) " +
+        "drop-shadow(0 1px 0 $rgb) drop-shadow(0 -1px 0 $rgb); }"
+}
+
+private fun sizeSvgToViewportScript(cropToLogo: Boolean, outlined: Boolean): String = """
     (function() {
         const svg = document.querySelector('svg');
         if (!svg || window.innerWidth <= 0 || window.innerHeight <= 0) {
             return false;
         }
         if ($cropToLogo) {
-            svg.setAttribute('viewBox', '$LOGO_BOUNDS_VIEW_BOX');
+            svg.setAttribute('viewBox', '${if (outlined) OUTLINED_LOGO_BOUNDS_VIEW_BOX else LOGO_BOUNDS_VIEW_BOX}');
         }
-        const width = window.innerWidth + 'px';
-        const height = window.innerHeight + 'px';
-        svg.setAttribute('width', width);
-        svg.setAttribute('height', height);
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        svg.style.setProperty('width', width, 'important');
-        svg.style.setProperty('height', height, 'important');
+        function fitToViewport() {
+            const width = window.innerWidth + 'px';
+            const height = window.innerHeight + 'px';
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
+            svg.style.setProperty('width', width, 'important');
+            svg.style.setProperty('height', height, 'important');
+        }
+        fitToViewport();
+        // The view can be resized later (e.g. a larger logo), so keep the logo filling it.
+        window.addEventListener('resize', fitToViewport);
         const bounds = svg.getBoundingClientRect();
         return bounds.width > 0 && bounds.height > 0;
     })();
