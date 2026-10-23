@@ -24,3 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "AMBiFy"
 include(":app")
+include(":shared")
+include(":server")

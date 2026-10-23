@@ -54,7 +54,7 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 
 ### Stage 1 — Server foundation (v0.3)
 
-- [ ] `:shared` and `:server` modules, `GET /health`, migrations, tests
+- [x] `:shared` and `:server` modules, `GET /health`, migrations, tests
 - [ ] Deployment on the home server: systemd service, LAN-only nginx, daily database backup to the NAS
 - [ ] App: network layer, server address setting, connection status on the Account screen
 
