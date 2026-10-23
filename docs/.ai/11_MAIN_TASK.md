@@ -3,10 +3,10 @@
 Roadmap: [02_Roadmap.md](../02_Roadmap.md) (approved 2026-10-14).
 
 Current stage:
-Stage 0.1 - Module bar carousel (v0.2.1)
+Stage 1 - Server foundation (v0.3)
 
 Next stage:
-Stage 1 - Server foundation (v0.3)
+Stage 1A - AI Gateway (v0.3.1) — the llm_gateway service may be built in parallel with Stage 1
 
 Rules:
 - One stage = one release (git tag), approved by the owner before commit/push.

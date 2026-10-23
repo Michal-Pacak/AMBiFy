@@ -22,6 +22,7 @@ Each module is documented independently and can evolve without affecting the pla
 
 | Module | Description | Status |
 |---------|-------------|:------:|
+| [Assistant](Assistant.md) | AI chat through the home AI gateway (Claude / GPT / Gemini, auto or chosen model) | ⏳ |
 | [Calendar](Calendar.md) | Shared organization calendar and personal Google Calendar sync | 🚧 |
 | [Missions](Missions.md) | Tasks, points and rewards | ⏳ |
 | [Shopping](Shopping.md) | Shared shopping lists | ⏳ |

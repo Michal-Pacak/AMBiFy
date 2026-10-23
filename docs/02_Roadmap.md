@@ -27,6 +27,7 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 | First users | Parents first; children start as profiles without accounts and get accounts in stage 7 |
 | Calendar | AMBiFy's own calendar first, Google Calendar sync later |
 | Module priority | Calendar and Timetable |
+| AI | Own gateway (`llm_gateway`) over the official Claude / GPT / Gemini / Copilot CLIs running on our subscriptions; the paid API only as a fallback |
 
 ---
 
@@ -56,6 +57,17 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 - [ ] `:shared` and `:server` modules, `GET /health`, migrations, tests
 - [ ] Deployment on the home server: systemd service, LAN-only nginx, daily database backup to the NAS
 - [ ] App: network layer, server address setting, connection status on the Account screen
+
+### Stage 1A — AI Gateway (v0.3.1)
+
+The gateway service does not depend on Stage 1 and can be built in parallel; the app part needs `:server` and the network layer.
+
+- [ ] `llm_gateway` service on the home server: one HTTP API for the Claude / GPT (Codex) / Gemini / Copilot CLIs running on our subscriptions; `auto` routing by task type or a forced (`manual`) model; fallback when a limit is hit
+- [ ] Text + file attachments, streamed answers, conversation history kept on the server (model-independent)
+- [ ] `:server` route that forwards app requests to the gateway (LAN + token; per-child limits come with Stage 3)
+- [ ] Assistant module in the app: chat with a model picker (Auto / Claude / GPT / Gemini) and attachments — layout approved first
+- [ ] Optional for other modules: vulcan_digest switches from the paid API to the gateway (paid API stays as a fallback)
+- Later, optional: voice conversation (speech-to-text → gateway → text-to-speech), then a true live mode (Gemini Live API)
 
 ### Stage 2 — Accounts, organization, child profiles (v0.4)
 
