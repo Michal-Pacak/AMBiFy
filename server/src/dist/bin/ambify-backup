@@ -1,0 +1,44 @@
+#!/usr/bin/python3 -I
+"""Copies the AMBiFy SQLite database to the NAS and keeps the newest copies.
+
+Usage: ambify-backup DATABASE TARGET_DIR NAS_MOUNT_POINT
+Refuses to run when the NAS is not mounted, so copies never land on the system disk.
+"""
+import datetime
+import pathlib
+import sqlite3
+import sys
+
+KEEP = 30
+
+
+def is_mounted(path: str) -> bool:
+    with open("/proc/self/mounts") as mounts:
+        return any(line.split()[1] == path for line in mounts)
+
+
+def main() -> int:
+    database, target, nas = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+    if not is_mounted(nas):
+        print(f"NAS not mounted at {nas}, backup skipped", file=sys.stderr)
+        return 1
+
+    name = f"ambify-{datetime.date.today().isoformat()}.db"
+    partial = target / (name + ".part")
+    # SQLite's online backup gives a consistent copy while the server keeps running.
+    source = sqlite3.connect(database)
+    copy = sqlite3.connect(partial)
+    with copy:
+        source.backup(copy)
+    copy.close()
+    source.close()
+    partial.replace(target / name)
+
+    for old in sorted(target.glob("ambify-*.db"))[:-KEEP]:
+        old.unlink()
+    print(f"Backup written: {target / name}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

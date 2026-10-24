@@ -1,0 +1,18 @@
+# Daily copy of the AMBiFy database to the NAS (started by ambify-backup.timer).
+[Unit]
+Description=AMBiFy database backup to the NAS
+RequiresMountsFor=/mnt/nas
+
+[Service]
+Type=oneshot
+User=ambify
+Group=ambify
+ExecStart=/opt/ambify-server/bin/ambify-backup /var/lib/ambify/ambify.db /mnt/nas/Backup/serverek/ambify /mnt/nas
+
+NoNewPrivileges=true
+ProtectSystem=strict
+# The database directory too: reading a WAL-mode SQLite file needs its shared-memory file.
+ReadWritePaths=/var/lib/ambify /mnt/nas/Backup/serverek/ambify
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true

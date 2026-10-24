@@ -1,0 +1,3 @@
+# Lets mlody (and Claude sessions running as mlody) restart only the AMBiFy services, without a password.
+# Installed as /etc/sudoers.d/ambify-deploy.
+mlody ALL=(root) NOPASSWD: /usr/bin/systemctl restart ambify-server.service, /usr/bin/systemctl start ambify-backup.service

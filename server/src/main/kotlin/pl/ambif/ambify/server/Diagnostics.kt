@@ -1,6 +1,8 @@
 package pl.ambif.ambify.server
 
 import java.io.File
+import java.time.Duration
+import java.time.Instant
 import org.jetbrains.exposed.v1.jdbc.Database
 import pl.ambif.ambify.shared.CheckStatus
 import pl.ambif.ambify.shared.DiagnosticResult
@@ -33,6 +35,7 @@ class Diagnostics(private val checks: List<DiagnosticCheck>) {
                 DiagnosticCheck { migrations(database) },
                 DiagnosticCheck { diskSpace(File(config.databasePath).absoluteFile.parentFile) },
                 DiagnosticCheck { nas(config.nasPath) },
+                DiagnosticCheck { backup(File(config.backupDir)) },
                 // Modules planned in the roadmap; replaced by real checks when they are built.
                 DiagnosticCheck { DiagnosticResult("assistant", "Asystent AI", CheckStatus.NOT_AVAILABLE, "od Stage 1A") },
                 DiagnosticCheck { DiagnosticResult("timetable", "Plan lekcji", CheckStatus.NOT_AVAILABLE, "od Stage 5") },
@@ -70,6 +73,17 @@ class Diagnostics(private val checks: List<DiagnosticCheck>) {
                 else -> CheckStatus.OK
             }
             return DiagnosticResult("disk", "Wolne miejsce", status, "${free / GB} GB")
+        }
+
+        /** Daily copies are written by ambify-backup.timer; older than two days means it stopped working. */
+        fun backup(directory: File, now: Instant = Instant.now()): DiagnosticResult {
+            val newest = directory.listFiles { file -> file.name.startsWith("ambify-") && file.name.endsWith(".db") }
+                ?.maxByOrNull { it.lastModified() }
+                ?: return DiagnosticResult("backup", "Kopia na NAS", CheckStatus.ERROR, "brak kopii")
+            val hours = Duration.between(Instant.ofEpochMilli(newest.lastModified()), now).toHours()
+            val age = if (hours < 24) "dziś" else "${hours / 24} dni temu"
+            val status = if (hours <= 48) CheckStatus.OK else CheckStatus.WARNING
+            return DiagnosticResult("backup", "Kopia na NAS", status, "ostatnia: $age")
         }
 
         /** The NAS disk must be mounted; an empty directory on the system disk is not enough. */

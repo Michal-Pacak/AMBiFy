@@ -1,16 +1,36 @@
-# systemd user service for the AMBiFy server (installed by deploy.sh).
+# systemd system service for the AMBiFy server (installed in /etc/systemd/system).
+# Runs as the dedicated "ambify" account; the program in /opt/ambify-server belongs to the
+# deploying user, so the service can run it but never change it.
 [Unit]
 Description=AMBiFy server
 After=network-online.target
+Wants=network-online.target
 
 [Service]
+User=ambify
+Group=ambify
 Environment=AMBIFY_HOST=127.0.0.1
 Environment=AMBIFY_PORT=8080
-Environment=AMBIFY_DB=%h/.local/share/ambify/ambify.db
+Environment=AMBIFY_DB=/var/lib/ambify/ambify.db
+Environment=AMBIFY_NAS=/mnt/nas
+Environment=AMBIFY_BACKUP_DIR=/mnt/nas/Backup/serverek/ambify
 Environment=JAVA_OPTS=-Xmx256m
-ExecStart=%h/.local/opt/ambify-server/bin/server
+ExecStart=/opt/ambify-server/bin/server
 Restart=on-failure
 RestartSec=5
 
+# Hardening: the server may write only its database directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ambify
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

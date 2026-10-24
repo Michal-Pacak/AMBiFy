@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily AMBiFy database backup
+
+[Timer]
+OnCalendar=*-*-* 03:00
+# Run after boot if the server was off at 03:00.
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

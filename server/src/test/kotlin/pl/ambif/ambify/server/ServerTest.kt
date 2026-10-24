@@ -81,6 +81,18 @@ class ServerTest {
     }
 
     @Test
+    fun backupAgeDecidesItsStatus() {
+        val dir = Files.createTempDirectory("ambify-backup").toFile()
+        val now = java.time.Instant.now()
+
+        assertEquals(CheckStatus.ERROR, Diagnostics.backup(dir, now).status)
+
+        java.io.File(dir, "ambify-2026-10-24.db").writeText("x")
+        assertEquals(CheckStatus.OK, Diagnostics.backup(dir, now).status)
+        assertEquals(CheckStatus.WARNING, Diagnostics.backup(dir, now.plus(java.time.Duration.ofDays(3))).status)
+    }
+
+    @Test
     fun failingCheckIsReportedInsteadOfCrashing() {
         val results = Diagnostics(listOf(DiagnosticCheck { error("boom") })).run(AppInfo(null, null))
 
