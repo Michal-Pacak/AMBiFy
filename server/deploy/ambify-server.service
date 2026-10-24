@@ -1,0 +1,16 @@
+# systemd user service for the AMBiFy server (installed by deploy.sh).
+[Unit]
+Description=AMBiFy server
+After=network-online.target
+
+[Service]
+Environment=AMBIFY_HOST=127.0.0.1
+Environment=AMBIFY_PORT=8080
+Environment=AMBIFY_DB=%h/.local/share/ambify/ambify.db
+Environment=JAVA_OPTS=-Xmx256m
+ExecStart=%h/.local/opt/ambify-server/bin/server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

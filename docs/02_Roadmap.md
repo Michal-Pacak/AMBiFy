@@ -56,7 +56,8 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 
 - [x] `:shared` and `:server` modules, `GET /health`, migrations, tests
 - [ ] Deployment on the home server: systemd service, LAN-only nginx, daily database backup to the NAS
-- [ ] App: network layer, server address setting, connection status on the Account screen
+- [x] `GET /diagnostics`: checks registered by each module (database, migrations, disk space, NAS backup, app/server version compatibility)
+- [x] App: network layer, fixed server address (changed only by an app update), connection status on the Account screen (connected / server works — other problem / no connection / checking) and a full diagnostics popup under "Check connection" (parents only from Stage 3)
 
 ### Stage 1A — AI Gateway (v0.3.1)
 

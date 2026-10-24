@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain HTTP only to the home server inside the LAN; HTTPS from outside comes in Stage 8. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.122</domain>
+    </domain-config>
+</network-security-config>

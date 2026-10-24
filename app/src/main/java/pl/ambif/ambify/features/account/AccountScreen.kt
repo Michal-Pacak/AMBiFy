@@ -12,14 +12,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import pl.ambif.ambify.core.network.ServerApi
 import pl.ambif.ambify.ui.theme.AMBiFyTheme
 
 @Composable
 fun AccountScreen() {
+    val serverApi = remember { ServerApi() }
+    val scope = rememberCoroutineScope()
+    var serverStatus by remember { mutableStateOf<ServerStatus>(ServerStatus.Checking) }
+    var diagnostics by remember { mutableStateOf<DiagnosticsState?>(null) }
+
+    LaunchedEffect(Unit) {
+        serverStatus = serverApi.status()
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -34,6 +51,18 @@ fun AccountScreen() {
                 text = "Konto",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
+            )
+
+            ServerCard(
+                status = serverStatus,
+                onCheckConnection = {
+                    diagnostics = DiagnosticsState.Loading
+                    serverStatus = ServerStatus.Checking
+                    scope.launch {
+                        diagnostics = serverApi.diagnosticsState()
+                        serverStatus = serverApi.status()
+                    }
+                },
             )
 
             Card(
@@ -64,6 +93,10 @@ fun AccountScreen() {
                 }
             }
         }
+    }
+
+    diagnostics?.let { state ->
+        DiagnosticsDialog(state = state, onDismiss = { diagnostics = null })
     }
 }
 

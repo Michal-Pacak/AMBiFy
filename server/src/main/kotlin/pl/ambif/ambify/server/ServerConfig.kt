@@ -5,12 +5,14 @@ data class ServerConfig(
     val host: String,
     val port: Int,
     val databasePath: String,
+    val nasPath: String,
 ) {
     companion object {
         fun fromEnv(env: Map<String, String> = System.getenv()) = ServerConfig(
             host = env["AMBIFY_HOST"] ?: "127.0.0.1",
             port = env["AMBIFY_PORT"]?.toInt() ?: 8080,
             databasePath = env["AMBIFY_DB"] ?: "data/ambify.db",
+            nasPath = env["AMBIFY_NAS"] ?: "/mnt/nas",
         )
     }
 }
