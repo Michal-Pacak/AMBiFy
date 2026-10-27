@@ -14,10 +14,15 @@ import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
 import pl.ambif.ambify.shared.AuthPaths
-import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.ChildProfile
 import pl.ambif.ambify.shared.ChildRequest
+import pl.ambif.ambify.shared.CommunityModules
+import pl.ambif.ambify.shared.CommunitySummary
+import pl.ambif.ambify.shared.CreateCommunityRequest
+import pl.ambif.ambify.shared.EmailRequest
+import pl.ambif.ambify.shared.GrantRequest
+import pl.ambif.ambify.shared.JoinRequest
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.DiagnosticsResponse
 import pl.ambif.ambify.shared.Family
@@ -25,14 +30,18 @@ import pl.ambif.ambify.shared.HealthResponse
 import pl.ambif.ambify.shared.Invitation
 import pl.ambif.ambify.shared.LoginRequest
 import pl.ambif.ambify.shared.Me
+import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ModuleOrder
+import pl.ambif.ambify.shared.ModulePaths
+import pl.ambif.ambify.shared.ModuleSwitch
 import pl.ambif.ambify.shared.PasswordResetCode
+import pl.ambif.ambify.shared.PlatformCommunity
+import pl.ambif.ambify.shared.PlatformPaths
 import pl.ambif.ambify.shared.RefreshRequest
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
 import pl.ambif.ambify.shared.Role
 import pl.ambif.ambify.shared.RoleRequest
-import pl.ambif.ambify.shared.SetupRequest
 import pl.ambif.ambify.shared.Tokens
 
 /** A server answer together with how long the request took. */
@@ -56,6 +65,8 @@ interface TokenStore {
 class ServerApi(
     private val baseUrl: String = BuildConfig.SERVER_URL,
     private val tokens: TokenStore? = null,
+    /** The community the requests are about (sent in [ApiHeaders.COMMUNITY]); null = the person's first one. */
+    private val community: () -> String? = { null },
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val refreshLock = Mutex()
@@ -64,8 +75,6 @@ class ServerApi(
 
     suspend fun diagnostics(): Timed<DiagnosticsResponse> = timed { get(ApiPaths.DIAGNOSTICS, auth = false) }
 
-    suspend fun authStatus(): AuthStatus = get(AuthPaths.STATUS, auth = false)
-    suspend fun setup(request: SetupRequest): Tokens = post(AuthPaths.SETUP, request, auth = false)
     suspend fun register(request: RegisterRequest): Tokens = post(AuthPaths.REGISTER, request, auth = false)
     suspend fun login(request: LoginRequest): Tokens = post(AuthPaths.LOGIN, request, auth = false)
     suspend fun resetPassword(request: ResetPasswordRequest) = send("POST", AuthPaths.RESET_PASSWORD, json.encodeToString(request), auth = false)
@@ -88,6 +97,18 @@ class ServerApi(
     suspend fun createResetCode(memberId: String): PasswordResetCode = post("${AccountPaths.MEMBERS}/$memberId/password-reset", null as String?)
     suspend fun setRole(memberId: String, role: Role) = send("PUT", "${AccountPaths.MEMBERS}/$memberId/role", json.encodeToString(RoleRequest(role)), auth = true)
     suspend fun signOutMember(memberId: String) = send("POST", "${AccountPaths.MEMBERS}/$memberId/sign-out", null, auth = true)
+
+    suspend fun createCommunity(name: String): CommunitySummary = post(AccountPaths.COMMUNITIES, CreateCommunityRequest(name))
+    suspend fun joinCommunity(code: String): CommunitySummary = post(AccountPaths.JOIN, JoinRequest(code))
+    suspend fun modules(): CommunityModules = get(ModulePaths.MODULES)
+    suspend fun setModule(module: ModuleId, enabled: Boolean): CommunityModules =
+        json.decodeFromString(send("PUT", "${ModulePaths.MODULES}/${module.name}", json.encodeToString(ModuleSwitch(enabled)), auth = true))
+
+    suspend fun platformCommunities(): List<PlatformCommunity> = get(PlatformPaths.COMMUNITIES)
+    suspend fun setGrant(communityId: String, key: String, granted: Boolean) =
+        send("PUT", "${PlatformPaths.COMMUNITIES}/$communityId/grants/$key", json.encodeToString(GrantRequest(granted)), auth = true)
+    suspend fun addFoundingCredit(email: String) = send("POST", PlatformPaths.FOUNDING_CREDITS, json.encodeToString(EmailRequest(email)), auth = true)
+    suspend fun platformResetCode(email: String): PasswordResetCode = post(PlatformPaths.RESET_CODES, EmailRequest(email))
 
     private suspend inline fun <reified T> get(path: String, auth: Boolean = true): T =
         json.decodeFromString(send("GET", path, null, auth))
@@ -145,7 +166,10 @@ class ServerApi(
                 connection.readTimeout = TIMEOUT_MS
                 connection.setRequestProperty(ApiHeaders.APP_VERSION_CODE, BuildConfig.VERSION_CODE.toString())
                 connection.setRequestProperty(ApiHeaders.APP_VERSION_NAME, BuildConfig.VERSION_NAME)
-                accessToken?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+                accessToken?.let {
+                    connection.setRequestProperty("Authorization", "Bearer $it")
+                    community()?.let { id -> connection.setRequestProperty(ApiHeaders.COMMUNITY, id) }
+                }
                 try {
                     if (body != null) {
                         connection.doOutput = true

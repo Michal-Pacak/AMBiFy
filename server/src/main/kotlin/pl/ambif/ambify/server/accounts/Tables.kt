@@ -2,27 +2,52 @@ package pl.ambif.ambify.server.accounts
 
 import org.jetbrains.exposed.v1.core.Table
 
-// Mirrors of the tables created by V002__accounts.sql (the SQL file is the source of truth).
+// Mirrors of the tables created by V002__accounts.sql and V003__communities.sql (the SQL files are the source of truth).
 
 object Organizations : Table("organizations") {
     val id = text("id")
     val name = text("name")
     val createdAt = long("created_at")
+    val createdBy = text("created_by").nullable()
+    val paidFounding = bool("paid_founding")
     override val primaryKey = PrimaryKey(id)
 }
 
 object Users : Table("users") {
     val id = text("id")
-    val organizationId = text("organization_id")
     val name = text("name")
     val email = text("email")
     val passwordHash = text("password_hash")
-    val role = text("role")
     val failedLogins = integer("failed_logins")
     val lockedUntil = long("locked_until").nullable()
-    val moduleOrder = text("module_order").nullable()
+    val platformAdmin = bool("platform_admin")
+    val foundingCredits = integer("founding_credits")
     val createdAt = long("created_at")
     override val primaryKey = PrimaryKey(id)
+}
+
+object Memberships : Table("memberships") {
+    val userId = text("user_id")
+    val organizationId = text("organization_id")
+    val role = text("role")
+    val moduleOrder = text("module_order").nullable()
+    val joinedAt = long("joined_at")
+    override val primaryKey = PrimaryKey(userId, organizationId)
+}
+
+object OrganizationGrants : Table("organization_grants") {
+    val organizationId = text("organization_id")
+    val grantKey = text("grant_key")
+    val grantSource = text("source")
+    val grantedBy = text("granted_by").nullable()
+    val grantedAt = long("granted_at")
+    override val primaryKey = PrimaryKey(organizationId, grantKey)
+}
+
+object DisabledModules : Table("disabled_modules") {
+    val organizationId = text("organization_id")
+    val module = text("module")
+    override val primaryKey = PrimaryKey(organizationId, module)
 }
 
 object ChildProfiles : Table("child_profiles") {

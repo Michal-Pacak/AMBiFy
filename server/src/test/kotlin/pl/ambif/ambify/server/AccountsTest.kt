@@ -86,7 +86,7 @@ class AccountsTest {
     }
 
     @Test
-    fun firstPersonCreatesFamilyOnlyOnce() = accountsApp {
+    fun setupCreatesAccountWithItsFirstCommunity() = accountsApp {
         assertFalse(client.send<Unit>("GET", AuthPaths.STATUS).body<AuthStatus>().familyExists)
 
         val owner = client.setupOwner()
@@ -95,9 +95,12 @@ class AccountsTest {
         assertEquals(Role.OWNER, me.role)
         assertEquals("michal@pacak.waw.pl", me.email)
         assertEquals("Pacakowie", me.familyName)
+        assertTrue(me.platformAdmin)
         assertTrue(client.send<Unit>("GET", AuthPaths.STATUS).body<AuthStatus>().familyExists)
-        val second = client.send("POST", AuthPaths.SETUP, SetupRequest("Inni", "X", "x@x.pl", "sekretne1", "A"))
-        assertEquals(HttpStatusCode.Conflict, second.status)
+        val other: Tokens = client.send("POST", AuthPaths.SETUP, SetupRequest("Inni", "X", "x@x.pl", "sekretne1", "A")).body()
+        val otherMe: Me = client.send<Unit>("GET", AccountPaths.ME, token = other.accessToken).body()
+        assertEquals("Inni", otherMe.familyName)
+        assertFalse(otherMe.platformAdmin)
     }
 
     @Test

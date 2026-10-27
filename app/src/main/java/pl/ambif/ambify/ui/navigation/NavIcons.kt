@@ -153,6 +153,28 @@ internal fun TimetableNavIcon() = LineNavIcon {
 }
 
 @Composable
+internal fun PlatformNavIcon() = LineNavIcon {
+    // Crown: the Platform Admin is above all communities.
+    line {
+        moveTo(0.12f, 0.3f); lineTo(0.3f, 0.56f); lineTo(0.5f, 0.2f); lineTo(0.7f, 0.56f)
+        lineTo(0.88f, 0.3f); lineTo(0.8f, 0.76f); lineTo(0.2f, 0.76f); close()
+    }
+    line { moveTo(0.2f, 0.88f); lineTo(0.8f, 0.88f) }
+}
+
+@Composable
+internal fun AssistantNavIcon() = LineNavIcon {
+    // A large four-pointed sparkle and a small one: the usual sign of AI.
+    line {
+        moveTo(0.42f, 0.16f); quadraticTo(0.46f, 0.5f, 0.8f, 0.54f)
+        quadraticTo(0.46f, 0.58f, 0.42f, 0.92f); quadraticTo(0.38f, 0.58f, 0.04f, 0.54f)
+        quadraticTo(0.38f, 0.5f, 0.42f, 0.16f); close()
+    }
+    line { moveTo(0.8f, 0.08f); lineTo(0.8f, 0.32f) }
+    line { moveTo(0.68f, 0.2f); lineTo(0.92f, 0.2f) }
+}
+
+@Composable
 internal fun SchoolNavIcon() = LineNavIcon {
     // Graduation cap with a tassel.
     line {

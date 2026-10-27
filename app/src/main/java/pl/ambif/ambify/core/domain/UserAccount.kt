@@ -12,5 +12,4 @@ enum class UserRole {
     OWNER,
     ADMIN,
     MEMBER,
-    GUEST,
 }

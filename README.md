@@ -101,6 +101,7 @@ AMBiFy is built around a **Core Platform** that provides common functionality, w
 | [Naming Convention](docs/03_Naming_Convention.md) | Naming standards |
 | [User Roles](docs/04_User_Roles.md) | Roles and permissions |
 | [Modules](docs/05_Modules.md) | Planned feature modules |
+| [Luxury Theme](docs/06_Luxury_Theme.md) | The approved look: graphite and metallic gold |
 
 ---
 

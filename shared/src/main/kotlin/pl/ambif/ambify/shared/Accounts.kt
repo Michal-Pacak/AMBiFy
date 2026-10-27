@@ -21,6 +21,15 @@ object AccountPaths {
     const val INVITATIONS = "/family/invitations"
     const val CHILDREN = "/family/children"
     const val MEMBERS = "/family/members"
+    const val COMMUNITIES = "/communities"
+    const val JOIN = "/communities/join"
+}
+
+/** Only for the Platform Admin (a flag on the account, above all communities). */
+object PlatformPaths {
+    const val COMMUNITIES = "/platform/communities"
+    const val FOUNDING_CREDITS = "/platform/founding-credits"
+    const val RESET_CODES = "/platform/reset-codes"
 }
 
 object AccountRules {
@@ -31,13 +40,12 @@ object AccountRules {
     const val LOCK_MINUTES = 15L
 }
 
-/** Shown as Owner / Admin / User / Guest; a higher [rank] may manage lower ones. */
+/** Role in one community, shown as Owner / Admin / User; a higher [rank] may manage lower ones. */
 @Serializable
 enum class Role(val rank: Int) {
     OWNER(3),
     ADMIN(2),
-    MEMBER(1),
-    GUEST(0);
+    MEMBER(1);
 
     val canManage: Boolean get() = this == OWNER || this == ADMIN
 }
@@ -61,9 +69,10 @@ data class SetupRequest(
     val deviceName: String,
 )
 
+/** A new account; with [code] it also joins that community, without it the person has no community yet. */
 @Serializable
 data class RegisterRequest(
-    val code: String,
+    val code: String? = null,
     val name: String,
     val email: String,
     val password: String,
@@ -85,14 +94,49 @@ data class ChangePasswordRequest(val currentPassword: String, val newPassword: S
 @Serializable
 data class Tokens(val accessToken: String, val refreshToken: String)
 
+/** The signed-in person; [role], [familyName] and [communityId] describe the current community (null: none yet). */
 @Serializable
 data class Me(
     val id: String,
     val name: String,
     val email: String,
-    val role: Role,
-    val familyName: String,
+    val role: Role? = null,
+    val familyName: String? = null,
+    val communityId: String? = null,
+    val platformAdmin: Boolean = false,
+    val communities: List<CommunitySummary> = emptyList(),
 )
+
+@Serializable
+data class CommunitySummary(val id: String, val name: String, val role: Role)
+
+@Serializable
+data class CreateCommunityRequest(val name: String)
+
+@Serializable
+data class JoinRequest(val code: String)
+
+/** One community on the Platform Admin's list. */
+@Serializable
+data class PlatformCommunity(
+    val id: String,
+    val name: String,
+    val ownerName: String?,
+    val members: Int,
+    val minors: Int,
+    val createdAt: Long,
+    /** False for the free first community of its Owner. */
+    val paidFounding: Boolean,
+    /** Granted premium modules and features (names from [Entitlements.grantKeys]). */
+    val grants: List<String>,
+)
+
+@Serializable
+data class GrantRequest(val granted: Boolean)
+
+/** Lets the person with this e-mail found one more community without paying (or get a password reset code). */
+@Serializable
+data class EmailRequest(val email: String)
 
 @Serializable
 data class Member(val id: String, val name: String, val role: Role)

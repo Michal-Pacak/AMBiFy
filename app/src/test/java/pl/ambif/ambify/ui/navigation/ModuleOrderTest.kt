@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import pl.ambif.ambify.shared.ModuleId
 
 class ModuleOrderTest {
     private val modules = listOf("1", "2", "3", "4", "5", "6", "7")
@@ -32,6 +33,31 @@ class ModuleOrderTest {
             listOf("3", "1", "2", "4", "5", "6", "7"),
             resolveModuleOrder(listOf("3", "x", "1", "3", "2"), modules),
         )
+    }
+
+    @Test
+    fun resolveModuleOrder_keepsPlaceOfRenamedShopping() {
+        assertEquals(listOf("lists", "calendar"), resolveModuleOrder(listOf("shopping", "calendar"), listOf("calendar", "lists")))
+    }
+
+    @Test
+    fun barRoutes_showEnabledModulesAndAccount() {
+        // Not known yet: the basic modules.
+        assertEquals(listOf("calendar", "lists", "account", "communication"), barRoutes(null))
+        assertEquals(
+            listOf("calendar", "account", "timetable"),
+            barRoutes(listOf(ModuleId.CALENDAR, ModuleId.TIMETABLE)),
+        )
+        // The Platform Admin panel only for the Platform Admin.
+        assertEquals(listOf("calendar", "account", "platform"), barRoutes(listOf(ModuleId.CALENDAR), platformAdmin = true))
+    }
+
+    @Test
+    fun everyModuleHasABarEntry() {
+        // A module switched on in a community must show up on the bar: it needs an icon and a screen.
+        ModuleId.entries.forEach { module ->
+            assertTrue("No bar entry for $module", BarModules.any { it.route == module.route && it.label == module.label })
+        }
     }
 
     @Test

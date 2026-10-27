@@ -4,7 +4,9 @@ import io.ktor.http.HttpStatusCode
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -13,6 +15,7 @@ import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -21,13 +24,18 @@ import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.ChildProfile
 import pl.ambif.ambify.shared.ChildRequest
+import pl.ambif.ambify.shared.CommunityModules
+import pl.ambif.ambify.shared.CommunitySummary
 import pl.ambif.ambify.shared.Device
+import pl.ambif.ambify.shared.Entitlements
 import pl.ambif.ambify.shared.Family
 import pl.ambif.ambify.shared.Invitation
 import pl.ambif.ambify.shared.LoginRequest
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Member
+import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.PasswordResetCode
+import pl.ambif.ambify.shared.PlatformCommunity
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
 import pl.ambif.ambify.shared.Role
@@ -37,6 +45,9 @@ import pl.ambif.ambify.shared.Tokens
 /** A refusal shown to the user: HTTP status, stable code for the app, Polish message. */
 class ApiException(val status: HttpStatusCode, val code: String, override val message: String) : RuntimeException(message)
 
+/** The caller inside one community: their account row, the community and their role there. */
+private class Membership(val user: ResultRow, val organizationId: String, val role: Role)
+
 class AccountService(
     private val database: Database,
     private val tokens: AccessTokens,
@@ -44,7 +55,7 @@ class AccountService(
 ) {
     fun status() = AuthStatus(familyExists = transaction(database) { Organizations.selectAll().count() > 0 })
 
-    /** The very first account: creates the family and becomes its Owner. Refused once a family exists. */
+    /** A new account together with its first (free) community, in which it becomes the Owner. */
     fun setup(request: SetupRequest): Tokens {
         val familyName = Validate.name(request.familyName, "Nazwa społeczności")
         val name = Validate.name(request.name, "Imię")
@@ -52,36 +63,23 @@ class AccountService(
         Validate.password(request.password)
         val hash = Passwords.hash(request.password)
         return transaction(database) {
-            if (Organizations.selectAll().count() > 0) {
-                throw ApiException(HttpStatusCode.Conflict, "family_exists", "Społeczność jest już założona. Zaloguj się albo dołącz z kodem.")
-            }
-            val now = clock()
-            val organizationId = Secrets.id()
-            Organizations.insert {
-                it[id] = organizationId
-                it[Organizations.name] = familyName
-                it[createdAt] = now
-            }
-            val userId = insertUser(organizationId, name, email, hash, Role.OWNER)
+            val userId = insertUser(name, email, hash)
+            insertCommunity(userId, familyName, paid = false)
             startSession(userId, request.deviceName)
         }
     }
 
-    /** Joining with a one-time invitation code from a parent. */
+    /** A new account; with an invitation code it joins that community, without one it has none yet. */
     fun register(request: RegisterRequest): Tokens {
         val name = Validate.name(request.name, "Imię")
         val email = Validate.email(request.email)
         Validate.password(request.password)
-        val code = request.code.trim().uppercase()
+        val code = request.code?.trim()?.uppercase()?.ifEmpty { null }
         val hash = Passwords.hash(request.password)
         return transaction(database) {
-            val now = clock()
-            val invitation = Invitations.selectAll().where { Invitations.code eq code }.singleOrNull()
-            if (invitation == null || invitation[Invitations.usedBy] != null || invitation[Invitations.expiresAt] < now) {
-                throw ApiException(HttpStatusCode.BadRequest, "invalid_code", "Kod zaproszenia jest nieprawidłowy, wykorzystany albo wygasł.")
-            }
-            val userId = insertUser(invitation[Invitations.organizationId], name, email, hash, Role.MEMBER)
-            Invitations.update({ Invitations.code eq code }) { it[usedBy] = userId }
+            val invitation = code?.let { validInvitation(it) }
+            val userId = insertUser(name, email, hash)
+            invitation?.let { acceptInvitation(it, userId) }
             startSession(userId, request.deviceName)
         }
     }
@@ -144,7 +142,7 @@ class AccountService(
         transaction(database) { Sessions.deleteWhere { id eq session.sessionId } }
     }
 
-    /** "I forgot my password": a code from a parent sets a new password and signs out all devices. */
+    /** "I forgot my password": a one-time code sets a new password and signs out all devices. */
     fun resetPassword(request: ResetPasswordRequest) {
         Validate.password(request.newPassword)
         val email = request.email.trim().lowercase()
@@ -181,30 +179,79 @@ class AccountService(
         }
     }
 
+    /** The profile plus the current community: the requested one, else the first; none for a new account. */
     fun me(session: UserSession): Me = transaction(database) {
         val user = user(session.userId)
+        val communities = communities(session.userId)
+        val current = communities.firstOrNull { it.id == session.communityId } ?: communities.firstOrNull()
         Me(
             id = user[Users.id],
             name = user[Users.name],
             email = user[Users.email],
-            role = Role.valueOf(user[Users.role]),
-            familyName = familyName(user[Users.organizationId]),
+            role = current?.role,
+            familyName = current?.name,
+            communityId = current?.id,
+            platformAdmin = user[Users.platformAdmin],
+            communities = communities,
         )
     }
 
+    fun communities(userId: String): List<CommunitySummary> = transaction(database) {
+        Memberships.join(Organizations, JoinType.INNER, Memberships.organizationId, Organizations.id).selectAll()
+            .where { Memberships.userId eq userId }
+            .orderBy(Memberships.joinedAt)
+            .map { CommunitySummary(it[Organizations.id], it[Organizations.name], Role.valueOf(it[Memberships.role])) }
+    }
+
+    /**
+     * Founding a community: the first one where the person is the Owner is free; every next one needs
+     * a payment (not available yet), a founding credit from the Platform Admin, or being the Platform Admin.
+     */
+    fun createCommunity(session: UserSession, name: String): CommunitySummary {
+        val communityName = Validate.name(name, "Nazwa społeczności")
+        return transaction(database) {
+            val user = user(session.userId)
+            val owned = Memberships.selectAll()
+                .where { (Memberships.userId eq session.userId) and (Memberships.role eq Role.OWNER.name) }.count()
+            val paid = when {
+                owned == 0L -> false
+                user[Users.platformAdmin] -> true
+                user[Users.foundingCredits] > 0 -> {
+                    Users.update({ Users.id eq session.userId }) { it[foundingCredits] = user[Users.foundingCredits] - 1 }
+                    true
+                }
+                else -> throw ApiException(
+                    HttpStatusCode.PaymentRequired, "payment_required",
+                    "Jesteś już Ownerem darmowej społeczności. Kolejna wymaga jednorazowej opłaty (wkrótce dostępne).",
+                )
+            }
+            CommunitySummary(insertCommunity(session.userId, communityName, paid), communityName, Role.OWNER)
+        }
+    }
+
+    /** A signed-in person joins one more community with its invitation code. */
+    fun join(session: UserSession, code: String): CommunitySummary = transaction(database) {
+        val invitation = validInvitation(code.trim().uppercase())
+        val organizationId = invitation[Invitations.organizationId]
+        if (Memberships.selectAll().where { (Memberships.userId eq session.userId) and (Memberships.organizationId eq organizationId) }.count() > 0) {
+            throw ApiException(HttpStatusCode.Conflict, "already_member", "Już należysz do tej społeczności.")
+        }
+        acceptInvitation(invitation, session.userId)
+        CommunitySummary(organizationId, communityName(organizationId), Role.MEMBER)
+    }
+
     fun family(session: UserSession): Family = transaction(database) {
-        val user = user(session.userId)
-        val organizationId = user[Users.organizationId]
-        val manager = Role.valueOf(user[Users.role]).canManage
+        val membership = membership(session)
+        val organizationId = membership.organizationId
         Family(
-            name = familyName(organizationId),
-            members = Users.selectAll().where { Users.organizationId eq organizationId }
-                .orderBy(Users.createdAt)
-                .map { Member(it[Users.id], it[Users.name], Role.valueOf(it[Users.role])) },
+            name = communityName(organizationId),
+            members = membersOf(organizationId)
+                .orderBy(Memberships.joinedAt)
+                .map { Member(it[Users.id], it[Users.name], Role.valueOf(it[Memberships.role])) },
             children = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }
                 .orderBy(ChildProfiles.createdAt)
                 .map { it.toChild() },
-            invitations = if (!manager) emptyList() else Invitations.selectAll()
+            invitations = if (!membership.role.canManage) emptyList() else Invitations.selectAll()
                 .where { (Invitations.organizationId eq organizationId) and Invitations.usedBy.isNull() and (Invitations.expiresAt greater clock()) }
                 .orderBy(Invitations.createdAt)
                 .map { Invitation(it[Invitations.code], it[Invitations.expiresAt]) },
@@ -217,8 +264,8 @@ class AccountService(
         val invitation = Invitation(Secrets.code(6), now + AccountRules.INVITATION_DAYS * DAY_MS)
         Invitations.insert {
             it[code] = invitation.code
-            it[organizationId] = manager[Users.organizationId]
-            it[createdBy] = manager[Users.id]
+            it[organizationId] = manager.organizationId
+            it[createdBy] = session.userId
             it[createdAt] = now
             it[expiresAt] = invitation.expiresAt
         }
@@ -229,7 +276,7 @@ class AccountService(
         transaction(database) {
             val manager = requireManager(session)
             Invitations.deleteWhere {
-                (Invitations.code eq code) and (organizationId eq manager[Users.organizationId]) and usedBy.isNull()
+                (Invitations.code eq code) and (organizationId eq manager.organizationId) and usedBy.isNull()
             }
         }
     }
@@ -242,7 +289,7 @@ class AccountService(
             val child = ChildProfile(Secrets.id(), name, color)
             ChildProfiles.insert {
                 it[id] = child.id
-                it[organizationId] = manager[Users.organizationId]
+                it[organizationId] = manager.organizationId
                 it[ChildProfiles.name] = name
                 it[ChildProfiles.color] = color
                 it[createdAt] = clock()
@@ -256,7 +303,7 @@ class AccountService(
         val color = Validate.color(request.color)
         return transaction(database) {
             val manager = requireManager(session)
-            val changed = ChildProfiles.update({ (ChildProfiles.id eq childId) and (ChildProfiles.organizationId eq manager[Users.organizationId]) }) {
+            val changed = ChildProfiles.update({ (ChildProfiles.id eq childId) and (ChildProfiles.organizationId eq manager.organizationId) }) {
                 it[ChildProfiles.name] = name
                 it[ChildProfiles.color] = color
             }
@@ -268,30 +315,25 @@ class AccountService(
     fun deleteChild(session: UserSession, childId: String) {
         transaction(database) {
             val manager = requireManager(session)
-            ChildProfiles.deleteWhere { (id eq childId) and (organizationId eq manager[Users.organizationId]) }
+            ChildProfiles.deleteWhere { (id eq childId) and (organizationId eq manager.organizationId) }
         }
     }
 
+    /** Takes the person out of this community; their account and other communities stay. */
     fun removeMember(session: UserSession, memberId: String) {
         transaction(database) {
-            val member = requireManageable(session, memberId)
-            val id = member[Users.id]
-            Invitations.update({ Invitations.usedBy eq id }) { it[usedBy] = null }
-            Invitations.deleteWhere { createdBy eq id }
-            Users.deleteWhere { Users.id eq id }
+            val manager = requireManageable(session, memberId)
+            val organizationId = manager.organizationId
+            Invitations.update({ (Invitations.usedBy eq memberId) and (Invitations.organizationId eq organizationId) }) { it[usedBy] = null }
+            Invitations.deleteWhere { (createdBy eq memberId) and (Invitations.organizationId eq organizationId) }
+            Memberships.deleteWhere { (userId eq memberId) and (Memberships.organizationId eq organizationId) }
         }
     }
 
-    /** A one-time code (valid 24 h) the Owner hands to someone who forgot the password. */
+    /** A one-time code (valid 24 h) the Owner or an Admin hands to someone who forgot the password. */
     fun createResetCode(session: UserSession, memberId: String): PasswordResetCode = transaction(database) {
-        val member = requireManageable(session, memberId, allowSelf = true)
-        val code = PasswordResetCode(Secrets.code(8), clock() + DAY_MS)
-        PasswordResets.insert {
-            it[codeHash] = Secrets.sha256(code.code)
-            it[userId] = member[Users.id]
-            it[expiresAt] = code.expiresAt
-        }
-        code
+        requireManageable(session, memberId, allowSelf = true)
+        insertResetCode(memberId)
     }
 
     /** Only the Owner hands out and takes back the Admin role. */
@@ -300,22 +342,24 @@ class AccountService(
             throw ApiException(HttpStatusCode.BadRequest, "invalid_role", "Można nadać tylko rolę Admin albo User.")
         }
         transaction(database) {
-            if (Role.valueOf(user(session.userId)[Users.role]) != Role.OWNER) throw forbidden()
-            val member = requireManageable(session, memberId)
-            Users.update({ Users.id eq member[Users.id] }) { it[Users.role] = role.name }
+            val manager = requireManageable(session, memberId)
+            if (manager.role != Role.OWNER) throw forbidden()
+            Memberships.update({ (Memberships.userId eq memberId) and (Memberships.organizationId eq manager.organizationId) }) {
+                it[Memberships.role] = role.name
+            }
         }
     }
 
     fun signOutMember(session: UserSession, memberId: String) {
         transaction(database) {
-            val member = requireManageable(session, memberId)
-            Sessions.deleteWhere { userId eq member[Users.id] }
+            requireManageable(session, memberId)
+            Sessions.deleteWhere { userId eq memberId }
         }
     }
 
     fun devices(session: UserSession): List<Device> = transaction(database) {
         Sessions.selectAll().where { Sessions.userId eq session.userId }
-            .orderBy(Sessions.lastUsedAt, org.jetbrains.exposed.v1.core.SortOrder.DESC)
+            .orderBy(Sessions.lastUsedAt, SortOrder.DESC)
             .map { Device(it[Sessions.id], it[Sessions.deviceName], it[Sessions.lastUsedAt], it[Sessions.id] == session.sessionId) }
     }
 
@@ -323,35 +367,181 @@ class AccountService(
         transaction(database) { Sessions.deleteWhere { (id eq deviceId) and (userId eq session.userId) } }
     }
 
+    /** Kept per person and community; empty for someone without a community. */
     fun moduleOrder(session: UserSession): List<String> = transaction(database) {
-        user(session.userId)[Users.moduleOrder]?.split(',')?.filter { it.isNotBlank() } ?: emptyList()
+        val membership = membershipOrNull(session) ?: return@transaction emptyList()
+        Memberships.selectAll()
+            .where { (Memberships.userId eq session.userId) and (Memberships.organizationId eq membership.organizationId) }
+            .single()[Memberships.moduleOrder]?.split(',')?.filter { it.isNotBlank() } ?: emptyList()
     }
 
     fun saveModuleOrder(session: UserSession, routes: List<String>) {
         val cleaned = routes.map { it.trim() }.filter { it.matches(Regex("[a-z_]{1,40}")) }.distinct().take(40)
         transaction(database) {
-            Users.update({ Users.id eq session.userId }) { it[moduleOrder] = cleaned.joinToString(",") }
+            val membership = membershipOrNull(session) ?: return@transaction
+            Memberships.update({ (Memberships.userId eq session.userId) and (Memberships.organizationId eq membership.organizationId) }) {
+                it[moduleOrder] = cleaned.joinToString(",")
+            }
         }
+    }
+
+    // --- modules ---
+
+    fun modules(session: UserSession): CommunityModules = transaction(database) {
+        communityModules(membership(session).organizationId)
+    }
+
+    /** The Owner or an Admin switches a module the community has on or off for everyone. */
+    fun setModule(session: UserSession, module: ModuleId, enabled: Boolean): CommunityModules = transaction(database) {
+        val manager = requireManager(session)
+        val organizationId = manager.organizationId
+        if (module !in Entitlements.owned(grants(organizationId))) {
+            throw ApiException(HttpStatusCode.Forbidden, "not_owned", "Ta społeczność nie ma modułu ${module.label}.")
+        }
+        if (enabled) {
+            DisabledModules.deleteWhere { (DisabledModules.organizationId eq organizationId) and (DisabledModules.module eq module.name) }
+        } else {
+            DisabledModules.insertIgnore {
+                it[DisabledModules.organizationId] = organizationId
+                it[DisabledModules.module] = module.name
+            }
+        }
+        communityModules(organizationId)
+    }
+
+    /** For module routes (from Stage 4 on): refuses a module the current community does not have switched on. */
+    fun requireModule(session: UserSession, module: ModuleId) {
+        transaction(database) {
+            if (module !in communityModules(membership(session).organizationId).enabled) {
+                throw ApiException(HttpStatusCode.Forbidden, "module_off", "Moduł ${module.label} nie jest włączony w tej społeczności.")
+            }
+        }
+    }
+
+    // --- Platform Admin ---
+
+    fun platformCommunities(session: UserSession): List<PlatformCommunity> = transaction(database) {
+        requirePlatformAdmin(session)
+        Organizations.selectAll().orderBy(Organizations.createdAt).map { organization ->
+            val organizationId = organization[Organizations.id]
+            val members = membersOf(organizationId)
+                .map { it[Users.name] to Role.valueOf(it[Memberships.role]) }
+            PlatformCommunity(
+                id = organizationId,
+                name = organization[Organizations.name],
+                ownerName = members.firstOrNull { it.second == Role.OWNER }?.first,
+                members = members.size,
+                minors = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }.count().toInt(),
+                createdAt = organization[Organizations.createdAt],
+                paidFounding = organization[Organizations.paidFounding],
+                grants = grants(organizationId).sorted(),
+            )
+        }
+    }
+
+    /** Grants or takes back a premium module or feature, free of charge. */
+    fun setGrant(session: UserSession, organizationId: String, key: String, granted: Boolean) {
+        if (key !in Entitlements.grantKeys) {
+            throw ApiException(HttpStatusCode.BadRequest, "unknown_grant", "Nieznany moduł albo funkcja: $key.")
+        }
+        transaction(database) {
+            requirePlatformAdmin(session)
+            if (Organizations.selectAll().where { Organizations.id eq organizationId }.count() == 0L) throw notFound()
+            if (granted) {
+                OrganizationGrants.insertIgnore {
+                    it[OrganizationGrants.organizationId] = organizationId
+                    it[grantKey] = key
+                    it[grantSource] = GRANTED
+                    it[grantedBy] = session.userId
+                    it[grantedAt] = clock()
+                }
+            } else {
+                OrganizationGrants.deleteWhere { (OrganizationGrants.organizationId eq organizationId) and (grantKey eq key) }
+            }
+        }
+    }
+
+    /** The person with this e-mail may found one more community for free. */
+    fun addFoundingCredit(session: UserSession, email: String) {
+        transaction(database) {
+            requirePlatformAdmin(session)
+            val user = userByEmail(email)
+            Users.update({ Users.id eq user[Users.id] }) { it[foundingCredits] = user[Users.foundingCredits] + 1 }
+        }
+    }
+
+    /** For an Owner who forgot the password: nobody in their community can hand them a code. */
+    fun platformResetCode(session: UserSession, email: String): PasswordResetCode = transaction(database) {
+        requirePlatformAdmin(session)
+        insertResetCode(userByEmail(email)[Users.id])
     }
 
     // --- helpers; all run inside a transaction ---
 
-    private fun insertUser(organizationId: String, name: String, email: String, hash: String, role: Role): String {
+    /** The very first account on a server becomes its Platform Admin. */
+    private fun insertUser(name: String, email: String, hash: String): String {
         if (Users.selectAll().where { Users.email eq email }.count() > 0) {
             throw ApiException(HttpStatusCode.Conflict, "email_taken", "Ten e-mail ma już konto. Zaloguj się.")
         }
+        val first = Users.selectAll().count() == 0L
         val userId = Secrets.id()
         Users.insert {
             it[id] = userId
-            it[Users.organizationId] = organizationId
             it[Users.name] = name
             it[Users.email] = email
             it[passwordHash] = hash
-            it[Users.role] = role.name
             it[failedLogins] = 0
+            it[platformAdmin] = first
+            it[foundingCredits] = 0
             it[createdAt] = clock()
         }
         return userId
+    }
+
+    private fun insertCommunity(ownerId: String, name: String, paid: Boolean): String {
+        val now = clock()
+        val organizationId = Secrets.id()
+        Organizations.insert {
+            it[id] = organizationId
+            it[Organizations.name] = name
+            it[createdAt] = now
+            it[createdBy] = ownerId
+            it[paidFounding] = paid
+        }
+        insertMembership(ownerId, organizationId, Role.OWNER)
+        return organizationId
+    }
+
+    private fun insertMembership(userId: String, organizationId: String, role: Role) {
+        Memberships.insert {
+            it[Memberships.userId] = userId
+            it[Memberships.organizationId] = organizationId
+            it[Memberships.role] = role.name
+            it[joinedAt] = clock()
+        }
+    }
+
+    private fun validInvitation(code: String): ResultRow {
+        val invitation = Invitations.selectAll().where { Invitations.code eq code }.singleOrNull()
+        if (invitation == null || invitation[Invitations.usedBy] != null || invitation[Invitations.expiresAt] < clock()) {
+            throw ApiException(HttpStatusCode.BadRequest, "invalid_code", "Kod zaproszenia jest nieprawidłowy, wykorzystany albo wygasł.")
+        }
+        return invitation
+    }
+
+    private fun acceptInvitation(invitation: ResultRow, userId: String) {
+        insertMembership(userId, invitation[Invitations.organizationId], Role.MEMBER)
+        Invitations.update({ Invitations.code eq invitation[Invitations.code] }) { it[usedBy] = userId }
+    }
+
+    private fun insertResetCode(userId: String): PasswordResetCode {
+        val code = PasswordResetCode(Secrets.code(8), clock() + DAY_MS)
+        PasswordResets.insert {
+            it[codeHash] = Secrets.sha256(code.code)
+            it[PasswordResets.userId] = userId
+            it[expiresAt] = code.expiresAt
+        }
+        return code
     }
 
     private fun startSession(userId: String, deviceName: String): Tokens {
@@ -374,27 +564,71 @@ class AccountService(
             ?: throw ApiException(HttpStatusCode.Unauthorized, "unauthorized", "Zaloguj się ponownie.")
     }
 
-    private fun familyName(organizationId: String): String =
+    private fun userByEmail(email: String): ResultRow =
+        Users.selectAll().where { Users.email eq email.trim().lowercase() }.singleOrNull()
+            ?: throw ApiException(HttpStatusCode.NotFound, "no_account", "Nie ma konta z tym e-mailem.")
+
+    private fun membersOf(organizationId: String) =
+        Memberships.join(Users, JoinType.INNER, Memberships.userId, Users.id).selectAll()
+            .where { Memberships.organizationId eq organizationId }
+
+    private fun communityName(organizationId: String): String =
         Organizations.selectAll().where { Organizations.id eq organizationId }.single()[Organizations.name]
 
-    /** Owner or Admin: may invite, manage minors and manage people with a lower role. */
-    private fun requireManager(session: UserSession): ResultRow {
-        val user = user(session.userId)
-        if (!Role.valueOf(user[Users.role]).canManage) throw forbidden()
-        return user
+    private fun grants(organizationId: String): Set<String> =
+        OrganizationGrants.selectAll().where { OrganizationGrants.organizationId eq organizationId }
+            .map { it[OrganizationGrants.grantKey] }.toSet()
+
+    private fun communityModules(organizationId: String): CommunityModules {
+        val grants = grants(organizationId)
+        val disabled = DisabledModules.selectAll().where { DisabledModules.organizationId eq organizationId }
+            .mapNotNull { row -> ModuleId.entries.firstOrNull { it.name == row[DisabledModules.module] } }.toSet()
+        return CommunityModules(
+            owned = Entitlements.owned(grants),
+            enabled = Entitlements.enabled(grants, disabled),
+            features = Entitlements.features(grants, disabled),
+            ownedFeatures = Entitlements.ownedFeatures(grants),
+        )
     }
 
-    /** A person of the same community with a lower role than the caller (or the caller, when [allowSelf]). */
-    private fun requireManageable(session: UserSession, memberId: String, allowSelf: Boolean = false): ResultRow {
+    /** The community named in the request (it must be one of the caller's), else the caller's first one. */
+    private fun membershipOrNull(session: UserSession): Membership? {
+        val user = user(session.userId)
+        val rows = Memberships.selectAll().where { Memberships.userId eq session.userId }.orderBy(Memberships.joinedAt).toList()
+        val row = if (session.communityId != null) {
+            rows.firstOrNull { it[Memberships.organizationId] == session.communityId } ?: throw notFound()
+        } else {
+            rows.firstOrNull() ?: return null
+        }
+        return Membership(user, row[Memberships.organizationId], Role.valueOf(row[Memberships.role]))
+    }
+
+    private fun membership(session: UserSession): Membership = membershipOrNull(session)
+        ?: throw ApiException(HttpStatusCode.Conflict, "no_community", "Najpierw załóż społeczność albo dołącz do niej z kodem.")
+
+    /** Owner or Admin: may invite, manage minors and manage people with a lower role. */
+    private fun requireManager(session: UserSession): Membership {
+        val membership = membership(session)
+        if (!membership.role.canManage) throw forbidden()
+        return membership
+    }
+
+    /** A person of the same community with a lower role than the caller (or the caller, when [allowSelf]); returns the caller. */
+    private fun requireManageable(session: UserSession, memberId: String, allowSelf: Boolean = false): Membership {
         val manager = requireManager(session)
-        if (memberId == manager[Users.id]) {
+        if (memberId == session.userId) {
             if (allowSelf) return manager
             throw ApiException(HttpStatusCode.BadRequest, "self", "Tej operacji nie można wykonać na własnym koncie.")
         }
-        val member = Users.selectAll().where { (Users.id eq memberId) and (Users.organizationId eq manager[Users.organizationId]) }
+        val member = Memberships.selectAll()
+            .where { (Memberships.userId eq memberId) and (Memberships.organizationId eq manager.organizationId) }
             .singleOrNull() ?: throw notFound()
-        if (Role.valueOf(member[Users.role]).rank >= Role.valueOf(manager[Users.role]).rank) throw forbidden()
-        return member
+        if (Role.valueOf(member[Memberships.role]).rank >= manager.role.rank) throw forbidden()
+        return manager
+    }
+
+    private fun requirePlatformAdmin(session: UserSession) {
+        if (!user(session.userId)[Users.platformAdmin]) throw forbidden()
     }
 
     private fun forbidden() = ApiException(HttpStatusCode.Forbidden, "forbidden", "Nie masz uprawnień do tej operacji.")
@@ -412,11 +646,13 @@ class AccountService(
 
     private companion object {
         const val DAY_MS = 24 * 60 * 60 * 1000L
+        const val GRANTED = "GRANTED"
     }
 }
 
 private object Validate {
-    private val EMAIL = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+    // Plain ASCII addresses only: a typo with a Polish letter would create an account nobody can sign in to.
+    private val EMAIL = Regex("^[a-z0-9._%+-]+@[a-z0-9-]+(\\.[a-z0-9-]+)*\\.[a-z]{2,}$")
     private val COLOR = Regex("^#[0-9A-Fa-f]{6}$")
 
     fun name(value: String, field: String): String {
@@ -430,7 +666,10 @@ private object Validate {
     fun email(value: String): String {
         val trimmed = value.trim().lowercase()
         if (!EMAIL.matches(trimmed) || trimmed.length > 120) {
-            throw ApiException(HttpStatusCode.BadRequest, "invalid_email", "Wpisz poprawny adres e-mail.")
+            throw ApiException(
+                HttpStatusCode.BadRequest, "invalid_email",
+                "Wpisz poprawny adres e-mail (bez polskich znaków i spacji).",
+            )
         }
         return trimmed
     }

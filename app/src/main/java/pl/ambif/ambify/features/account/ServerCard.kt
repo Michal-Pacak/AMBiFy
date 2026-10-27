@@ -2,6 +2,7 @@ package pl.ambif.ambify.features.account
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,10 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +27,7 @@ import pl.ambif.ambify.core.network.ServerApi
 import pl.ambif.ambify.shared.CheckStatus
 import pl.ambif.ambify.shared.DiagnosticResult
 import pl.ambif.ambify.shared.HealthStatus
+import pl.ambif.ambify.ui.theme.LuxuryCard
 
 /** The four states of the connection shown on the Account screen. */
 sealed interface ServerStatus {
@@ -70,13 +69,7 @@ fun ServerCard(status: ServerStatus, onCheckConnection: () -> Unit) {
         is ServerStatus.OtherProblem -> Amber to "Serwer działa — inny problem"
         ServerStatus.Unreachable -> Red to "Brak połączenia"
     }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-    ) {
+    LuxuryCard(contentPadding = PaddingValues(0.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

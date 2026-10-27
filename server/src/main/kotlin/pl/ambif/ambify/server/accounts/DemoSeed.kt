@@ -14,9 +14,12 @@ object DemoSeed {
     const val OWNER = "owner@test.ambify"
     const val ADMIN = "admin@test.ambify"
     const val USER = "user@test.ambify"
+    /** Created first, so it becomes the Platform Admin; Owner of a second test community. */
+    const val PLATFORM = "platform@test.ambify"
 
     fun seedIfEmpty(service: AccountService, tokens: AccessTokens) {
         if (service.status().familyExists) return
+        service.setup(SetupRequest("Druga społeczność testowa", "Pat Platform", PLATFORM, PASSWORD, "seed"))
         val owner = session(tokens, service.setup(SetupRequest("Społeczność testowa", "Ola Owner", OWNER, PASSWORD, "seed")))
         for ((name, email) in listOf("Adam Admin" to ADMIN, "Ula User" to USER)) {
             val code = service.createInvitation(owner).code

@@ -1,9 +1,11 @@
 package pl.ambif.ambify.features.account
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -17,14 +19,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -57,12 +60,23 @@ import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Member
 import pl.ambif.ambify.shared.Role
 import pl.ambif.ambify.ui.icons.AppIcons
+import pl.ambif.ambify.ui.theme.LuxuryCard
+import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 internal sealed interface AccountDialog {
     data object ChangePassword : AccountDialog
     data class Code(val title: String, val text: String, val code: String, val share: String?) : AccountDialog
     data class Child(val child: ChildProfile?) : AccountDialog
     data class Confirm(val question: String, val action: String, val onConfirm: () -> Unit) : AccountDialog
+    /** One text field, e.g. the name of a new community or an invitation code. */
+    data class Input(
+        val title: String,
+        val label: String,
+        val info: String?,
+        val action: String,
+        val code: Boolean,
+        val onSave: suspend (String) -> Unit,
+    ) : AccountDialog
 }
 
 internal val ChildColors = listOf("#8EC3F0", "#9AD7A4", "#E3A8C0", "#F2C27B", "#B9A7EE", "#7FD3CF", "#F29C8B", "#C9C9CF")
@@ -72,7 +86,52 @@ internal fun Role.label() = when (this) {
     Role.OWNER -> "Owner"
     Role.ADMIN -> "Admin"
     Role.MEMBER -> "User"
-    Role.GUEST -> "Guest"
+}
+
+/** The current community, switching to another one, founding or joining one, and its modules screen. */
+@Composable
+internal fun CommunityCard(
+    me: Me,
+    onSwitch: (String) -> Unit,
+    onCreate: () -> Unit,
+    onJoin: () -> Unit,
+    onOpenModules: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    AccountCard("Społeczność") {
+        Box {
+            OutlinedButton(onClick = { menuOpen = true }, border = BorderStroke(1.5.dp, Gold)) {
+                Text(me.familyName ?: "", color = Gold, fontWeight = FontWeight.Medium)
+                Icon(AppIcons.ExpandMore, contentDescription = "Zmień społeczność", tint = Gold)
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                me.communities.forEach { community ->
+                    DropdownMenuItem(
+                        text = { Text(community.name) },
+                        leadingIcon = { if (community.id == me.communityId) Icon(AppIcons.Check, contentDescription = "Bieżąca") },
+                        trailingIcon = { Text(community.role.label(), color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        onClick = {
+                            menuOpen = false
+                            if (community.id != me.communityId) onSwitch(community.id)
+                        },
+                    )
+                }
+                HorizontalDivider()
+                DropdownMenuItem(text = { Text("+ Załóż nową społeczność") }, onClick = {
+                    menuOpen = false
+                    onCreate()
+                })
+                DropdownMenuItem(text = { Text("+ Dołącz z kodem") }, onClick = {
+                    menuOpen = false
+                    onJoin()
+                })
+            }
+        }
+        me.role?.let { Text("Twoja rola: ${it.label()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        ButtonsRow {
+            FilledTonalButton(onClick = onOpenModules) { Text("Moduły społeczności") }
+        }
+    }
 }
 
 @Composable
@@ -85,7 +144,6 @@ internal fun ProfileCard(me: Me, onChangePassword: () -> Unit, onLogout: () -> U
                 Text(me.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Text("${me.role.label()} · społeczność ${me.familyName}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ButtonsRow {
             FilledTonalButton(onClick = onChangePassword) { Text("Zmień hasło") }
             FilledTonalButton(onClick = onLogout) { Text("Wyloguj") }
@@ -106,15 +164,16 @@ internal fun FamilyCard(
     onRemoveMember: (Member) -> Unit,
     onSetRole: (Member, Role) -> Unit,
 ) {
-    val manager = me.role.canManage
-    AccountCard("Społeczność") {
+    val myRole = me.role ?: Role.MEMBER
+    val manager = myRole.canManage
+    AccountCard("Członkowie") {
         Column {
             family.members.forEachIndexed { index, member ->
                 val color = if (member.role == Role.OWNER) Gold else MemberColors[index % MemberColors.size]
                 // Owner and Admin manage only people with a lower role; only the Owner changes roles.
-                val actions = if (manager && member.role.rank < me.role.rank) {
+                val actions = if (manager && member.role.rank < myRole.rank) {
                     buildList {
-                        if (me.role == Role.OWNER) {
+                        if (myRole == Role.OWNER) {
                             if (member.role == Role.ADMIN) add("Zmień rolę na User" to { onSetRole(member, Role.MEMBER) })
                             else add("Nadaj rolę Admin" to { onSetRole(member, Role.ADMIN) })
                         }
@@ -265,6 +324,35 @@ internal fun ChildDialog(child: ChildProfile?, onDismiss: () -> Unit, onSave: su
 }
 
 @Composable
+internal fun InputDialog(dialog: AccountDialog.Input, onDismiss: () -> Unit) {
+    var value by rememberSaveable { mutableStateOf("") }
+    val submit = rememberSubmit { dialog.onSave(value) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(dialog.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                dialog.info?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = if (dialog.code) it.uppercase().filter(Char::isLetterOrDigit).take(8) else it },
+                    label = { Text(dialog.label) },
+                    singleLine = true,
+                    textStyle = if (dialog.code) TextStyle(fontFamily = FontFamily.Monospace, fontSize = 20.sp, letterSpacing = 4.sp) else TextStyle.Default,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = if (dialog.code) KeyboardCapitalization.Characters else KeyboardCapitalization.Sentences,
+                        keyboardType = if (dialog.label.contains("e-mail", ignoreCase = true)) KeyboardType.Email else KeyboardType.Text,
+                    ),
+                )
+                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy) { Text(dialog.action) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+    )
+}
+
+@Composable
 internal fun ConfirmDialog(dialog: AccountDialog.Confirm, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -282,24 +370,15 @@ internal fun ConfirmDialog(dialog: AccountDialog.Confirm, onDismiss: () -> Unit)
 // --- building blocks ---
 
 @Composable
-private fun AccountCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            content()
-        }
+internal fun AccountCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    LuxuryCard(contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 14.dp)) {
+        LuxurySectionTitle(title)
+        content()
     }
 }
 
 @Composable
-private fun ColumnScope.ButtonsRow(content: @Composable () -> Unit) {
+internal fun ColumnScope.ButtonsRow(content: @Composable () -> Unit) {
     FlowRow(
         modifier = Modifier.align(Alignment.End),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),

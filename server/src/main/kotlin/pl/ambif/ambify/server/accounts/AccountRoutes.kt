@@ -17,11 +17,20 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import pl.ambif.ambify.shared.AccountPaths
 import pl.ambif.ambify.shared.ApiError
+import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.ChildRequest
+import pl.ambif.ambify.shared.CreateCommunityRequest
+import pl.ambif.ambify.shared.EmailRequest
+import pl.ambif.ambify.shared.GrantRequest
+import pl.ambif.ambify.shared.JoinRequest
 import pl.ambif.ambify.shared.LoginRequest
+import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ModuleOrder
+import pl.ambif.ambify.shared.ModulePaths
+import pl.ambif.ambify.shared.ModuleSwitch
+import pl.ambif.ambify.shared.PlatformPaths
 import pl.ambif.ambify.shared.RefreshRequest
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
@@ -111,7 +120,36 @@ fun Route.accountRoutes(service: AccountService) {
             service.signOutMember(call.session(), call.parameters["id"]!!)
             call.respond(HttpStatusCode.NoContent)
         }
+
+        get(AccountPaths.COMMUNITIES) { call.respond(service.communities(call.session().userId)) }
+        post(AccountPaths.COMMUNITIES) {
+            call.respond(service.createCommunity(call.session(), call.receive<CreateCommunityRequest>().name))
+        }
+        post(AccountPaths.JOIN) { call.respond(service.join(call.session(), call.receive<JoinRequest>().code)) }
+
+        get(ModulePaths.MODULES) { call.respond(service.modules(call.session())) }
+        put("${ModulePaths.MODULES}/{module}") {
+            val module = ModuleId.entries.firstOrNull { it.name == call.parameters["module"] } ?: throw notFound()
+            call.respond(service.setModule(call.session(), module, call.receive<ModuleSwitch>().enabled))
+        }
+
+        get(PlatformPaths.COMMUNITIES) { call.respond(service.platformCommunities(call.session())) }
+        put("${PlatformPaths.COMMUNITIES}/{id}/grants/{key}") {
+            val granted = call.receive<GrantRequest>().granted
+            service.setGrant(call.session(), call.parameters["id"]!!, call.parameters["key"]!!, granted)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(PlatformPaths.FOUNDING_CREDITS) {
+            service.addFoundingCredit(call.session(), call.receive<EmailRequest>().email)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(PlatformPaths.RESET_CODES) {
+            call.respond(service.platformResetCode(call.session(), call.receive<EmailRequest>().email))
+        }
     }
 }
 
-private fun ApplicationCall.session(): UserSession = principal<UserSession>()!!
+private fun ApplicationCall.session(): UserSession =
+    principal<UserSession>()!!.copy(communityId = request.headers[ApiHeaders.COMMUNITY]?.ifBlank { null })
+
+private fun notFound() = ApiException(HttpStatusCode.NotFound, "not_found", "Nie znaleziono.")

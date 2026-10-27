@@ -7,7 +7,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -19,21 +18,24 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import kotlinx.coroutines.launch
 import pl.ambif.ambify.BuildConfig
 import pl.ambif.ambify.core.navigation.AppDestination
+import pl.ambif.ambify.core.navigation.NoBarRoutes
 import pl.ambif.ambify.core.navigation.SignedOutRoutes
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
-import pl.ambif.ambify.features.auth.JoinScreen
 import pl.ambif.ambify.features.auth.LoginScreen
+import pl.ambif.ambify.features.auth.RegisterScreen
 import pl.ambif.ambify.features.auth.ResetPasswordScreen
-import pl.ambif.ambify.features.auth.SetupScreen
+import pl.ambif.ambify.features.auth.StartScreen
 import pl.ambif.ambify.features.account.AccountScreen
+import pl.ambif.ambify.features.account.CommunityModulesScreen
+import pl.ambif.ambify.features.platform.PlatformScreen
 import pl.ambif.ambify.features.calendar.CalendarScreen
 import pl.ambif.ambify.features.common.ModulePlaceholderScreen
 import pl.ambif.ambify.features.home.HomeScreen
 import pl.ambif.ambify.modules.splash.SplashScreen
+import pl.ambif.ambify.shared.ModuleId
 
 @Composable
 fun AppNavHost(
@@ -42,24 +44,30 @@ fun AppNavHost(
 ) {
     val session = LocalAppSession.current
     val sessionState by session.state.collectAsState()
-    val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val showNavigationBar =
-        currentDestination != null && currentDestination.route !in SignedOutRoutes
+        currentDestination != null && currentDestination.route !in NoBarRoutes
     var loginNotice by rememberSaveable { mutableStateOf<String?>(null) }
 
+    /** Dashboard, or the start screen for someone who has no community yet. */
     fun openAfterSignIn() {
-        navController.navigate(AppDestination.Home.route) {
+        val hasCommunity = (session.state.value as? SessionState.SignedIn)?.me?.communityId != null
+        navController.navigate(if (hasCommunity) AppDestination.Home.route else AppDestination.Start.route) {
             popUpTo(navController.graph.id) { inclusive = true }
         }
     }
 
     // Signed out anywhere in the app (logout, revoked device, expired session): back to login.
+    // Left without a community (removed from the last one): to the start screen.
     LaunchedEffect(sessionState, currentDestination?.route) {
-        val route = currentDestination?.route
-        if (sessionState is SessionState.SignedOut && route != null && route !in SignedOutRoutes) {
-            navController.navigate(AppDestination.Login.route) {
+        val route = currentDestination?.route ?: return@LaunchedEffect
+        val next = when (val state = sessionState) {
+            SessionState.SignedOut -> AppDestination.Login.takeIf { route !in SignedOutRoutes }
+            is SessionState.SignedIn -> AppDestination.Start.takeIf { state.me.communityId == null && route !in NoBarRoutes }
+        }
+        next?.let {
+            navController.navigate(it.route) {
                 popUpTo(navController.graph.id) { inclusive = true }
             }
         }
@@ -68,7 +76,7 @@ fun AppNavHost(
     // Back on the Dashboard (or a sign-in screen) leaves the app without asking: the real app goes to
     // the background like any Android app, the test app closes completely.
     val activity = LocalContext.current as? Activity
-    val rootRoutes = setOf(AppDestination.Home.route, AppDestination.Login.route, AppDestination.Setup.route)
+    val rootRoutes = setOf(AppDestination.Home.route, AppDestination.Login.route, AppDestination.Start.route)
     BackHandler(enabled = currentDestination?.route in rootRoutes) {
         if (BuildConfig.TEST_LOGIN) activity?.finishAndRemoveTask() else activity?.moveTaskToBack(true)
     }
@@ -94,16 +102,11 @@ fun AppNavHost(
             composable(AppDestination.Splash.route) {
                 SplashScreen(
                     onNavigateToHome = {
-                        scope.launch {
-                            val next = when {
-                                session.isSignedIn -> {
-                                    session.refreshInBackground()
-                                    AppDestination.Home
-                                }
-                                runCatching { session.api.authStatus().familyExists }.getOrDefault(true) -> AppDestination.Login
-                                else -> AppDestination.Setup
-                            }
-                            navController.navigate(next.route) {
+                        if (session.isSignedIn) {
+                            session.refreshInBackground()
+                            openAfterSignIn()
+                        } else {
+                            navController.navigate(AppDestination.Login.route) {
                                 popUpTo(AppDestination.Splash.route) { inclusive = true }
                             }
                         }
@@ -111,21 +114,21 @@ fun AppNavHost(
                 )
             }
 
-            composable(AppDestination.Setup.route) {
-                SetupScreen(onSignedIn = ::openAfterSignIn)
-            }
-
             composable(AppDestination.Login.route) {
                 LoginScreen(
                     onSignedIn = ::openAfterSignIn,
-                    onJoin = { navController.navigate(AppDestination.Join.route) },
+                    onCreateAccount = { navController.navigate(AppDestination.Register.route) },
                     onForgotPassword = { navController.navigate(AppDestination.ResetPassword.route) },
                     notice = loginNotice,
                 )
             }
 
-            composable(AppDestination.Join.route) {
-                JoinScreen(onSignedIn = ::openAfterSignIn, onBack = { navController.popBackStack() })
+            composable(AppDestination.Register.route) {
+                RegisterScreen(onSignedIn = ::openAfterSignIn, onBack = { navController.popBackStack() })
+            }
+
+            composable(AppDestination.Start.route) {
+                StartScreen(name = (sessionState as? SessionState.SignedIn)?.me?.name ?: "", onReady = ::openAfterSignIn)
             }
 
             composable(AppDestination.ResetPassword.route) {
@@ -149,41 +152,58 @@ fun AppNavHost(
 
             composable(AppDestination.Missions.route) {
                 ModulePlaceholderScreen(
-                    title = "Misje",
+                    title = ModuleId.MISSIONS.label,
                     description = "Zadania, punkty i nagrody dla członków organizacji.",
                 )
             }
 
-            composable(AppDestination.Shopping.route) {
+            composable(AppDestination.Lists.route) {
                 ModulePlaceholderScreen(
-                    title = "Zakupy",
-                    description = "Wspólne listy zakupów całej organizacji.",
+                    title = ModuleId.LISTS.label,
+                    description = "Wspólne listy: zakupy, zadania i terminy.",
                 )
             }
 
             composable(AppDestination.Communication.route) {
                 ModulePlaceholderScreen(
-                    title = "Czat",
+                    title = ModuleId.COMMUNICATION.label,
                     description = "Wiadomości i dyskusje między członkami organizacji.",
                 )
             }
 
             composable(AppDestination.Timetable.route) {
                 ModulePlaceholderScreen(
-                    title = "Plan lekcji",
+                    title = ModuleId.TIMETABLE.label,
                     description = "Tygodniowy plan lekcji uczniów.",
                 )
             }
 
             composable(AppDestination.School.route) {
                 ModulePlaceholderScreen(
-                    title = "Szkoła",
+                    title = ModuleId.SCHOOL.label,
                     description = "Oceny, ogłoszenia i sprawy szkolne.",
                 )
             }
 
+            composable(AppDestination.Assistant.route) {
+                ModulePlaceholderScreen(
+                    title = ModuleId.ASSISTANT.label,
+                    description = "Rozmowa z AI (Claude, GPT, Gemini) z załącznikami, przez bramkę AI na serwerze.",
+                )
+            }
+
             composable(AppDestination.Account.route) {
-                AccountScreen()
+                AccountScreen(
+                    onOpenModules = { navController.navigate(AppDestination.CommunityModules.route) },
+                )
+            }
+
+            composable(AppDestination.CommunityModules.route) {
+                CommunityModulesScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(AppDestination.Platform.route) {
+                PlatformScreen()
             }
         }
     }

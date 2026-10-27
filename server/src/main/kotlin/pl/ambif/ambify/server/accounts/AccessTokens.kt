@@ -8,8 +8,11 @@ import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Date
 
-/** Who is calling: set by the JWT check on every authenticated request. */
-data class UserSession(val userId: String, val sessionId: String)
+/**
+ * Who is calling: set by the JWT check on every authenticated request.
+ * [communityId] comes from the request header; the service checks that the caller belongs to it.
+ */
+data class UserSession(val userId: String, val sessionId: String, val communityId: String? = null)
 
 /**
  * Short-lived JWT access tokens. Each one names its device session, and the server checks that

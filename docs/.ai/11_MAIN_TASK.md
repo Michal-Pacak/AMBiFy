@@ -3,10 +3,10 @@
 Roadmap: [02_Roadmap.md](../02_Roadmap.md) (approved 2026-10-14).
 
 Current stage:
-Stage 2 - Accounts, organization, child profiles (v0.4)
+Stage 3 - Communities, modules & Platform Admin (v0.5)
 
 Next stage:
-Stage 3 - Roles & Permissions (v0.5)
+Stage 4 - Timetable from vulcan_digest (v0.6)
 
 In the background, when convenient:
 Stage 1A - AI Gateway (v0.3.1)

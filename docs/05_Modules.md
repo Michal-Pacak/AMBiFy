@@ -60,6 +60,20 @@ Every module should:
 
 ---
 
+## Basic and Premium
+
+The catalog lives in `shared/.../Modules.kt` (`ModuleId`, `Feature`, `Entitlements`) and the server enforces it.
+
+| Tier | Modules | Who pays |
+|------|---------|----------|
+| Basic | Calendar, Lists, Communication (text) | Included: free in the first own community, in the founding fee of every next one |
+| Premium | Timetable, School, Missions, AI Assistant | The community's Owner, per community |
+| Premium features | Lists: reminders, meal plan, to Missions; Communication: attachments | The community's Owner, per community |
+
+Basic modules are the light, text-only ones (little space and server work). Until payments exist, premium is granted only by the Platform Admin. The Owner and Admins can switch off any module the community has; the module bar shows the enabled ones.
+
+---
+
 ## Module Documentation
 
 Detailed documentation for individual modules is maintained separately.

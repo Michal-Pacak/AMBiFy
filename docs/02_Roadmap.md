@@ -86,10 +86,15 @@ Decisions (2026-10-24): login with e-mail + password; the phone stays signed in 
 
 Done early (2026-10-24, owner's decision): the group is called a **community** ("Społeczność") instead of a family; roles are shown in English — **Owner / Admin / User**; people without an account are **"Nieletni"** (minor) profiles.
 
+Business model (2026-10-27, owner's decision): anyone can found a community. The first community where a person is the Owner is free and has the **basic** modules (the light, text-only ones: Calendar, Lists, Communication); every next one needs a one-time founding fee. **Premium** modules and features (Timetable, School, Missions, AI Assistant, attachments, extras inside modules) are always paid, per community, by its Owner. Payments come after Stage 9; until then only the Platform Admin grants them, free of charge. The Guest role is dropped: people outside the family are Users or found their own community.
+
 - [x] Roles Owner, Admin, User: the Owner grants and takes back Admin; Owner and Admin manage only people with a lower role (invitations, minors, password reset codes, signing out, removing)
-- [ ] Guest role
-- [ ] Per-module permission catalog in `:shared`, enforced by the server
-- [ ] Enabling/disabling modules per organization; navigation bar built from enabled and permitted modules
+- [x] One account in many communities, a role per community; switcher on the Account screen; founding a new community and joining with a code while signed in
+- [x] Sign-up without a code (account first, then found or join a community); e-mail addresses without Polish letters
+- [x] Module catalog in `:shared` (basic / premium modules and premium features inside modules), enforced by the server
+- [x] Owner and Admins switch the community's modules on and off; the module bar shows only the enabled ones
+- [x] Platform Admin (the oldest Owner on the server): panel with all communities, grants premium modules and features, a free founding of one more community, password reset code for an Owner
+- [x] Luxury theme on every screen (graphite and metallic gold, [06_Luxury_Theme.md](06_Luxury_Theme.md)); every module has its place on the module bar
 
 ### Stage 4 — Timetable from vulcan_digest (v0.6)
 
@@ -97,10 +102,13 @@ Done early (2026-10-24, owner's decision): the group is called a **community** (
 - [ ] vulcan_digest exports the timetable to the AMBiFy server after its daily run
 - [ ] Timetable screen: tab per child, day/week view, current lesson highlighted, offline copy
 
-### Stage 5 — Shopping list (v0.7)
+### Stage 5 — Lists (v0.7)
 
-- [ ] Shared lists, items with quantity, who added it, check off while shopping
+One list engine for several list types: shopping, tasks, deadlines (a new type is configuration, not new code).
+
+- [ ] Basic: shared lists of every type, items with quantity or date, who added it, check off
 - [ ] Offline first: local database + synchronization (reused by later modules)
+- [ ] Premium features: reminders (`LISTS_REMINDERS`), shopping list generated from planned meals (`LISTS_MEAL_PLAN`), moving a task to Missions (`LISTS_TO_MISSIONS`)
 
 ### Stage 6 — Calendar v1 (v0.8)
 
@@ -117,6 +125,11 @@ Done early (2026-10-24, owner's decision): the group is called a **community** (
 
 - [ ] Child profile becomes an account (login set by a parent)
 - [ ] Limited permissions managed by parents
+
+### Later — Quick unlock
+
+- [ ] The phone remembers the signed-in person; the app opens with a fingerprint, PIN or pattern instead of the password (a lock of the app on the phone, not a second password on the server) — layout approved first
+- [ ] Password recovery by e-mail link (needs Stage 9)
 
 ### Stage 9 — Access outside home (v1.0)
 
@@ -167,3 +180,7 @@ Every new module is delivered the same way:
 ---
 
 ➡ **Next document:** [Naming Convention →](03_Naming_Convention.md)
+
+### After v1.0 — Payments
+
+- [ ] One-time founding fee for every next community, premium modules and features per community paid by its Owner (Google Play Billing for digital features in the Android app)

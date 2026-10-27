@@ -1,5 +1,6 @@
 package pl.ambif.ambify.features.auth
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -54,9 +56,10 @@ import pl.ambif.ambify.core.network.ServerError
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.shared.AccountRules
 import pl.ambif.ambify.shared.LoginRequest
+import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
-import pl.ambif.ambify.shared.SetupRequest
+import pl.ambif.ambify.shared.Tier
 import pl.ambif.ambify.ui.branding.BrandLogo
 import pl.ambif.ambify.ui.icons.AppIcons
 
@@ -71,34 +74,108 @@ internal object AuthColors {
     val Error = Color(0xFFFF8A80)
 }
 
-/** First start: the family does not exist yet. */
+/** A new account without a community; founding one or joining with a code comes next ([StartScreen]). */
 @Composable
-fun SetupScreen(onSignedIn: () -> Unit) {
+fun RegisterScreen(onSignedIn: () -> Unit, onBack: () -> Unit) {
     val session = LocalAppSession.current
-    var familyName by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var repeat by rememberSaveable { mutableStateOf("") }
     val submit = rememberSubmit {
         checkPasswords(password, repeat)
-        session.signIn(session.api.setup(SetupRequest(familyName, name, email, password, session.deviceName)))
+        session.signIn(session.api.register(RegisterRequest(null, name, email, password, session.deviceName)))
         onSignedIn()
     }
 
-    AuthLayout {
-        AuthHeader("Załóż społeczność", "Zostaniesz jej Ownerem i zaprosisz pozostałych.", centered = true, logo = true)
-        AuthField("Nazwa społeczności", familyName, { familyName = it }, capitalize = true)
+    AuthLayout(top = 16.dp) {
+        BackButton(onBack)
+        AuthHeader("Załóż konto", "Społeczność założysz albo dołączysz do niej z kodem w następnym kroku.")
         AuthField("Twoje imię", name, { name = it }, capitalize = true)
         AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
         PasswordField("Hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
         PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
-        SubmitButton("Załóż społeczność", submit)
+        SubmitButton("Załóż konto", submit)
+    }
+}
+
+/** Signed in without a community: found the first one (free) or join one with an invitation code. */
+@Composable
+fun StartScreen(name: String, onReady: () -> Unit) {
+    val session = LocalAppSession.current
+    val scope = rememberCoroutineScope()
+    var choice by rememberSaveable { mutableStateOf<String?>(null) }
+    var communityName by rememberSaveable { mutableStateOf("") }
+    var code by rememberSaveable { mutableStateOf("") }
+    val found = rememberSubmit {
+        session.createCommunity(communityName)
+        onReady()
+    }
+    val join = rememberSubmit {
+        session.joinCommunity(code)
+        onReady()
+    }
+
+    AuthLayout {
+        AuthHeader("Witaj, $name!", "Nie należysz jeszcze do żadnej społeczności. Załóż własną albo dołącz do istniejącej z kodem zaproszenia.")
+        StartChoice(
+            title = "Załóż społeczność",
+            text = "Zostaniesz jej Ownerem. Pierwsza społeczność jest za darmo, z modułami " +
+                ModuleId.entries.filter { it.tier == Tier.BASIC }.joinToString(", ") { it.label } + ".",
+            primary = true,
+            onClick = { choice = FOUND },
+        )
+        if (choice == FOUND) {
+            AuthField("Nazwa społeczności", communityName, { communityName = it }, capitalize = true, last = true, onDone = found.run)
+            SubmitButton("Załóż społeczność", found)
+        }
+        StartChoice(
+            title = "Mam kod zaproszenia",
+            text = "Kod dostajesz od Ownera lub Admina społeczności. Jest jednorazowy i ważny ${AccountRules.INVITATION_DAYS} dni.",
+            primary = false,
+            onClick = { choice = JOIN },
+        )
+        if (choice == JOIN) {
+            CodeField("Kod zaproszenia", code, { code = it })
+            SubmitButton("Dołącz do społeczności", join)
+        }
+        TextButton(onClick = { scope.launch { session.logout() } }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text("Wyloguj", color = AuthColors.Muted, fontSize = 15.sp)
+        }
+    }
+}
+
+private const val FOUND = "found"
+private const val JOIN = "join"
+
+@Composable
+private fun StartChoice(title: String, text: String, primary: Boolean, onClick: () -> Unit) {
+    val content: @Composable () -> Unit = {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Text(text, fontSize = 14.sp, lineHeight = 19.sp)
+        }
+    }
+    if (primary) {
+        Button(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AuthColors.Gold, contentColor = AuthColors.OnGold),
+        ) { content() }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.5.dp, AuthColors.Gold),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AuthColors.Gold),
+        ) { content() }
     }
 }
 
 @Composable
-fun LoginScreen(onSignedIn: () -> Unit, onJoin: () -> Unit, onForgotPassword: () -> Unit, notice: String? = null) {
+fun LoginScreen(onSignedIn: () -> Unit, onCreateAccount: () -> Unit, onForgotPassword: () -> Unit, notice: String? = null) {
     val session = LocalAppSession.current
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -121,15 +198,20 @@ fun LoginScreen(onSignedIn: () -> Unit, onJoin: () -> Unit, onForgotPassword: ()
         }
         Spacer(Modifier.height(8.dp))
         if (BuildConfig.TEST_LOGIN) TestLogin(onSignedIn)
-        Text("Nie masz konta? Poproś Ownera lub Admina o kod.", color = AuthColors.Muted, fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
-        FilledTonalButton(
-            onClick = onJoin,
+        Text("Nie masz konta?", color = AuthColors.Muted, fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+        OutlinedButton(
+            onClick = onCreateAccount,
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(27.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(containerColor = AuthColors.Tonal, contentColor = AuthColors.OnTonal),
+            border = BorderStroke(1.5.dp, AuthColors.Gold),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AuthColors.Gold),
         ) {
-            Text("Mam kod zaproszenia", fontSize = 16.sp)
+            Text("Załóż konto", fontSize = 16.sp)
         }
+        Text(
+            "Konto zakładasz bez kodu. Społeczność wybierasz w następnym kroku.",
+            color = AuthColors.Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -159,7 +241,7 @@ fun JoinScreen(onSignedIn: () -> Unit, onBack: () -> Unit) {
     }
 }
 
-/** "I forgot my password": the code comes from an Owner or Admin (Konto → Społeczność → ⋮ → Resetuj hasło). */
+/** "I forgot my password": the code comes from an Owner or Admin (Konto → Społeczność → ⋮ → Resetuj hasło), an Owner's from the Platform Admin. */
 @Composable
 fun ResetPasswordScreen(onDone: () -> Unit, onBack: () -> Unit) {
     val session = LocalAppSession.current
@@ -175,7 +257,11 @@ fun ResetPasswordScreen(onDone: () -> Unit, onBack: () -> Unit) {
 
     AuthLayout(top = 16.dp) {
         BackButton(onBack)
-        AuthHeader("Nowe hasło", "Poproś Ownera lub Admina o kod resetu: Konto → Społeczność → ⋮ → Resetuj hasło. Kod jest ważny 24 godziny.")
+        AuthHeader(
+            "Nowe hasło",
+            "Kod resetu dostaniesz od Ownera lub Admina swojej społeczności (Konto → Społeczność → ⋮ → Resetuj hasło). " +
+                "Owner dostaje kod od Platform Admina. Kod jest ważny 24 godziny.",
+        )
         AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
         CodeField("Kod resetu", code, { code = it })
         PasswordField("Nowe hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
@@ -195,7 +281,12 @@ private fun TestLogin(onSignedIn: () -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         Text("Szybkie logowanie (test)", color = AuthColors.Gold, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        listOf("Owner" to "owner@test.ambify", "Admin" to "admin@test.ambify", "User" to "user@test.ambify").forEach { (role, email) ->
+        listOf(
+            "Owner" to "owner@test.ambify",
+            "Admin" to "admin@test.ambify",
+            "User" to "user@test.ambify",
+            "Platform Admin" to "platform@test.ambify",
+        ).forEach { (role, email) ->
             FilledTonalButton(
                 onClick = {
                     chosen = email

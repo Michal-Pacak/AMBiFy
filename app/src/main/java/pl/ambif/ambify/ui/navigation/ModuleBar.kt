@@ -79,6 +79,9 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import pl.ambif.ambify.core.device.GrabVibration
 import pl.ambif.ambify.core.navigation.AppDestination
+import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.shared.ModuleId
+import pl.ambif.ambify.shared.Tier
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.settings.ModuleOrderStore
 import pl.ambif.ambify.ui.branding.BrandLogo
@@ -117,16 +120,47 @@ internal class BarModule(
     val route: String get() = destination.route
 }
 
+/** A module's bar entry: its name comes from the module catalog, the same as on every other screen. */
+private fun BarModule(module: ModuleId, icon: @Composable () -> Unit): BarModule {
+    val destination = BarDestinations.getValue(module)
+    check(destination.route == module.route) { "Route of $module differs from its screen" }
+    return BarModule(destination, module.label, icon)
+}
+
+private val BarDestinations = mapOf(
+    ModuleId.CALENDAR to AppDestination.Calendar,
+    ModuleId.MISSIONS to AppDestination.Missions,
+    ModuleId.LISTS to AppDestination.Lists,
+    ModuleId.COMMUNICATION to AppDestination.Communication,
+    ModuleId.TIMETABLE to AppDestination.Timetable,
+    ModuleId.SCHOOL to AppDestination.School,
+    ModuleId.ASSISTANT to AppDestination.Assistant,
+)
+
 /** All bar modules in their default order. */
 internal val BarModules = listOf(
-    BarModule(AppDestination.Calendar, "Kalendarz") { CalendarNavIcon() },
-    BarModule(AppDestination.Missions, "Misje") { MissionsNavIcon() },
-    BarModule(AppDestination.Shopping, "Zakupy") { ShoppingNavIcon() },
+    BarModule(ModuleId.CALENDAR) { CalendarNavIcon() },
+    BarModule(ModuleId.MISSIONS) { MissionsNavIcon() },
+    BarModule(ModuleId.LISTS) { ShoppingNavIcon() },
     BarModule(AppDestination.Account, "Konto") { AccountNavIcon() },
-    BarModule(AppDestination.Communication, "Czat") { CommunicationNavIcon() },
-    BarModule(AppDestination.Timetable, "Plan lekcji") { TimetableNavIcon() },
-    BarModule(AppDestination.School, "Szkoła") { SchoolNavIcon() },
+    BarModule(AppDestination.Platform, "Platform Admin") { PlatformNavIcon() },
+    BarModule(ModuleId.COMMUNICATION) { CommunicationNavIcon() },
+    BarModule(ModuleId.TIMETABLE) { TimetableNavIcon() },
+    BarModule(ModuleId.SCHOOL) { SchoolNavIcon() },
+    BarModule(ModuleId.ASSISTANT) { AssistantNavIcon() },
 )
+
+/**
+ * Routes on the bar: the modules switched on in the current community (the basic ones while that is
+ * not known yet), Konto, which is not a module and is always there, and the Platform Admin panel,
+ * only for the Platform Admin.
+ */
+internal fun barRoutes(enabled: List<ModuleId>?, platformAdmin: Boolean = false): List<String> {
+    val modules = (enabled ?: ModuleId.entries.filter { it.tier == Tier.BASIC }).map { it.route }
+    return BarModules.map { it.route }.filter {
+        it == AppDestination.Account.route || (it == AppDestination.Platform.route && platformAdmin) || it in modules
+    }
+}
 
 /**
  * Navigation bar with the Dashboard logo fixed in the middle.
@@ -149,9 +183,13 @@ fun ModuleBar(
     val session = LocalAppSession.current
     // The order also lives on the server; a newer copy from there reloads the bar.
     val moduleOrderVersion by session.moduleOrderVersion.collectAsState()
+    val communityModules by session.modules.collectAsState()
+    val sessionState by session.state.collectAsState()
+    val platformAdmin = (sessionState as? SessionState.SignedIn)?.me?.platformAdmin == true
     val modulesByRoute = remember { BarModules.associateBy { it.route } }
+    val shownRoutes = remember(communityModules, platformAdmin) { barRoutes(communityModules?.enabled, platformAdmin) }
 
-    var order by remember(moduleOrderVersion) { mutableStateOf(resolveModuleOrder(store.load(), BarModules.map { it.route })) }
+    var order by remember(moduleOrderVersion, shownRoutes) { mutableStateOf(resolveModuleOrder(store.load(), shownRoutes)) }
     // Index in `order` of the first module on the collapsed bar.
     var windowStart by rememberSaveable { mutableIntStateOf(0) }
 

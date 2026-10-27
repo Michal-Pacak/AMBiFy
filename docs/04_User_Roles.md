@@ -16,14 +16,19 @@ This document describes the roles and permission model used throughout the **AMB
 
 ---
 
-## Planned Roles
+## Roles
+
+A person has one account and may belong to many communities, with a role in each of them.
 
 | Role | Description |
 |------|-------------|
-| Owner | Full control over the organization |
-| Administrator | Manages organization settings and members |
-| Member | Uses assigned modules |
-| Guest | Limited access when enabled |
+| Owner | Founded the community; full control, grants and takes back the Admin role |
+| Admin | Invites people, manages minors and people with the User role, switches modules on and off |
+| User | Uses the modules the community has switched on |
+| Nieletni | A minor's profile without an account, managed by the Owner and Admins |
+| Platform Admin | Above all communities (the oldest Owner on the server); grants premium modules and features and free foundings, never set through the API |
+
+There is no Guest role: someone from outside the family is a User or founds their own community. Temporary access (an invitation whose membership expires) is in the backlog.
 
 ---
 

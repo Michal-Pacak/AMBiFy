@@ -12,3 +12,5 @@ AB-009 Backend Agnostic
 AB-010 AI Platform Service
 AB-011 Multi Organization
 AB-012 Marketplace Ready
+AB-013 Temporary Access (membership that expires, instead of a Guest role)
+AB-014 Storage Quota per Community (basic limit, more with premium)

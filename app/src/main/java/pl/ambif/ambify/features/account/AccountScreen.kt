@@ -2,15 +2,13 @@ package pl.ambif.ambify.features.account
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,16 +36,18 @@ import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.Family
 import pl.ambif.ambify.shared.Role
+import pl.ambif.ambify.ui.theme.Luxury
+import pl.ambif.ambify.ui.theme.LuxuryCard
 
 @Composable
-fun AccountScreen() {
+fun AccountScreen(onOpenModules: () -> Unit) {
     val session = LocalAppSession.current
     val api = session.api
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by session.state.collectAsState()
     val me = (state as? SessionState.SignedIn)?.me ?: return
-    val manager = me.role.canManage
+    val manager = me.role?.canManage == true
 
     var family by remember { mutableStateOf<Family?>(null) }
     var devices by remember { mutableStateOf<List<Device>>(emptyList()) }
@@ -79,8 +79,10 @@ fun AccountScreen() {
         context.startActivity(Intent.createChooser(send, null))
     }
 
-    LaunchedEffect(Unit) {
-        serverStatus = api.status()
+    LaunchedEffect(Unit) { serverStatus = api.status() }
+
+    // Again after switching to another community.
+    LaunchedEffect(me.communityId) {
         try {
             reload()
         } catch (e: ServerError) {
@@ -103,6 +105,47 @@ fun AccountScreen() {
                 me = me,
                 onChangePassword = { dialog = AccountDialog.ChangePassword },
                 onLogout = { scope.launch { session.logout() } },
+            )
+
+            CommunityCard(
+                me = me,
+                onSwitch = { id ->
+                    scope.launch {
+                        try {
+                            session.switchCommunity(id)
+                            notice = null
+                        } catch (e: ServerError) {
+                            notice = e.message
+                        }
+                    }
+                },
+                onCreate = {
+                    dialog = AccountDialog.Input(
+                        title = "Nowa społeczność",
+                        label = "Nazwa społeczności",
+                        info = "Zostaniesz jej Ownerem. Pierwsza własna społeczność jest za darmo, każda kolejna wymaga jednorazowej opłaty.",
+                        action = "Załóż",
+                        code = false,
+                    ) { name ->
+                        session.createCommunity(name)
+                        notice = "Założono społeczność $name."
+                        dialog = null
+                    }
+                },
+                onJoin = {
+                    dialog = AccountDialog.Input(
+                        title = "Dołącz do społeczności",
+                        label = "Kod zaproszenia",
+                        info = "Kod dostajesz od Ownera lub Admina społeczności.",
+                        action = "Dołącz",
+                        code = true,
+                    ) { code ->
+                        session.joinCommunity(code)
+                        notice = "Dołączono do społeczności ${(session.state.value as? SessionState.SignedIn)?.me?.familyName ?: ""}."
+                        dialog = null
+                    }
+                },
+                onOpenModules = onOpenModules,
             )
 
             family?.let { current ->
@@ -169,11 +212,7 @@ fun AccountScreen() {
                 },
             )
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            ) {
+            LuxuryCard(contentPadding = PaddingValues(0.dp)) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Kalendarz Google", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
@@ -216,6 +255,7 @@ fun AccountScreen() {
             },
         )
         is AccountDialog.Confirm -> ConfirmDialog(current, onDismiss = { dialog = null })
+        is AccountDialog.Input -> InputDialog(current, onDismiss = { dialog = null })
     }
 }
 
@@ -226,4 +266,4 @@ internal fun formatDay(millis: Long): String = dayFormat.format(Date(millis))
 private fun invitationText(familyName: String, code: String, expiresAt: Long) =
     "Dołącz do społeczności $familyName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)})."
 
-internal val Gold = Color(0xFFD4A93C)
+internal val Gold = Luxury.GoldText
