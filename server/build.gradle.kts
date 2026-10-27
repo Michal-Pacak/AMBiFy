@@ -5,7 +5,7 @@ plugins {
     application
 }
 
-version = "0.3.0"
+version = "0.4.0"
 
 kotlin {
     jvmToolchain(21)
@@ -27,6 +27,10 @@ dependencies {
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.auth)
+    implementation(libs.ktor.server.auth.jwt)
+    implementation(libs.ktor.server.status.pages)
+    implementation(libs.bouncycastle)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.sqlite.jdbc)

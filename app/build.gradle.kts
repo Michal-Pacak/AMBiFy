@@ -15,11 +15,20 @@ android {
         applicationId = "pl.ambif.ambify"
         minSdk = 31
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.4.0"
 
         // Fixed home server address; changed only by an app update, never by the user.
-        buildConfigField("String", "SERVER_URL", "\"http://192.168.1.122:8090\"")
+        // -Pambify.serverUrl=… builds a separate test app ("AMBiFy TEST", own data) against a test
+        // server, installed next to the real app so tests never touch the family's sign-in.
+        val testServerUrl = project.findProperty("ambify.serverUrl") as String?
+        buildConfigField("String", "SERVER_URL", "\"${testServerUrl ?: "http://192.168.1.122:8090"}\"")
+        if (testServerUrl != null) applicationIdSuffix = ".test"
+        // The test app offers one-tap sign-in with the test server's demo accounts.
+        buildConfigField("boolean", "TEST_LOGIN", (testServerUrl != null).toString())
+        manifestPlaceholders["appLabel"] = if (testServerUrl != null) "AMBiFy TEST" else "@string/app_name"
+        manifestPlaceholders["appIcon"] = if (testServerUrl != null) "@mipmap/ic_launcher_test" else "@mipmap/ic_launcher"
+        manifestPlaceholders["appRoundIcon"] = if (testServerUrl != null) "@mipmap/ic_launcher_test_round" else "@mipmap/ic_launcher_round"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

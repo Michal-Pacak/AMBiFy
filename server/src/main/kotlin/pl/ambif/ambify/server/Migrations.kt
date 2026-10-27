@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 object Migrations {
     val FILES = listOf(
         "V001__init.sql",
+        "V002__accounts.sql",
     )
 
     fun apply(database: Database) {

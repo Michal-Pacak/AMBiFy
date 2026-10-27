@@ -22,11 +22,11 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 
 | Topic | Decision |
 |-------|----------|
-| Backend | Own server on the home server (`serverek`): Ktor + SQLite, LAN-only until stage 8 |
+| Backend | Own server on the home server (`serverek`): Ktor + SQLite, LAN-only until stage 9 |
 | Repository | Monorepo: `:app` (Android), `:shared` (API models, permissions, module keys), `:server` (Ktor) |
 | First users | Parents first; children start as profiles without accounts and get accounts in stage 7 |
 | Calendar | AMBiFy's own calendar first, Google Calendar sync later |
-| Module priority | Calendar and Timetable |
+| Module order | Accounts first, then Timetable, Shopping list and Calendar (changed 2026-10-24); the AI gateway (Stage 1A) is built when convenient, nothing depends on it |
 | AI | Own gateway (`llm_gateway`) over the official Claude / GPT / Gemini / Copilot CLIs running on our subscriptions; the paid API only as a fallback |
 
 ---
@@ -50,7 +50,7 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 - [x] Panel grip shown only when there are more than four modules
 - [x] Bar labels: 11 sp, at most 2 lines x 10 characters ("Komunikacja" shown as "Czat")
 - [x] Dashboard: larger logo without a label, transparent around the symbol (1 px outline), level with the labels; flatter cradle
-- [x] Back on the Dashboard asks before closing the app
+- [x] Back on the Dashboard leaves the app without asking: the real app goes to the background, the test app closes (changed 2026-10-24)
 
 ### Stage 1 — Server foundation (v0.3)
 
@@ -72,48 +72,60 @@ The gateway service does not depend on Stage 1 and can be built in parallel; the
 
 ### Stage 2 — Accounts, organization, child profiles (v0.4)
 
-- [ ] Registration and login (Argon2, JWT access + refresh tokens)
-- [ ] Organization, members, invitation codes
-- [ ] Child profiles without accounts (linked to the student in Vulcan)
-- [ ] App flow: Splash → Login → Home; Account screen with members, invitations and child profiles
-- [ ] Module order saved per user on the server
+Decisions (2026-10-24): login with e-mail + password; the phone stays signed in until logout (session renewed while the app is used, expires after 90 days of inactivity, a parent can sign out a lost phone); new people join only with an invitation code.
+
+- [x] Registration and login (Argon2 password hashes, JWT access + refresh tokens with rotation)
+- [x] The first person creates the family and becomes its Owner; everyone else registers only with a one-time invitation code (valid 7 days)
+- [x] Organization, members, invitation codes
+- [x] Child profiles without accounts: name and color (the link to the student in Vulcan moves to Stage 4)
+- [x] Signed-in devices per member; sign out a lost phone remotely
+- [x] App flow: Splash → Login → Home; Account screen with profile, members, invitations and child profiles — layout approved first
+- [x] Module order saved per user on the server
 
 ### Stage 3 — Roles & Permissions (v0.5)
 
-- [ ] Roles: Owner, Administrator, Member, Guest (family: parent = Owner/Admin, child = Member)
+Done early (2026-10-24, owner's decision): the group is called a **community** ("Społeczność") instead of a family; roles are shown in English — **Owner / Admin / User**; people without an account are **"Nieletni"** (minor) profiles.
+
+- [x] Roles Owner, Admin, User: the Owner grants and takes back Admin; Owner and Admin manage only people with a lower role (invitations, minors, password reset codes, signing out, removing)
+- [ ] Guest role
 - [ ] Per-module permission catalog in `:shared`, enforced by the server
 - [ ] Enabling/disabling modules per organization; navigation bar built from enabled and permitted modules
 
-### Stage 4 — Calendar v1 (v0.6)
+### Stage 4 — Timetable from vulcan_digest (v0.6)
 
-- [ ] Events: title, time, all-day, location, description, participants (members and child profiles)
-- [ ] Month view, day/week agenda, create/edit/delete, filter by person
-- [ ] Offline first: local database + synchronization (reused by later modules)
-
-### Stage 5 — Timetable from vulcan_digest (v0.7)
-
+- [ ] Child profile linked to the student in Vulcan
 - [ ] vulcan_digest exports the timetable to the AMBiFy server after its daily run
 - [ ] Timetable screen: tab per child, day/week view, current lesson highlighted, offline copy
 
-### Stage 6 — School & Dashboard (v0.8)
+### Stage 5 — Shopping list (v0.7)
+
+- [ ] Shared lists, items with quantity, who added it, check off while shopping
+- [ ] Offline first: local database + synchronization (reused by later modules)
+
+### Stage 6 — Calendar v1 (v0.8)
+
+- [ ] Events: title, time, all-day, location, description, participants (members and child profiles)
+- [ ] Month view, day/week agenda, create/edit/delete, filter by person
+
+### Stage 7 — School & Dashboard (v0.9)
 
 - [ ] Structured school summaries (tests, homework, reminders) from vulcan_digest
 - [ ] School screen per child
 - [ ] Dashboard: today's events, children's lessons today/tomorrow, upcoming tests
 
-### Stage 7 — Children as users (v0.9)
+### Stage 8 — Children as users (v0.10)
 
 - [ ] Child profile becomes an account (login set by a parent)
 - [ ] Limited permissions managed by parents
 
-### Stage 8 — Access outside home (v1.0)
+### Stage 9 — Access outside home (v1.0)
 
 - [ ] `ambify.pacak.waw.pl` over HTTPS, rate limiting, fail2ban
 - [ ] Admin panel of the NAS restricted to LAN before router ports are opened
 
 ### Later
 
-Missions → Shopping → Communication → Google Calendar sync → push notifications → Finance, Documents.
+Missions → Communication → Google Calendar sync → push notifications → Finance, Documents.
 
 ---
 

@@ -3,11 +3,11 @@ package pl.ambif.ambify.ui.navigation
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -19,7 +19,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.launch
+import pl.ambif.ambify.BuildConfig
 import pl.ambif.ambify.core.navigation.AppDestination
+import pl.ambif.ambify.core.navigation.SignedOutRoutes
+import pl.ambif.ambify.core.session.LocalAppSession
+import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.features.auth.JoinScreen
+import pl.ambif.ambify.features.auth.LoginScreen
+import pl.ambif.ambify.features.auth.ResetPasswordScreen
+import pl.ambif.ambify.features.auth.SetupScreen
 import pl.ambif.ambify.features.account.AccountScreen
 import pl.ambif.ambify.features.calendar.CalendarScreen
 import pl.ambif.ambify.features.common.ModulePlaceholderScreen
@@ -31,28 +40,37 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
+    val session = LocalAppSession.current
+    val sessionState by session.state.collectAsState()
+    val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val showNavigationBar =
-        currentDestination != null && currentDestination.route != AppDestination.Splash.route
+        currentDestination != null && currentDestination.route !in SignedOutRoutes
+    var loginNotice by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Back on the Dashboard asks before leaving the app (other screens go back to the Dashboard).
-    var confirmExit by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = currentDestination?.route == AppDestination.Home.route) {
-        confirmExit = true
+    fun openAfterSignIn() {
+        navController.navigate(AppDestination.Home.route) {
+            popUpTo(navController.graph.id) { inclusive = true }
+        }
     }
-    if (confirmExit) {
-        val activity = LocalContext.current as? Activity
-        AlertDialog(
-            onDismissRequest = { confirmExit = false },
-            title = { Text("Zamknąć AMBiFy?") },
-            confirmButton = {
-                TextButton(onClick = { activity?.finish() }) { Text("Zamknij") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmExit = false }) { Text("Anuluj") }
-            },
-        )
+
+    // Signed out anywhere in the app (logout, revoked device, expired session): back to login.
+    LaunchedEffect(sessionState, currentDestination?.route) {
+        val route = currentDestination?.route
+        if (sessionState is SessionState.SignedOut && route != null && route !in SignedOutRoutes) {
+            navController.navigate(AppDestination.Login.route) {
+                popUpTo(navController.graph.id) { inclusive = true }
+            }
+        }
+    }
+
+    // Back on the Dashboard (or a sign-in screen) leaves the app without asking: the real app goes to
+    // the background like any Android app, the test app closes completely.
+    val activity = LocalContext.current as? Activity
+    val rootRoutes = setOf(AppDestination.Home.route, AppDestination.Login.route, AppDestination.Setup.route)
+    BackHandler(enabled = currentDestination?.route in rootRoutes) {
+        if (BuildConfig.TEST_LOGIN) activity?.finishAndRemoveTask() else activity?.moveTaskToBack(true)
     }
 
     Scaffold(
@@ -76,15 +94,53 @@ fun AppNavHost(
             composable(AppDestination.Splash.route) {
                 SplashScreen(
                     onNavigateToHome = {
-                        navController.navigate(AppDestination.Home.route) {
-                            popUpTo(AppDestination.Splash.route) { inclusive = true }
+                        scope.launch {
+                            val next = when {
+                                session.isSignedIn -> {
+                                    session.refreshInBackground()
+                                    AppDestination.Home
+                                }
+                                runCatching { session.api.authStatus().familyExists }.getOrDefault(true) -> AppDestination.Login
+                                else -> AppDestination.Setup
+                            }
+                            navController.navigate(next.route) {
+                                popUpTo(AppDestination.Splash.route) { inclusive = true }
+                            }
                         }
                     },
                 )
             }
 
+            composable(AppDestination.Setup.route) {
+                SetupScreen(onSignedIn = ::openAfterSignIn)
+            }
+
+            composable(AppDestination.Login.route) {
+                LoginScreen(
+                    onSignedIn = ::openAfterSignIn,
+                    onJoin = { navController.navigate(AppDestination.Join.route) },
+                    onForgotPassword = { navController.navigate(AppDestination.ResetPassword.route) },
+                    notice = loginNotice,
+                )
+            }
+
+            composable(AppDestination.Join.route) {
+                JoinScreen(onSignedIn = ::openAfterSignIn, onBack = { navController.popBackStack() })
+            }
+
+            composable(AppDestination.ResetPassword.route) {
+                ResetPasswordScreen(
+                    onDone = {
+                        loginNotice = "Hasło zmienione. Zaloguj się nowym hasłem."
+                        navController.popBackStack()
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
             composable(AppDestination.Home.route) {
-                HomeScreen()
+                val me = (sessionState as? SessionState.SignedIn)?.me
+                HomeScreen(organizationName = me?.familyName ?: "", userName = me?.name ?: "")
             }
 
             composable(AppDestination.Calendar.route) {
@@ -115,7 +171,7 @@ fun AppNavHost(
             composable(AppDestination.Timetable.route) {
                 ModulePlaceholderScreen(
                     title = "Plan lekcji",
-                    description = "Tygodniowy plan lekcji dzieci.",
+                    description = "Tygodniowy plan lekcji uczniów.",
                 )
             }
 

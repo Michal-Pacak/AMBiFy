@@ -1,0 +1,18 @@
+# systemd user service: the TEST server for the "AMBiFy TEST" app (installed by deploy-test.sh).
+# Separate database with demo accounts; the real server and its data are never touched.
+[Unit]
+Description=AMBiFy test server (demo data)
+
+[Service]
+Environment=AMBIFY_HOST=0.0.0.0
+Environment=AMBIFY_PORT=18090
+Environment=AMBIFY_DB=%h/.local/share/ambify-test/ambify.db
+Environment=AMBIFY_BACKUP_DIR=%h/.local/share/ambify-test/backup
+Environment=AMBIFY_DEMO=1
+Environment=JAVA_OPTS=-Xmx192m
+ExecStart=%h/.local/opt/ambify-test/bin/server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -18,6 +18,8 @@ import pl.ambif.ambify.shared.DiagnosticsResponse
 import pl.ambif.ambify.shared.HealthResponse
 import pl.ambif.ambify.shared.HealthStatus
 
+fun testTokens() = pl.ambif.ambify.server.accounts.AccessTokens(ByteArray(64) { it.toByte() })
+
 class ServerTest {
     private fun tempDbPath(): String =
         Files.createTempDirectory("ambify-test").resolve("test.db").toString()
@@ -27,7 +29,7 @@ class ServerTest {
     @Test
     fun healthReportsOkWhenAllChecksPass() = testApplication {
         val database = Db.open(tempDbPath())
-        application { module(database, Diagnostics(listOf(DiagnosticCheck { result(CheckStatus.OK) }))) }
+        application { module(database, Diagnostics(listOf(DiagnosticCheck { result(CheckStatus.OK) })), testTokens()) }
 
         val response = client.get(ApiPaths.HEALTH)
 
@@ -44,7 +46,7 @@ class ServerTest {
             DiagnosticCheck { result(CheckStatus.OK) },
             DiagnosticCheck { result(CheckStatus.WARNING) },
         )
-        application { module(database, Diagnostics(checks)) }
+        application { module(database, Diagnostics(checks), testTokens()) }
 
         val health = Json.decodeFromString<HealthResponse>(client.get(ApiPaths.HEALTH).bodyAsText())
 
@@ -55,7 +57,7 @@ class ServerTest {
     fun diagnosticsListsChecksAndOldAppIsRejected() = testApplication {
         val database = Db.open(tempDbPath())
         val config = ServerConfig.fromEnv(mapOf("AMBIFY_DB" to tempDbPath()))
-        application { module(database, Diagnostics.platform(database, config, "test")) }
+        application { module(database, Diagnostics.platform(database, config, "test"), testTokens()) }
 
         val response = client.get(ApiPaths.DIAGNOSTICS) {
             header(ApiHeaders.APP_VERSION_CODE, Diagnostics.MIN_APP_VERSION_CODE - 1)

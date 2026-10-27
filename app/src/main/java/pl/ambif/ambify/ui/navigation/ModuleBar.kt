@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -78,6 +79,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import pl.ambif.ambify.core.device.GrabVibration
 import pl.ambif.ambify.core.navigation.AppDestination
+import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.settings.ModuleOrderStore
 import pl.ambif.ambify.ui.branding.BrandLogo
 
@@ -144,9 +146,12 @@ fun ModuleBar(
     val scope = rememberCoroutineScope()
     val grabVibration = remember(context) { GrabVibration(context.applicationContext) }
     val store = remember(context) { ModuleOrderStore(context.applicationContext) }
+    val session = LocalAppSession.current
+    // The order also lives on the server; a newer copy from there reloads the bar.
+    val moduleOrderVersion by session.moduleOrderVersion.collectAsState()
     val modulesByRoute = remember { BarModules.associateBy { it.route } }
 
-    var order by remember { mutableStateOf(resolveModuleOrder(store.load(), BarModules.map { it.route })) }
+    var order by remember(moduleOrderVersion) { mutableStateOf(resolveModuleOrder(store.load(), BarModules.map { it.route })) }
     // Index in `order` of the first module on the collapsed bar.
     var windowStart by rememberSaveable { mutableIntStateOf(0) }
 
@@ -210,7 +215,7 @@ fun ModuleBar(
             val visible = order.rotatedFrom(windowStart)
             order = visible.moved(visible.indexOf(dragged), dragTarget)
             windowStart = 0
-            store.save(order)
+            session.saveModuleOrder(order)
         }
         draggedRoute = null
         dragTarget = -1

@@ -24,7 +24,7 @@ class Diagnostics(private val checks: List<DiagnosticCheck>) {
 
     companion object {
         // Oldest app versionCode the server still works with; raise it when the API changes incompatibly.
-        const val MIN_APP_VERSION_CODE = 4
+        const val MIN_APP_VERSION_CODE = 5
 
         private const val GB = 1024L * 1024 * 1024
 
@@ -38,7 +38,7 @@ class Diagnostics(private val checks: List<DiagnosticCheck>) {
                 DiagnosticCheck { backup(File(config.backupDir)) },
                 // Modules planned in the roadmap; replaced by real checks when they are built.
                 DiagnosticCheck { DiagnosticResult("assistant", "Asystent AI", CheckStatus.NOT_AVAILABLE, "od Stage 1A") },
-                DiagnosticCheck { DiagnosticResult("timetable", "Plan lekcji", CheckStatus.NOT_AVAILABLE, "od Stage 5") },
+                DiagnosticCheck { DiagnosticResult("timetable", "Plan lekcji", CheckStatus.NOT_AVAILABLE, "od Stage 4") },
             )
         )
 
