@@ -2,7 +2,7 @@ package pl.ambif.ambify.server.accounts
 
 import org.jetbrains.exposed.v1.core.Table
 
-// Mirrors of the tables created by V002__accounts.sql and V003__communities.sql (the SQL files are the source of truth).
+// Mirrors of the tables created by the SQL migrations V002–V004 (the SQL files are the source of truth).
 
 object Organizations : Table("organizations") {
     val id = text("id")
@@ -32,6 +32,8 @@ object Memberships : Table("memberships") {
     val role = text("role")
     val moduleOrder = text("module_order").nullable()
     val joinedAt = long("joined_at")
+    val avatarShape = text("avatar_shape").nullable()
+    val avatarColor = text("avatar_color").nullable()
     override val primaryKey = PrimaryKey(userId, organizationId)
 }
 
@@ -56,6 +58,7 @@ object ChildProfiles : Table("child_profiles") {
     val name = text("name")
     val color = text("color")
     val createdAt = long("created_at")
+    val avatarShape = text("avatar_shape").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

@@ -15,8 +15,18 @@ sealed class AppDestination(val route: String) {
     data object Timetable : AppDestination("timetable")
     data object School : AppDestination("school")
     data object Assistant : AppDestination("assistant")
-    data object Account : AppDestination("account")
-    data object CommunityModules : AppDestination("community_modules")
+    /** Ustawienia on the module bar, with its sections. */
+    data object Settings : AppDestination("settings")
+    data object SettingsAccount : AppDestination("settings/account")
+    data object SettingsCommunities : AppDestination("settings/communities")
+    data object SettingsApp : AppDestination("settings/app")
+    /** Screens of one community, opened from its popup in Ustawienia → Społeczności. */
+    data object CommunityModules : AppDestination("community/{id}/modules") {
+        fun of(communityId: String) = "community/$communityId/modules"
+    }
+    data object CommunityPeople : AppDestination("community/{id}/people/{section}") {
+        fun of(communityId: String, section: String) = "community/$communityId/people/$section"
+    }
     data object Platform : AppDestination("platform")
 }
 

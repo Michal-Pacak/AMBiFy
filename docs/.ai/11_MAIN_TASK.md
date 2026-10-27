@@ -3,7 +3,7 @@
 Roadmap: [02_Roadmap.md](../02_Roadmap.md) (approved 2026-10-14).
 
 Current stage:
-Stage 3 - Communities, modules & Platform Admin (v0.5)
+Stage 3.1 - Settings, avatars, floating cards (v0.5.1)
 
 Next stage:
 Stage 4 - Timetable from vulcan_digest (v0.6)

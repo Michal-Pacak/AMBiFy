@@ -23,6 +23,8 @@ object AccountPaths {
     const val MEMBERS = "/family/members"
     const val COMMUNITIES = "/communities"
     const val JOIN = "/communities/join"
+    /** POST: leave the current community (Admin and User; the Owner cannot). */
+    const val LEAVE = "/family/leave"
 }
 
 /** Only for the Platform Admin (a flag on the account, above all communities). */
@@ -107,8 +109,13 @@ data class Me(
     val communities: List<CommunitySummary> = emptyList(),
 )
 
+/** [avatar] is the person's own icon in that community. */
 @Serializable
-data class CommunitySummary(val id: String, val name: String, val role: Role)
+data class CommunitySummary(val id: String, val name: String, val role: Role, val avatar: Avatar? = null)
+
+/** New name, and a new e-mail address only together with the current password. */
+@Serializable
+data class ProfileUpdate(val name: String, val email: String? = null, val currentPassword: String? = null)
 
 @Serializable
 data class CreateCommunityRequest(val name: String)
@@ -139,10 +146,10 @@ data class GrantRequest(val granted: Boolean)
 data class EmailRequest(val email: String)
 
 @Serializable
-data class Member(val id: String, val name: String, val role: Role)
+data class Member(val id: String, val name: String, val role: Role, val avatar: Avatar? = null)
 
 @Serializable
-data class ChildProfile(val id: String, val name: String, val color: String)
+data class ChildProfile(val id: String, val name: String, val color: String, val avatar: Avatar? = null)
 
 @Serializable
 data class ChildRequest(val name: String, val color: String)

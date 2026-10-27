@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.content.edit
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -13,6 +15,7 @@ import pl.ambif.ambify.core.session.AppSession
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.ui.navigation.AppNavHost
 import pl.ambif.ambify.ui.theme.AMBiFyTheme
+import pl.ambif.ambify.ui.theme.LocalCardMotion
 
 class MainActivity : ComponentActivity() {
     private val session by lazy { AppSession(applicationContext) }
@@ -22,7 +25,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (BuildConfig.TEST_LOGIN) offerHomeScreenShortcut()
         setContent {
-            CompositionLocalProvider(LocalAppSession provides session) {
+            val cardAnimations by session.device.cardAnimations.collectAsState()
+            val cardMotion = cardAnimations && !session.device.systemAnimationsOff()
+            CompositionLocalProvider(LocalAppSession provides session, LocalCardMotion provides cardMotion) {
                 AMBiFyTheme {
                     AppNavHost()
                 }

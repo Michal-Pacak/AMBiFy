@@ -16,10 +16,12 @@ import kotlinx.serialization.json.Json
 import pl.ambif.ambify.core.network.ServerApi
 import pl.ambif.ambify.core.network.ServerError
 import pl.ambif.ambify.core.network.TokenStore
+import pl.ambif.ambify.core.settings.DevicePreferences
 import pl.ambif.ambify.core.settings.ModuleOrderStore
 import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.ModuleOrder
+import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.Tokens
 
 sealed interface SessionState {
@@ -40,6 +42,9 @@ class AppSession(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val moduleOrderStore = ModuleOrderStore(context)
+
+    /** Settings of this phone (card animations). */
+    val device = DevicePreferences(context)
 
     private val tokenStore = object : TokenStore {
         override var accessToken: String?
@@ -107,6 +112,22 @@ class AppSession(context: Context) {
     }
 
     suspend fun createCommunity(name: String) = switchCommunity(api.createCommunity(name).id)
+
+    suspend fun updateProfile(update: ProfileUpdate) {
+        val me = api.updateProfile(update)
+        preferences.edit { putString(KEY_ME, json.encodeToString(me)) }
+        _state.value = SessionState.SignedIn(me)
+    }
+
+    /** Leaves [communityId]; when it was the current one, the server's next answer picks another (or none). */
+    suspend fun leaveCommunity(communityId: String) {
+        api.forCommunity(communityId).leaveCommunity()
+        if ((_state.value as? SessionState.SignedIn)?.me?.communityId == communityId) {
+            preferences.edit { remove(KEY_COMMUNITY) }
+        }
+        refreshProfile()
+        refreshCommunity()
+    }
 
     suspend fun joinCommunity(code: String) = switchCommunity(api.joinCommunity(code).id)
 

@@ -37,6 +37,7 @@ import pl.ambif.ambify.shared.ModuleSwitch
 import pl.ambif.ambify.shared.PasswordResetCode
 import pl.ambif.ambify.shared.PlatformCommunity
 import pl.ambif.ambify.shared.PlatformPaths
+import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.RefreshRequest
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
@@ -71,6 +72,9 @@ class ServerApi(
     private val json = Json { ignoreUnknownKeys = true }
     private val refreshLock = Mutex()
 
+    /** The same connection, but every request is about community [communityId] (not the current one). */
+    fun forCommunity(communityId: String) = ServerApi(baseUrl, tokens) { communityId }
+
     suspend fun health(): Timed<HealthResponse> = timed { get(ApiPaths.HEALTH, auth = false) }
 
     suspend fun diagnostics(): Timed<DiagnosticsResponse> = timed { get(ApiPaths.DIAGNOSTICS, auth = false) }
@@ -81,6 +85,7 @@ class ServerApi(
     suspend fun logout() = send("POST", AuthPaths.LOGOUT, null, auth = true)
 
     suspend fun me(): Me = get(AccountPaths.ME)
+    suspend fun updateProfile(update: ProfileUpdate): Me = json.decodeFromString(send("PUT", AccountPaths.ME, json.encodeToString(update), auth = true))
     suspend fun changePassword(request: ChangePasswordRequest) = send("POST", AccountPaths.PASSWORD, json.encodeToString(request), auth = true)
     suspend fun devices(): List<Device> = get(AccountPaths.SESSIONS)
     suspend fun signOutDevice(id: String) = send("DELETE", "${AccountPaths.SESSIONS}/$id", null, auth = true)
@@ -88,6 +93,8 @@ class ServerApi(
     suspend fun saveModuleOrder(order: ModuleOrder) = send("PUT", AccountPaths.MODULE_ORDER, json.encodeToString(order), auth = true)
 
     suspend fun family(): Family = get(AccountPaths.FAMILY)
+    suspend fun renameCommunity(name: String) = send("PUT", AccountPaths.FAMILY, json.encodeToString(CreateCommunityRequest(name)), auth = true)
+    suspend fun leaveCommunity() = send("POST", AccountPaths.LEAVE, null, auth = true)
     suspend fun createInvitation(): Invitation = post(AccountPaths.INVITATIONS, null as String?)
     suspend fun cancelInvitation(code: String) = send("DELETE", "${AccountPaths.INVITATIONS}/$code", null, auth = true)
     suspend fun addChild(request: ChildRequest): ChildProfile = post(AccountPaths.CHILDREN, request)

@@ -142,7 +142,7 @@ internal val BarModules = listOf(
     BarModule(ModuleId.CALENDAR) { CalendarNavIcon() },
     BarModule(ModuleId.MISSIONS) { MissionsNavIcon() },
     BarModule(ModuleId.LISTS) { ShoppingNavIcon() },
-    BarModule(AppDestination.Account, "Konto") { AccountNavIcon() },
+    BarModule(AppDestination.Settings, "Ustawienia") { SettingsNavIcon() },
     BarModule(AppDestination.Platform, "Platform Admin") { PlatformNavIcon() },
     BarModule(ModuleId.COMMUNICATION) { CommunicationNavIcon() },
     BarModule(ModuleId.TIMETABLE) { TimetableNavIcon() },
@@ -152,13 +152,13 @@ internal val BarModules = listOf(
 
 /**
  * Routes on the bar: the modules switched on in the current community (the basic ones while that is
- * not known yet), Konto, which is not a module and is always there, and the Platform Admin panel,
+ * not known yet), Ustawienia, which is not a module and is always there, and the Platform Admin panel,
  * only for the Platform Admin.
  */
 internal fun barRoutes(enabled: List<ModuleId>?, platformAdmin: Boolean = false): List<String> {
     val modules = (enabled ?: ModuleId.entries.filter { it.tier == Tier.BASIC }).map { it.route }
     return BarModules.map { it.route }.filter {
-        it == AppDestination.Account.route || (it == AppDestination.Platform.route && platformAdmin) || it in modules
+        it == AppDestination.Settings.route || (it == AppDestination.Platform.route && platformAdmin) || it in modules
     }
 }
 

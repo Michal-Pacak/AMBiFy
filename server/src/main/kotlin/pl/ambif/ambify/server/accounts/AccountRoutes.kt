@@ -31,6 +31,7 @@ import pl.ambif.ambify.shared.ModuleOrder
 import pl.ambif.ambify.shared.ModulePaths
 import pl.ambif.ambify.shared.ModuleSwitch
 import pl.ambif.ambify.shared.PlatformPaths
+import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.RefreshRequest
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
@@ -76,6 +77,7 @@ fun Route.accountRoutes(service: AccountService) {
             call.respond(HttpStatusCode.NoContent)
         }
         get(AccountPaths.ME) { call.respond(service.me(call.session())) }
+        put(AccountPaths.ME) { call.respond(service.updateProfile(call.session(), call.receive<ProfileUpdate>())) }
         post(AccountPaths.PASSWORD) {
             service.changePassword(call.session(), call.receive<ChangePasswordRequest>())
             call.respond(HttpStatusCode.NoContent)
@@ -92,6 +94,14 @@ fun Route.accountRoutes(service: AccountService) {
         }
 
         get(AccountPaths.FAMILY) { call.respond(service.family(call.session())) }
+        put(AccountPaths.FAMILY) {
+            service.renameCommunity(call.session(), call.receive<CreateCommunityRequest>().name)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(AccountPaths.LEAVE) {
+            service.leave(call.session())
+            call.respond(HttpStatusCode.NoContent)
+        }
         post(AccountPaths.INVITATIONS) { call.respond(service.createInvitation(call.session())) }
         delete("${AccountPaths.INVITATIONS}/{code}") {
             service.cancelInvitation(call.session(), call.parameters["code"]!!)

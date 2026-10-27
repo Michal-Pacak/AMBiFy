@@ -96,6 +96,13 @@ Business model (2026-10-27, owner's decision): anyone can found a community. The
 - [x] Platform Admin (the oldest Owner on the server): panel with all communities, grants premium modules and features, a free founding of one more community, password reset code for an Owner
 - [x] Luxury theme on every screen (graphite and metallic gold, [06_Luxury_Theme.md](06_Luxury_Theme.md)); every module has its place on the module bar
 
+### Stage 3.1 — Settings, avatars, floating cards (v0.5.1)
+
+- [x] Ustawienia on the module bar instead of Konto: Konto (own data, e-mail change with the password, devices, connected accounts later), Społeczności (list; a popup with the role and the actions it allows, also for a community that is not the current one), Aplikacja (settings of this phone)
+- [x] Owner renames the community; Admin and User can leave it (the Owner cannot until handing the role over exists)
+- [x] Avatars: initials on a color; same initials in a community get a different shape; handed out once per community and never changed by others joining
+- [x] Floating Luxury cards (sink towards the touch, gold rings), switchable in Ustawienia → Aplikacja
+
 ### Stage 4 — Timetable from vulcan_digest (v0.6)
 
 - [ ] Child profile linked to the student in Vulcan
@@ -114,6 +121,7 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 
 - [ ] Events: title, time, all-day, location, description, participants (members and child profiles)
 - [ ] Month view, day/week agenda, create/edit/delete, filter by person
+- [ ] Google Calendar: Google accounts connected in Ustawienia → Konto; for each community the person picks the Google calendar synchronized with it (see [Calendar](Modules/Calendar.md))
 
 ### Stage 7 — School & Dashboard (v0.9)
 

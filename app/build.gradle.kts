@@ -15,8 +15,8 @@ android {
         applicationId = "pl.ambif.ambify"
         minSdk = 31
         targetSdk = 37
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.5.1"
 
         // Fixed home server address; changed only by an app update, never by the user.
         // -Pambify.serverUrl=… builds a separate test app ("AMBiFy TEST", own data) against a test

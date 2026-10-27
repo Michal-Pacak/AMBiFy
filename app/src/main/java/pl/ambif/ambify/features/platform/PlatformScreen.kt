@@ -1,7 +1,6 @@
 package pl.ambif.ambify.features.platform
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -50,6 +50,7 @@ import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.PlatformCommunity
 import pl.ambif.ambify.shared.Tier
 import pl.ambif.ambify.ui.theme.LuxuryCard
+import pl.ambif.ambify.ui.theme.LuxuryOpenButton
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
@@ -58,7 +59,7 @@ import pl.ambif.ambify.ui.theme.LuxurySectionTitle
  * free of charge, a free founding of one more community, a password reset code for an Owner.
  */
 @Composable
-fun PlatformScreen() {
+fun PlatformScreen(resetKey: Int = 0) {
     val session = LocalAppSession.current
     val api = session.api
     val scope = rememberCoroutineScope()
@@ -87,9 +88,11 @@ fun PlatformScreen() {
     }
 
     LaunchedEffect(Unit) { act {} }
+    // Platform Admin tapped again on the module bar: back to the list.
+    LaunchedEffect(resetKey) { if (resetKey > 0) selectedId = null }
     BackHandler(enabled = selectedId != null) { selectedId = null }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -185,7 +188,7 @@ private fun summary(community: PlatformCommunity): String = buildString {
 
 @Composable
 private fun CommunityRow(community: PlatformCommunity, onClick: () -> Unit) {
-    LuxuryCard(modifier = Modifier.clickable(onClick = onClick), contentPadding = PaddingValues(0.dp)) {
+    LuxuryCard(contentPadding = PaddingValues(0.dp)) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(community.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
@@ -196,7 +199,7 @@ private fun CommunityRow(community: PlatformCommunity, onClick: () -> Unit) {
                     color = Gold,
                 )
             }
-            Text("›", style = MaterialTheme.typography.headlineSmall, color = Gold)
+            LuxuryOpenButton("Otwórz: ${community.name}", onClick = onClick, modifier = Modifier.padding(start = 12.dp))
         }
     }
 }

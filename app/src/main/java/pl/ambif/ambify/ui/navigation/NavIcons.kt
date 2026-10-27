@@ -57,32 +57,14 @@ internal fun CalendarNavIcon() {
 }
 
 @Composable
-internal fun AccountNavIcon() {
-    val color = androidx.compose.material3.LocalContentColor.current
-    Canvas(modifier = Modifier.size(22.dp)) {
-        val strokeWidth = 1.8.dp.toPx()
-        drawCircle(
-            color = color,
-            radius = size.minDimension * 0.16f,
-            center = Offset(size.width / 2f, size.height * 0.32f),
-            style = Stroke(width = strokeWidth),
-        )
-        val shoulders = Path().apply {
-            moveTo(size.width * 0.18f, size.height * 0.88f)
-            cubicTo(
-                size.width * 0.2f,
-                size.height * 0.61f,
-                size.width * 0.8f,
-                size.height * 0.61f,
-                size.width * 0.82f,
-                size.height * 0.88f,
-            )
-        }
-        drawPath(
-            path = shoulders,
-            color = color,
-            style = Stroke(width = strokeWidth),
-        )
+internal fun SettingsNavIcon() = LineNavIcon {
+    // Gear: a ring with eight teeth around a hub.
+    line { addOval(androidx.compose.ui.geometry.Rect(0.22f, 0.22f, 0.78f, 0.78f)) }
+    line { addOval(androidx.compose.ui.geometry.Rect(0.4f, 0.4f, 0.6f, 0.6f)) }
+    repeat(8) { i ->
+        val angle = Math.toRadians(i * 45.0)
+        val (cos, sin) = kotlin.math.cos(angle).toFloat() to kotlin.math.sin(angle).toFloat()
+        line { moveTo(0.5f + 0.28f * cos, 0.5f + 0.28f * sin); lineTo(0.5f + 0.42f * cos, 0.5f + 0.42f * sin) }
     }
 }
 

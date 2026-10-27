@@ -198,7 +198,7 @@ class AccountsTest {
         val badColor = client.send("POST", AccountPaths.CHILDREN, ChildRequest("Filip", "zielony"), phone.accessToken)
         val family: Family = client.send<Unit>("GET", AccountPaths.FAMILY, token = phone.accessToken).body()
 
-        assertEquals(listOf(ChildProfile(child.id, "Bartuś", "#8EC3F0")), family.children)
+        assertEquals(listOf(Triple(child.id, "Bartuś", "#8EC3F0")), family.children.map { Triple(it.id, it.name, it.color) })
         assertEquals(HttpStatusCode.BadRequest, badColor.status)
 
         client.send("PUT", AccountPaths.MODULE_ORDER, ModuleOrder(listOf("calendar", "home", "BAD;route")), phone.accessToken)

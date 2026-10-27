@@ -34,12 +34,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import pl.ambif.ambify.core.network.ServerError
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.Feature
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.Role
@@ -56,24 +58,32 @@ import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /**
- * Modules of the current community: available ones have a switch (the Owner and Admins use it), the others
- * a "Kup" button for the Owner, who alone pays. How a module became available is not shown here.
+ * Modules of one community (opened from its popup in Ustawienia → Społeczności): available ones have a switch
+ * (the Owner and Admins use it), the others a "Kup" button for the Owner, who alone pays. How a module became
+ * available is not shown here. A change in the current community updates the module bar at once.
  */
 @Composable
-fun CommunityModulesScreen(onBack: () -> Unit) {
+fun CommunityModulesScreen(communityId: String, onBack: () -> Unit) {
     val session = LocalAppSession.current
+    val api = remember(communityId) { session.api.forCommunity(communityId) }
     val scope = rememberCoroutineScope()
     val state by session.state.collectAsState()
     val me = (state as? SessionState.SignedIn)?.me ?: return
-    val modules by session.modules.collectAsState()
-    val manager = me.role?.canManage == true
-    val owner = me.role == Role.OWNER
+    val community = me.communities.firstOrNull { it.id == communityId }
+    var modules by remember { mutableStateOf<CommunityModules?>(null) }
+    val manager = community?.role?.canManage == true
+    val owner = community?.role == Role.OWNER
     var notice by remember { mutableStateOf<String?>(null) }
     val buy = { label: String -> notice = "Zakup modułu $label będzie dostępny wkrótce." }
 
-    LaunchedEffect(me.communityId) {
+    fun show(answer: CommunityModules) {
+        modules = answer
+        if (communityId == me.communityId) session.showModules(answer)
+    }
+
+    LaunchedEffect(communityId) {
         try {
-            session.showModules(session.api.modules())
+            show(api.modules())
         } catch (e: ServerError) {
             notice = e.message
         }
@@ -82,7 +92,7 @@ fun CommunityModulesScreen(onBack: () -> Unit) {
     fun switch(module: ModuleId, enabled: Boolean) {
         scope.launch {
             try {
-                session.showModules(session.api.setModule(module, enabled))
+                show(api.setModule(module, enabled))
                 notice = null
             } catch (e: ServerError) {
                 notice = e.message
@@ -90,12 +100,12 @@ fun CommunityModulesScreen(onBack: () -> Unit) {
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            ScreenTitle("Moduły", me.familyName ?: "", onBack)
+            ScreenTitle("Moduły", community?.name ?: "", onBack)
             notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
             val current = modules ?: return@Column
 
@@ -195,7 +205,8 @@ internal fun ExtrasLink(module: ModuleId, extras: List<Feature>, owned: Int, con
         Row(
             modifier = Modifier
                 .heightIn(min = 32.dp)
-                .clickable(onClickLabel = "Pokaż dodatki premium") { open = true },
+                // No grey highlight inside a Luxury card: the card itself answers the touch.
+                .clickable(interactionSource = null, indication = null, onClickLabel = "Pokaż dodatki premium") { open = true },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Dodatki premium · $owned z ${extras.size}", color = Luxury.GoldLink, fontSize = 12.sp)

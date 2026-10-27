@@ -51,6 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pl.ambif.ambify.features.auth.checkPasswords
 import pl.ambif.ambify.features.auth.rememberSubmit
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import pl.ambif.ambify.shared.Avatar
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.ChildProfile
 import pl.ambif.ambify.shared.Device
@@ -58,13 +62,18 @@ import pl.ambif.ambify.shared.Family
 import pl.ambif.ambify.shared.Invitation
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Member
+import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.Role
+import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
+import pl.ambif.ambify.ui.theme.Luxury
+import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 internal sealed interface AccountDialog {
     data object ChangePassword : AccountDialog
+    data object EditProfile : AccountDialog
     data class Code(val title: String, val text: String, val code: String, val share: String?) : AccountDialog
     data class Child(val child: ChildProfile?) : AccountDialog
     data class Confirm(val question: String, val action: String, val onConfirm: () -> Unit) : AccountDialog
@@ -80,7 +89,15 @@ internal sealed interface AccountDialog {
 }
 
 internal val ChildColors = listOf("#8EC3F0", "#9AD7A4", "#E3A8C0", "#F2C27B", "#B9A7EE", "#7FD3CF", "#F29C8B", "#C9C9CF")
-private val MemberColors = listOf(Color(0xFFE3A8C0), Color(0xFFB9A7EE), Color(0xFF7FD3CF), Color(0xFFF29C8B))
+
+internal val Gold = Luxury.GoldText
+
+private val dayFormat = SimpleDateFormat("dd.MM", Locale.forLanguageTag("pl-PL"))
+
+internal fun formatDay(millis: Long): String = dayFormat.format(Date(millis))
+
+internal fun invitationText(communityName: String, code: String, expiresAt: Long) =
+    "Dołącz do społeczności $communityName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)})."
 
 internal fun Role.label() = when (this) {
     Role.OWNER -> "Owner"
@@ -88,121 +105,65 @@ internal fun Role.label() = when (this) {
     Role.MEMBER -> "User"
 }
 
-/** The current community, switching to another one, founding or joining one, and its modules screen. */
+/** People of a community; Owner and Admin manage only people with a lower role, only the Owner changes roles. */
 @Composable
-internal fun CommunityCard(
-    me: Me,
-    onSwitch: (String) -> Unit,
-    onCreate: () -> Unit,
-    onJoin: () -> Unit,
-    onOpenModules: () -> Unit,
-) {
-    var menuOpen by remember { mutableStateOf(false) }
-    AccountCard("Społeczność") {
-        Box {
-            OutlinedButton(onClick = { menuOpen = true }, border = BorderStroke(1.5.dp, Gold)) {
-                Text(me.familyName ?: "", color = Gold, fontWeight = FontWeight.Medium)
-                Icon(AppIcons.ExpandMore, contentDescription = "Zmień społeczność", tint = Gold)
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                me.communities.forEach { community ->
-                    DropdownMenuItem(
-                        text = { Text(community.name) },
-                        leadingIcon = { if (community.id == me.communityId) Icon(AppIcons.Check, contentDescription = "Bieżąca") },
-                        trailingIcon = { Text(community.role.label(), color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                        onClick = {
-                            menuOpen = false
-                            if (community.id != me.communityId) onSwitch(community.id)
-                        },
-                    )
-                }
-                HorizontalDivider()
-                DropdownMenuItem(text = { Text("+ Załóż nową społeczność") }, onClick = {
-                    menuOpen = false
-                    onCreate()
-                })
-                DropdownMenuItem(text = { Text("+ Dołącz z kodem") }, onClick = {
-                    menuOpen = false
-                    onJoin()
-                })
-            }
-        }
-        me.role?.let { Text("Twoja rola: ${it.label()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        ButtonsRow {
-            FilledTonalButton(onClick = onOpenModules) { Text("Moduły społeczności") }
-        }
-    }
-}
-
-@Composable
-internal fun ProfileCard(me: Me, onChangePassword: () -> Unit, onLogout: () -> Unit) {
-    AccountCard("Ty") {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Avatar(me.name, Gold)
-            Column {
-                Text(me.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Text(me.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        ButtonsRow {
-            FilledTonalButton(onClick = onChangePassword) { Text("Zmień hasło") }
-            FilledTonalButton(onClick = onLogout) { Text("Wyloguj") }
-        }
-    }
-}
-
-@Composable
-internal fun FamilyCard(
+internal fun MembersCard(
     family: Family,
-    me: Me,
-    onInvite: () -> Unit,
-    onAddChild: () -> Unit,
-    onEditChild: (ChildProfile) -> Unit,
-    onDeleteChild: (ChildProfile) -> Unit,
+    myRole: Role,
     onSignOutMember: (Member) -> Unit,
     onResetPassword: (Member) -> Unit,
     onRemoveMember: (Member) -> Unit,
     onSetRole: (Member, Role) -> Unit,
 ) {
-    val myRole = me.role ?: Role.MEMBER
-    val manager = myRole.canManage
     AccountCard("Członkowie") {
-        Column {
-            family.members.forEachIndexed { index, member ->
-                val color = if (member.role == Role.OWNER) Gold else MemberColors[index % MemberColors.size]
-                // Owner and Admin manage only people with a lower role; only the Owner changes roles.
-                val actions = if (manager && member.role.rank < myRole.rank) {
-                    buildList {
-                        if (myRole == Role.OWNER) {
-                            if (member.role == Role.ADMIN) add("Zmień rolę na User" to { onSetRole(member, Role.MEMBER) })
-                            else add("Nadaj rolę Admin" to { onSetRole(member, Role.ADMIN) })
-                        }
-                        add("Wyloguj urządzenia" to { onSignOutMember(member) })
-                        add("Resetuj hasło" to { onResetPassword(member) })
-                        add("Usuń ze społeczności" to { onRemoveMember(member) })
+        family.members.forEachIndexed { index, member ->
+            if (index > 0) LuxuryDivider()
+            val actions = if (myRole.canManage && member.role.rank < myRole.rank) {
+                buildList {
+                    if (myRole == Role.OWNER) {
+                        if (member.role == Role.ADMIN) add("Zmień rolę na User" to { onSetRole(member, Role.MEMBER) })
+                        else add("Nadaj rolę Admin" to { onSetRole(member, Role.ADMIN) })
                     }
-                } else {
-                    emptyList()
+                    add("Wyloguj urządzenia" to { onSignOutMember(member) })
+                    add("Resetuj hasło" to { onResetPassword(member) })
+                    add("Usuń ze społeczności" to { onRemoveMember(member) })
                 }
-                PersonRow(member.name, member.role.label(), color, actions)
+            } else {
+                emptyList()
             }
-            family.children.forEach { child ->
-                val actions = if (manager) listOf("Edytuj" to { onEditChild(child) }, "Usuń" to { onDeleteChild(child) }) else emptyList()
-                PersonRow(child.name, "Nieletni", parseColor(child.color), actions)
-            }
-        }
-        if (manager) {
-            ButtonsRow {
-                FilledTonalButton(onClick = onInvite) { Text("+ Zaproś osobę") }
-                FilledTonalButton(onClick = onAddChild) { Text("+ Dodaj nieletniego") }
-            }
+            PersonRow(member.name, member.role.label(), member.avatar, actions)
         }
     }
 }
 
 @Composable
-internal fun InvitationsCard(invitations: List<Invitation>, onShare: (Invitation) -> Unit, onCancel: (Invitation) -> Unit) {
+internal fun MinorsCard(
+    children: List<ChildProfile>,
+    manager: Boolean,
+    onAdd: () -> Unit,
+    onEdit: (ChildProfile) -> Unit,
+    onDelete: (ChildProfile) -> Unit,
+) {
+    AccountCard("Nieletni") {
+        if (children.isEmpty()) Text("Brak profili Nieletnich.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        children.forEachIndexed { index, child ->
+            if (index > 0) LuxuryDivider()
+            val actions = if (manager) listOf("Edytuj" to { onEdit(child) }, "Usuń" to { onDelete(child) }) else emptyList()
+            PersonRow(child.name, "Nieletni", child.avatar, actions)
+        }
+        if (manager) ButtonsRow { FilledTonalButton(onClick = onAdd) { Text("+ Dodaj nieletniego") } }
+    }
+}
+
+@Composable
+internal fun InvitationsCard(
+    invitations: List<Invitation>,
+    onInvite: () -> Unit,
+    onShare: (Invitation) -> Unit,
+    onCancel: (Invitation) -> Unit,
+) {
     AccountCard("Zaproszenia") {
+        if (invitations.isEmpty()) Text("Brak aktywnych zaproszeń.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         invitations.forEach { invitation ->
             Row(modifier = Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -213,6 +174,7 @@ internal fun InvitationsCard(invitations: List<Invitation>, onShare: (Invitation
                 TextButton(onClick = { onCancel(invitation) }) { Text("Anuluj", color = Gold) }
             }
         }
+        ButtonsRow { FilledTonalButton(onClick = onInvite) { Text("+ Zaproś osobę") } }
     }
 }
 
@@ -252,6 +214,47 @@ internal fun ChangePasswordDialog(onDismiss: () -> Unit, onSave: suspend (Change
                 PasswordInput("Obecne hasło", current) { current = it }
                 PasswordInput("Nowe hasło (min. 8 znaków)", new) { new = it }
                 PasswordInput("Powtórz nowe hasło", repeat) { repeat = it }
+                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy) { Text("Zapisz") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+    )
+}
+
+/** Name, and a new e-mail address together with the current password. */
+@Composable
+internal fun EditProfileDialog(me: Me, onDismiss: () -> Unit, onSave: suspend (ProfileUpdate) -> Unit) {
+    var name by rememberSaveable { mutableStateOf(me.name) }
+    var email by rememberSaveable { mutableStateOf(me.email) }
+    var password by rememberSaveable { mutableStateOf("") }
+    val emailChanged = email.trim().lowercase() != me.email
+    val submit = rememberSubmit { onSave(ProfileUpdate(name, email, password.ifEmpty { null })) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Zmień dane") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Imię i nazwisko") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("E-mail") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                )
+                if (emailChanged) PasswordInput("Obecne hasło (potrzebne do zmiany e-maila)", password) { password = it }
+                Text(
+                    "Ikona z inicjałami zmieni się razem z imieniem i nazwiskiem.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
@@ -387,14 +390,14 @@ internal fun ColumnScope.ButtonsRow(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun PersonRow(name: String, detail: String, color: Color, actions: List<Pair<String, () -> Unit>>) {
+private fun PersonRow(name: String, detail: String, avatar: Avatar?, actions: List<Pair<String, () -> Unit>>) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Avatar(name, color)
+        PersonAvatar(name, avatar)
         // Detail under the name: with large phone fonts a side-by-side detail squeezed names into two lines.
         Column(modifier = Modifier.weight(1f)) {
             Text(name, style = MaterialTheme.typography.bodyLarge)
@@ -415,13 +418,6 @@ private fun PersonRow(name: String, detail: String, color: Color, actions: List<
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun Avatar(name: String, color: Color) {
-    Box(modifier = Modifier.size(36.dp).background(color, CircleShape), contentAlignment = Alignment.Center) {
-        Text(name.take(1).uppercase(), color = Color(0xFF1A1A1A), fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }
 }
 

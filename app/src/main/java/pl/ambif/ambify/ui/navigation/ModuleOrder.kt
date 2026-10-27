@@ -25,7 +25,7 @@ internal fun fitsBarLabelRule(label: String): Boolean {
 }
 
 /** Routes saved by older app versions under a name that has changed since. */
-private val RenamedRoutes = mapOf("shopping" to "lists")
+private val RenamedRoutes = mapOf("shopping" to "lists", "account" to "settings")
 
 /** The circular list read from [start]: element 0 is the first module of the bar window. */
 internal fun <T> List<T>.rotatedFrom(start: Int): List<T> =

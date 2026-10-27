@@ -21,6 +21,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import pl.ambif.ambify.shared.AccountRules
 import pl.ambif.ambify.shared.AuthStatus
+import pl.ambif.ambify.shared.Avatar
+import pl.ambif.ambify.shared.AvatarShape
+import pl.ambif.ambify.shared.Avatars
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.ChildProfile
 import pl.ambif.ambify.shared.ChildRequest
@@ -36,6 +39,7 @@ import pl.ambif.ambify.shared.Member
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.PasswordResetCode
 import pl.ambif.ambify.shared.PlatformCommunity
+import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
 import pl.ambif.ambify.shared.Role
@@ -197,10 +201,70 @@ class AccountService(
     }
 
     fun communities(userId: String): List<CommunitySummary> = transaction(database) {
-        Memberships.join(Organizations, JoinType.INNER, Memberships.organizationId, Organizations.id).selectAll()
+        val name = user(userId)[Users.name]
+        val rows = Memberships.join(Organizations, JoinType.INNER, Memberships.organizationId, Organizations.id).selectAll()
             .where { Memberships.userId eq userId }
             .orderBy(Memberships.joinedAt)
-            .map { CommunitySummary(it[Organizations.id], it[Organizations.name], Role.valueOf(it[Memberships.role])) }
+            .toList()
+        rows.forEach { ensureAvatars(it[Organizations.id]) }
+        rows.map { row ->
+            val organizationId = row[Organizations.id]
+            val avatar = Memberships.selectAll()
+                .where { (Memberships.userId eq userId) and (Memberships.organizationId eq organizationId) }
+                .single().memberAvatar(name)
+            CommunitySummary(organizationId, row[Organizations.name], Role.valueOf(row[Memberships.role]), avatar)
+        }
+    }
+
+    /** New name, and a new e-mail only with the current password; a new name may give new initials, so a new icon. */
+    fun updateProfile(session: UserSession, update: ProfileUpdate): Me {
+        val name = Validate.name(update.name, "Imię")
+        val email = update.email?.let(Validate::email)
+        val user = user(session.userId)
+        if (email != null && email != user[Users.email]) {
+            if (!Passwords.verify(update.currentPassword.orEmpty(), user[Users.passwordHash])) {
+                throw ApiException(HttpStatusCode.BadRequest, "wrong_password", "Obecne hasło jest nieprawidłowe.")
+            }
+        }
+        transaction(database) {
+            if (email != null && email != user[Users.email] && Users.selectAll().where { Users.email eq email }.count() > 0) {
+                throw ApiException(HttpStatusCode.Conflict, "email_taken", "Ten e-mail ma już inne konto.")
+            }
+            Users.update({ Users.id eq session.userId }) {
+                it[Users.name] = name
+                if (email != null) it[Users.email] = email
+            }
+            if (Avatars.initials(name) != Avatars.initials(user[Users.name])) {
+                val organizations = Memberships.selectAll().where { Memberships.userId eq session.userId }.map { it[Memberships.organizationId] }
+                Memberships.update({ Memberships.userId eq session.userId }) { it[avatarShape] = null }
+                organizations.forEach { ensureAvatars(it) }
+            }
+        }
+        return me(session)
+    }
+
+    /** Only the Owner renames the community. */
+    fun renameCommunity(session: UserSession, name: String) {
+        val communityName = Validate.name(name, "Nazwa społeczności")
+        transaction(database) {
+            val membership = membership(session)
+            if (membership.role != Role.OWNER) throw forbidden()
+            Organizations.update({ Organizations.id eq membership.organizationId }) { it[Organizations.name] = communityName }
+        }
+    }
+
+    /** Admin or User leaves the current community; the Owner cannot (handing the role over comes later). */
+    fun leave(session: UserSession) {
+        transaction(database) {
+            val membership = membership(session)
+            if (membership.role == Role.OWNER) {
+                throw ApiException(
+                    HttpStatusCode.Conflict, "owner_cannot_leave",
+                    "Owner nie może opuścić swojej społeczności. Przekazanie roli Ownera będzie dostępne później.",
+                )
+            }
+            removeMembership(session.userId, membership.organizationId)
+        }
     }
 
     /**
@@ -243,11 +307,12 @@ class AccountService(
     fun family(session: UserSession): Family = transaction(database) {
         val membership = membership(session)
         val organizationId = membership.organizationId
+        ensureAvatars(organizationId)
         Family(
             name = communityName(organizationId),
             members = membersOf(organizationId)
                 .orderBy(Memberships.joinedAt)
-                .map { Member(it[Users.id], it[Users.name], Role.valueOf(it[Memberships.role])) },
+                .map { Member(it[Users.id], it[Users.name], Role.valueOf(it[Memberships.role]), it.memberAvatar(it[Users.name])) },
             children = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }
                 .orderBy(ChildProfiles.createdAt)
                 .map { it.toChild() },
@@ -286,15 +351,16 @@ class AccountService(
         val color = Validate.color(request.color)
         return transaction(database) {
             val manager = requireManager(session)
-            val child = ChildProfile(Secrets.id(), name, color)
+            val childId = Secrets.id()
             ChildProfiles.insert {
-                it[id] = child.id
+                it[id] = childId
                 it[organizationId] = manager.organizationId
                 it[ChildProfiles.name] = name
                 it[ChildProfiles.color] = color
                 it[createdAt] = clock()
             }
-            child
+            ensureAvatars(manager.organizationId)
+            child(childId)
         }
     }
 
@@ -303,12 +369,16 @@ class AccountService(
         val color = Validate.color(request.color)
         return transaction(database) {
             val manager = requireManager(session)
-            val changed = ChildProfiles.update({ (ChildProfiles.id eq childId) and (ChildProfiles.organizationId eq manager.organizationId) }) {
+            val before = ChildProfiles.selectAll()
+                .where { (ChildProfiles.id eq childId) and (ChildProfiles.organizationId eq manager.organizationId) }
+                .singleOrNull() ?: throw notFound()
+            ChildProfiles.update({ ChildProfiles.id eq childId }) {
                 it[ChildProfiles.name] = name
                 it[ChildProfiles.color] = color
+                if (Avatars.initials(name) != Avatars.initials(before[ChildProfiles.name])) it[avatarShape] = null
             }
-            if (changed == 0) throw notFound()
-            ChildProfile(childId, name, color)
+            ensureAvatars(manager.organizationId)
+            child(childId)
         }
     }
 
@@ -322,11 +392,7 @@ class AccountService(
     /** Takes the person out of this community; their account and other communities stay. */
     fun removeMember(session: UserSession, memberId: String) {
         transaction(database) {
-            val manager = requireManageable(session, memberId)
-            val organizationId = manager.organizationId
-            Invitations.update({ (Invitations.usedBy eq memberId) and (Invitations.organizationId eq organizationId) }) { it[usedBy] = null }
-            Invitations.deleteWhere { (createdBy eq memberId) and (Invitations.organizationId eq organizationId) }
-            Memberships.deleteWhere { (userId eq memberId) and (Memberships.organizationId eq organizationId) }
+            removeMembership(memberId, requireManageable(session, memberId).organizationId)
         }
     }
 
@@ -512,6 +578,7 @@ class AccountService(
         return organizationId
     }
 
+    /** The icon is handed out at once, so it never depends on who joins later. */
     private fun insertMembership(userId: String, organizationId: String, role: Role) {
         Memberships.insert {
             it[Memberships.userId] = userId
@@ -519,7 +586,62 @@ class AccountService(
             it[Memberships.role] = role.name
             it[joinedAt] = clock()
         }
+        ensureAvatars(organizationId)
     }
+
+    private fun removeMembership(userId: String, organizationId: String) {
+        Invitations.update({ (Invitations.usedBy eq userId) and (Invitations.organizationId eq organizationId) }) { it[usedBy] = null }
+        Invitations.deleteWhere { (createdBy eq userId) and (Invitations.organizationId eq organizationId) }
+        Memberships.deleteWhere { (Memberships.userId eq userId) and (Memberships.organizationId eq organizationId) }
+    }
+
+    /**
+     * Hands out icons to the people of a community who have none yet, in the order they joined (members and
+     * minors together): the first shape nobody with the same initials uses, and for members the least-used color.
+     * Icons already handed out never change.
+     */
+    private fun ensureAvatars(organizationId: String) {
+        val members = membersOf(organizationId).toList()
+        val minors = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }.toList()
+        if (members.none { it[Memberships.avatarShape] == null || it[Memberships.avatarColor] == null } &&
+            minors.none { it[ChildProfiles.avatarShape] == null }
+        ) return
+
+        class Person(val initials: String, val since: Long, var shape: AvatarShape?, var color: String?, val save: (AvatarShape, String) -> Unit)
+        val people = members.map { row ->
+            Person(
+                Avatars.initials(row[Users.name]), row[Memberships.joinedAt],
+                row[Memberships.avatarShape]?.let(AvatarShape::valueOf), row[Memberships.avatarColor],
+            ) { shape, color ->
+                Memberships.update({ (Memberships.userId eq row[Users.id]) and (Memberships.organizationId eq organizationId) }) {
+                    it[avatarShape] = shape.name
+                    it[avatarColor] = color
+                }
+            }
+        } + minors.map { row ->
+            Person(
+                Avatars.initials(row[ChildProfiles.name]), row[ChildProfiles.createdAt],
+                row[ChildProfiles.avatarShape]?.let(AvatarShape::valueOf), row[ChildProfiles.color],
+            ) { shape, _ -> ChildProfiles.update({ ChildProfiles.id eq row[ChildProfiles.id] }) { it[avatarShape] = shape.name } }
+        }
+        for (person in people.sortedBy { it.since }) {
+            if (person.shape != null && person.color != null) continue
+            val color = person.color ?: Avatars.freeColor(people.mapNotNull { it.color })
+            val shape = person.shape ?: Avatars.freeShape(people.filter { it.initials == person.initials }.mapNotNull { it.shape })
+            person.color = color
+            person.shape = shape
+            person.save(shape, color)
+        }
+    }
+
+    private fun ResultRow.memberAvatar(name: String): Avatar? {
+        val shape = this[Memberships.avatarShape] ?: return null
+        val color = this[Memberships.avatarColor] ?: return null
+        return Avatar(Avatars.initials(name), color, AvatarShape.valueOf(shape))
+    }
+
+    private fun child(childId: String): ChildProfile =
+        ChildProfiles.selectAll().where { ChildProfiles.id eq childId }.single().toChild()
 
     private fun validInvitation(code: String): ResultRow {
         val invitation = Invitations.selectAll().where { Invitations.code eq code }.singleOrNull()
@@ -642,7 +764,10 @@ class AccountService(
 
     private fun idleLimitMs() = AccountRules.SESSION_IDLE_DAYS * DAY_MS
 
-    private fun ResultRow.toChild() = ChildProfile(this[ChildProfiles.id], this[ChildProfiles.name], this[ChildProfiles.color])
+    private fun ResultRow.toChild() = ChildProfile(
+        this[ChildProfiles.id], this[ChildProfiles.name], this[ChildProfiles.color],
+        this[ChildProfiles.avatarShape]?.let { Avatar(Avatars.initials(this[ChildProfiles.name]), this[ChildProfiles.color], AvatarShape.valueOf(it)) },
+    )
 
     private companion object {
         const val DAY_MS = 24 * 60 * 60 * 1000L

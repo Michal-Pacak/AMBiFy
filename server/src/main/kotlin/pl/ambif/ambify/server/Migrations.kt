@@ -13,6 +13,7 @@ object Migrations {
         "V001__init.sql",
         "V002__accounts.sql",
         "V003__communities.sql",
+        "V004__avatars.sql",
     )
 
     /** First line of a file that rebuilds a table: it runs with foreign keys off, checked before commit. */

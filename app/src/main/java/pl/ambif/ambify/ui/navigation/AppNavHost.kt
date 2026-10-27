@@ -8,16 +8,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import pl.ambif.ambify.BuildConfig
 import pl.ambif.ambify.core.navigation.AppDestination
 import pl.ambif.ambify.core.navigation.NoBarRoutes
@@ -28,14 +32,20 @@ import pl.ambif.ambify.features.auth.LoginScreen
 import pl.ambif.ambify.features.auth.RegisterScreen
 import pl.ambif.ambify.features.auth.ResetPasswordScreen
 import pl.ambif.ambify.features.auth.StartScreen
-import pl.ambif.ambify.features.account.AccountScreen
 import pl.ambif.ambify.features.account.CommunityModulesScreen
+import pl.ambif.ambify.features.settings.AccountSettingsScreen
+import pl.ambif.ambify.features.settings.AppSettingsScreen
+import pl.ambif.ambify.features.settings.CommunitiesScreen
+import pl.ambif.ambify.features.settings.CommunityPeopleScreen
+import pl.ambif.ambify.features.settings.CommunitySection
+import pl.ambif.ambify.features.settings.SettingsScreen
 import pl.ambif.ambify.features.platform.PlatformScreen
 import pl.ambif.ambify.features.calendar.CalendarScreen
 import pl.ambif.ambify.features.common.ModulePlaceholderScreen
 import pl.ambif.ambify.features.home.HomeScreen
 import pl.ambif.ambify.modules.splash.SplashScreen
 import pl.ambif.ambify.shared.ModuleId
+import pl.ambif.ambify.ui.theme.WaterLayer
 
 @Composable
 fun AppNavHost(
@@ -49,6 +59,8 @@ fun AppNavHost(
     val showNavigationBar =
         currentDestination != null && currentDestination.route !in NoBarRoutes
     var loginNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    // Bumped when the current module is tapped again on the bar: screens with inner steps go back to their start.
+    var moduleReselections by remember { mutableIntStateOf(0) }
 
     /** Dashboard, or the start screen for someone who has no community yet. */
     fun openAfterSignIn() {
@@ -59,12 +71,17 @@ fun AppNavHost(
     }
 
     // Signed out anywhere in the app (logout, revoked device, expired session): back to login.
-    // Left without a community (removed from the last one): to the start screen.
+    // Left without a community (removed from the last one): to the start screen. On the start screen while
+    // the profile from the server shows a community (the phone had an older copy, e.g. right after an app
+    // update): on to the Dashboard.
     LaunchedEffect(sessionState, currentDestination?.route) {
         val route = currentDestination?.route ?: return@LaunchedEffect
         val next = when (val state = sessionState) {
             SessionState.SignedOut -> AppDestination.Login.takeIf { route !in SignedOutRoutes }
-            is SessionState.SignedIn -> AppDestination.Start.takeIf { state.me.communityId == null && route !in NoBarRoutes }
+            is SessionState.SignedIn -> when {
+                state.me.communityId == null -> AppDestination.Start.takeIf { route !in NoBarRoutes }
+                else -> AppDestination.Home.takeIf { route == AppDestination.Start.route }
+            }
         }
         next?.let {
             navController.navigate(it.route) {
@@ -88,16 +105,24 @@ fun AppNavHost(
                 ModuleBar(
                     currentDestination = currentDestination,
                     onDestinationSelected = { route ->
-                        navController.navigateToBottomDestination(route)
+                        // Tapping the module you are in goes back to its main screen (like the logo goes to the
+                        // Dashboard), from any of its sub-screens. An open popup takes that tap only to close.
+                        if (moduleOf(navController.currentDestination?.route) == route) {
+                            navController.popBackStack(route, inclusive = false)
+                            moduleReselections++
+                        } else {
+                            navController.navigateToBottomDestination(route)
+                        }
                     },
                 )
             }
         },
     ) { contentPadding ->
+        // Screens are transparent: the Scaffold paints the background and the cards' rings go on this "water".
+        WaterLayer(modifier = Modifier.padding(contentPadding)) {
         NavHost(
             navController = navController,
             startDestination = AppDestination.Splash.route,
-            modifier = Modifier.padding(contentPadding),
         ) {
             composable(AppDestination.Splash.route) {
                 SplashScreen(
@@ -192,21 +217,67 @@ fun AppNavHost(
                 )
             }
 
-            composable(AppDestination.Account.route) {
-                AccountScreen(
-                    onOpenModules = { navController.navigate(AppDestination.CommunityModules.route) },
+            composable(AppDestination.Settings.route) {
+                SettingsScreen(
+                    onOpenAccount = { navController.navigate(AppDestination.SettingsAccount.route) },
+                    onOpenCommunities = { navController.navigate(AppDestination.SettingsCommunities.route) },
+                    onOpenApp = { navController.navigate(AppDestination.SettingsApp.route) },
                 )
             }
 
-            composable(AppDestination.CommunityModules.route) {
-                CommunityModulesScreen(onBack = { navController.popBackStack() })
+            composable(AppDestination.SettingsAccount.route) {
+                AccountSettingsScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(AppDestination.SettingsApp.route) {
+                AppSettingsScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(AppDestination.SettingsCommunities.route) {
+                CommunitiesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { id, section ->
+                        navController.navigate(
+                            if (section == CommunitySection.MODULES) AppDestination.CommunityModules.of(id)
+                            else AppDestination.CommunityPeople.of(id, section.name),
+                        )
+                    },
+                )
+            }
+
+            composable(
+                AppDestination.CommunityModules.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                CommunityModulesScreen(communityId = entry.arguments?.getString("id").orEmpty(), onBack = { navController.popBackStack() })
+            }
+
+            composable(
+                AppDestination.CommunityPeople.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }, navArgument("section") { type = NavType.StringType }),
+            ) { entry ->
+                val section = runCatching { CommunitySection.valueOf(entry.arguments?.getString("section").orEmpty()) }
+                    .getOrDefault(CommunitySection.MEMBERS)
+                CommunityPeopleScreen(
+                    communityId = entry.arguments?.getString("id").orEmpty(),
+                    section = section,
+                    onBack = { navController.popBackStack() },
+                )
             }
 
             composable(AppDestination.Platform.route) {
-                PlatformScreen()
+                PlatformScreen(resetKey = moduleReselections)
             }
         }
+        }
     }
+}
+
+/** The module bar entry a screen belongs to: the sections of Ustawienia and the screens of one community are in Ustawienia. */
+private fun moduleOf(route: String?): String? = when {
+    route == null -> null
+    route.startsWith("settings") || route.startsWith("community/") -> AppDestination.Settings.route
+    else -> route
 }
 
 private fun NavHostController.navigateToBottomDestination(route: String) {

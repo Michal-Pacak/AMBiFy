@@ -36,20 +36,22 @@ class ModuleOrderTest {
     }
 
     @Test
-    fun resolveModuleOrder_keepsPlaceOfRenamedShopping() {
+    fun resolveModuleOrder_keepsPlaceOfRenamedModules() {
         assertEquals(listOf("lists", "calendar"), resolveModuleOrder(listOf("shopping", "calendar"), listOf("calendar", "lists")))
+        // Konto became Ustawienia in v0.5.1.
+        assertEquals(listOf("settings", "calendar"), resolveModuleOrder(listOf("account", "calendar"), listOf("calendar", "settings")))
     }
 
     @Test
     fun barRoutes_showEnabledModulesAndAccount() {
         // Not known yet: the basic modules.
-        assertEquals(listOf("calendar", "lists", "account", "communication"), barRoutes(null))
+        assertEquals(listOf("calendar", "lists", "settings", "communication"), barRoutes(null))
         assertEquals(
-            listOf("calendar", "account", "timetable"),
+            listOf("calendar", "settings", "timetable"),
             barRoutes(listOf(ModuleId.CALENDAR, ModuleId.TIMETABLE)),
         )
         // The Platform Admin panel only for the Platform Admin.
-        assertEquals(listOf("calendar", "account", "platform"), barRoutes(listOf(ModuleId.CALENDAR), platformAdmin = true))
+        assertEquals(listOf("calendar", "settings", "platform"), barRoutes(listOf(ModuleId.CALENDAR), platformAdmin = true))
     }
 
     @Test
