@@ -14,10 +14,12 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,17 +40,19 @@ import pl.ambif.ambify.features.account.ButtonsRow
 import pl.ambif.ambify.features.account.ConfirmDialog
 import pl.ambif.ambify.features.account.InputDialog
 import pl.ambif.ambify.features.account.label
+import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.CommunitySummary
 import pl.ambif.ambify.shared.Me
-import pl.ambif.ambify.shared.Role
+import pl.ambif.ambify.shared.Mode
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCardShape
 import pl.ambif.ambify.ui.theme.LuxuryDivider
+import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** What a popup action opens for one community. */
-enum class CommunitySection { MEMBERS, INVITATIONS, MINORS, MODULES }
+enum class CommunitySection { MEMBERS, INVITATIONS, MODULES, PERMISSIONS, REQUESTS }
 
 /**
  * My communities. A tap opens a popup with my role there and the actions that role allows; they act on that
@@ -60,7 +64,9 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
     val scope = rememberCoroutineScope()
     val state by session.state.collectAsState()
     val me = (state as? SessionState.SignedIn)?.me ?: return
-    var selected by remember { mutableStateOf<CommunitySummary?>(null) }
+    // Saved with the screen: back from a section (Role i uprawnienia…) shows this community's popup again, one step back.
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = me.communities.firstOrNull { it.id == selectedId }
     var dialog by remember { mutableStateOf<AccountDialog?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
 
@@ -84,7 +90,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                         .fillMaxWidth()
                         .heightIn(min = 64.dp)
                         // No grey highlight inside a Luxury card: the card itself answers the touch.
-                        .clickable(interactionSource = null, indication = null, onClickLabel = "Pokaż akcje: ${community.name}") { selected = community },
+                        .clickable(interactionSource = null, indication = null, onClickLabel = "Pokaż akcje: ${community.name}") { selectedId = community.id },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
@@ -97,7 +103,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                             if (community.id == me.communityId) CurrentBadge()
                         }
                     }
-                    Text("›", color = Luxury.GoldLink, fontSize = 24.sp)
+                    LuxuryOpenMark(size = 36.dp)
                 }
             }
             if (me.communities.isEmpty()) {
@@ -141,25 +147,37 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
         }
     }
 
+    // What my role may do in the community whose popup is open, and how many requests wait for me there.
+    var popupMe by remember { mutableStateOf<Me?>(null) }
+    var popupRequests by remember { mutableStateOf(0) }
+    LaunchedEffect(selected?.id) {
+        popupMe = null
+        popupRequests = 0
+        val id = selected?.id ?: return@LaunchedEffect
+        val api = session.api.forCommunity(id)
+        runCatching { popupMe = api.me() }
+        runCatching { popupRequests = api.requests().size }
+    }
+
     selected?.let { community ->
         CommunityPopup(
             me = me,
             community = community,
-            onDismiss = { selected = null },
-            onOpen = { section ->
-                selected = null
-                onOpen(community.id, section)
+            permissions = popupMe?.permissions.orEmpty(),
+            requests = popupRequests,
+            onDismiss = { selectedId = null },
+            onOpen = { section -> onOpen(community.id, section)
             },
             onGoogle = {
-                selected = null
+                selectedId = null
                 notice = "Łączenie kalendarza Google ze społecznością będzie dostępne wkrótce."
             },
             onMakeCurrent = {
-                selected = null
+                selectedId = null
                 act("Bieżąca społeczność: ${community.name}.") { session.switchCommunity(community.id) }
             },
             onRename = {
-                selected = null
+                selectedId = null
                 dialog = AccountDialog.Input(
                     title = "Zmień nazwę społeczności",
                     label = "Nowa nazwa",
@@ -174,7 +192,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                 }
             },
             onLeave = {
-                selected = null
+                selectedId = null
                 dialog = AccountDialog.Confirm("Opuścić społeczność ${community.name}?", "Opuść") {
                     act("Nie należysz już do społeczności ${community.name}.") { session.leaveCommunity(community.id) }
                 }
@@ -194,6 +212,8 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
 private fun CommunityPopup(
     me: Me,
     community: CommunitySummary,
+    permissions: Map<Action, Mode>,
+    requests: Int,
     onDismiss: () -> Unit,
     onOpen: (CommunitySection) -> Unit,
     onGoogle: () -> Unit,
@@ -201,8 +221,8 @@ private fun CommunityPopup(
     onRename: () -> Unit,
     onLeave: () -> Unit,
 ) {
-    val owner = community.role == Role.OWNER
-    val manager = community.role.canManage
+    val owner = community.role.owner
+    val can = { action: Action -> permissions[action] == Mode.ALLOWED }
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -221,16 +241,21 @@ private fun CommunityPopup(
                 }
             }
             LuxurySectionTitle("Co możesz zrobić", modifier = Modifier.padding(top = 14.dp, bottom = 2.dp))
-            PopupAction(if (owner) "Członkowie i role" else if (manager) "Członkowie" else "Członkowie (podgląd)") { onOpen(CommunitySection.MEMBERS) }
-            if (manager) {
+            val manages = can(Action.ASSIGN_ROLES) || can(Action.REMOVE_MEMBERS)
+            PopupAction(if (manages) "Członkowie" else "Członkowie (podgląd)") { onOpen(CommunitySection.MEMBERS) }
+            if (can(Action.INVITE)) {
                 LuxuryDivider()
                 PopupAction("Zaproszenia") { onOpen(CommunitySection.INVITATIONS) }
+            }
+            if (requests > 0) {
                 LuxuryDivider()
-                PopupAction("Nieletni") { onOpen(CommunitySection.MINORS) }
+                PopupAction("Prośby do zatwierdzenia", trailing = requests.toString(), color = Luxury.GoldText) { onOpen(CommunitySection.REQUESTS) }
             }
             LuxuryDivider()
-            PopupAction(if (manager) "Moduły" else "Moduły (podgląd)") { onOpen(CommunitySection.MODULES) }
-            if (owner) {
+            PopupAction(if (can(Action.SWITCH_MODULES)) "Moduły" else "Moduły (podgląd)") { onOpen(CommunitySection.MODULES) }
+            LuxuryDivider()
+            PopupAction(if (owner) "Role i uprawnienia" else "Uprawnienia ról (podgląd)") { onOpen(CommunitySection.PERMISSIONS) }
+            if (can(Action.RENAME_COMMUNITY)) {
                 LuxuryDivider()
                 PopupAction("Zmień nazwę społeczności", onClick = onRename)
             }
@@ -274,7 +299,7 @@ private fun PopupAction(
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         trailing?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Luxury.Disabled) }
-        if (arrow && trailing == null) Text("›", color = Luxury.GoldLink, fontSize = 22.sp)
+        if (arrow && trailing == null) LuxuryOpenMark(size = 36.dp)
     }
 }
 

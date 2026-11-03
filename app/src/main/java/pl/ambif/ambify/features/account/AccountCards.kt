@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,9 +55,9 @@ import pl.ambif.ambify.features.auth.rememberSubmit
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.Avatar
 import pl.ambif.ambify.shared.ChangePasswordRequest
-import pl.ambif.ambify.shared.ChildProfile
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.Family
 import pl.ambif.ambify.shared.Invitation
@@ -75,7 +76,7 @@ internal sealed interface AccountDialog {
     data object ChangePassword : AccountDialog
     data object EditProfile : AccountDialog
     data class Code(val title: String, val text: String, val code: String, val share: String?) : AccountDialog
-    data class Child(val child: ChildProfile?) : AccountDialog
+    data class PickRole(val member: Member) : AccountDialog
     data class Confirm(val question: String, val action: String, val onConfirm: () -> Unit) : AccountDialog
     /** One text field, e.g. the name of a new community or an invitation code. */
     data class Input(
@@ -88,8 +89,6 @@ internal sealed interface AccountDialog {
     ) : AccountDialog
 }
 
-internal val ChildColors = listOf("#8EC3F0", "#9AD7A4", "#E3A8C0", "#F2C27B", "#B9A7EE", "#7FD3CF", "#F29C8B", "#C9C9CF")
-
 internal val Gold = Luxury.GoldText
 
 private val dayFormat = SimpleDateFormat("dd.MM", Locale.forLanguageTag("pl-PL"))
@@ -99,34 +98,33 @@ internal fun formatDay(millis: Long): String = dayFormat.format(Date(millis))
 internal fun invitationText(communityName: String, code: String, expiresAt: Long) =
     "Dołącz do społeczności $communityName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)})."
 
-internal fun Role.label() = when (this) {
-    Role.OWNER -> "Owner"
-    Role.ADMIN -> "Admin"
-    Role.MEMBER -> "User"
-}
+internal fun Role.label() = name
 
-/** People of a community; Owner and Admin manage only people with a lower role, only the Owner changes roles. */
+/**
+ * People of a community. Actions only on people with a lower role, as the permission table allows the caller
+ * ([can]): giving them another role, signing them out, a password reset code, removing them.
+ */
 @Composable
 internal fun MembersCard(
     family: Family,
     myRole: Role,
+    can: (Action) -> Boolean,
     onSignOutMember: (Member) -> Unit,
     onResetPassword: (Member) -> Unit,
     onRemoveMember: (Member) -> Unit,
-    onSetRole: (Member, Role) -> Unit,
+    onChangeRole: (Member) -> Unit,
 ) {
     AccountCard("Członkowie") {
         family.members.forEachIndexed { index, member ->
             if (index > 0) LuxuryDivider()
-            val actions = if (myRole.canManage && member.role.rank < myRole.rank) {
+            val actions = if (member.role.rank < myRole.rank) {
                 buildList {
-                    if (myRole == Role.OWNER) {
-                        if (member.role == Role.ADMIN) add("Zmień rolę na User" to { onSetRole(member, Role.MEMBER) })
-                        else add("Nadaj rolę Admin" to { onSetRole(member, Role.ADMIN) })
+                    if (can(Action.ASSIGN_ROLES)) add("Zmień rolę…" to { onChangeRole(member) })
+                    if (can(Action.REMOVE_MEMBERS)) {
+                        add("Wyloguj urządzenia" to { onSignOutMember(member) })
+                        add("Resetuj hasło" to { onResetPassword(member) })
+                        add("Usuń ze społeczności" to { onRemoveMember(member) })
                     }
-                    add("Wyloguj urządzenia" to { onSignOutMember(member) })
-                    add("Resetuj hasło" to { onResetPassword(member) })
-                    add("Usuń ze społeczności" to { onRemoveMember(member) })
                 }
             } else {
                 emptyList()
@@ -136,23 +134,32 @@ internal fun MembersCard(
     }
 }
 
+/** Picks a role for [member] among the roles lower than the caller's (never the Owner's). */
 @Composable
-internal fun MinorsCard(
-    children: List<ChildProfile>,
-    manager: Boolean,
-    onAdd: () -> Unit,
-    onEdit: (ChildProfile) -> Unit,
-    onDelete: (ChildProfile) -> Unit,
-) {
-    AccountCard("Nieletni") {
-        if (children.isEmpty()) Text("Brak profili Nieletnich.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        children.forEachIndexed { index, child ->
-            if (index > 0) LuxuryDivider()
-            val actions = if (manager) listOf("Edytuj" to { onEdit(child) }, "Usuń" to { onDelete(child) }) else emptyList()
-            PersonRow(child.name, "Nieletni", child.avatar, actions)
-        }
-        if (manager) ButtonsRow { FilledTonalButton(onClick = onAdd) { Text("+ Dodaj nieletniego") } }
-    }
+internal fun RolePickerDialog(member: Member, roles: List<Role>, myRole: Role, onDismiss: () -> Unit, onPick: suspend (Role) -> Unit) {
+    val choices = roles.filter { !it.owner && it.rank < myRole.rank }
+    var picked by remember { mutableStateOf(member.role.id) }
+    val submit = rememberSubmit { onPick(choices.first { it.id == picked }) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rola: ${member.name}") },
+        text = {
+            Column {
+                choices.forEach { role ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { picked = role.id },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = picked == role.id, onClick = { picked = role.id })
+                        Text(role.name, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy && picked != member.role.id) { Text("Zapisz") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+    )
 }
 
 @Composable
@@ -284,45 +291,6 @@ internal fun CodeDialog(dialog: AccountDialog.Code, onShare: (() -> Unit)?, onDi
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Gotowe") } },
         dismissButton = onShare?.let { share -> { TextButton(onClick = share) { Text("Udostępnij") } } },
-    )
-}
-
-@Composable
-internal fun ChildDialog(child: ChildProfile?, onDismiss: () -> Unit, onSave: suspend (String, String) -> Unit) {
-    var name by rememberSaveable { mutableStateOf(child?.name ?: "") }
-    var color by rememberSaveable { mutableStateOf(child?.color ?: ChildColors.first()) }
-    val submit = rememberSubmit { onSave(name, color) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (child == null) "Dodaj nieletniego" else "Edytuj profil") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Imię") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                )
-                Text("Kolor (np. w kalendarzu)", style = MaterialTheme.typography.bodyMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ChildColors.forEach { option ->
-                        val selected = option == color
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(parseColor(option), CircleShape)
-                                .border(if (selected) 3.dp else 0.dp, if (selected) Color.White else Color.Transparent, CircleShape)
-                                .clickable { color = option }
-                                .semantics { contentDescription = if (selected) "Kolor $option, wybrany" else "Kolor $option" },
-                        )
-                    }
-                }
-                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy) { Text("Zapisz") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
     )
 }
 

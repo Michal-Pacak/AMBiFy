@@ -13,7 +13,6 @@ import pl.ambif.ambify.server.accounts.ApiException
 import pl.ambif.ambify.server.accounts.UserSession
 import pl.ambif.ambify.shared.AvatarShape
 import pl.ambif.ambify.shared.Avatars
-import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.Role
@@ -67,18 +66,6 @@ class AvatarsTest {
         // Members get the colors least used so far, so the first ones all differ.
         val colors = service.family(owner).members.map { it.avatar!!.color }
         assertEquals(colors.size, colors.toSet().size)
-    }
-
-    @Test
-    fun minorsShareTheShapeOrderAndKeepTheirColor() {
-        val (service, owner) = community()
-        val minor = service.addChild(owner, ChildRequest("Mikołaj Pacak", "#9AD7A4"))
-
-        assertEquals(AvatarShape.SQUARE, minor.avatar!!.shape)
-        assertEquals("#9AD7A4", minor.avatar!!.color)
-        assertEquals("MP", minor.avatar!!.initials)
-        val renamed = service.updateChild(owner, minor.id, ChildRequest("Bartek", "#9AD7A4"))
-        assertEquals(AvatarShape.CIRCLE, renamed.avatar!!.shape)
     }
 
     @Test
@@ -137,7 +124,7 @@ class AvatarsTest {
         val service = AccountService(Db.open(path), tokens)
         val members = service.family(UserSession("u1", "s")).members
 
-        assertEquals(listOf(Role.OWNER to AvatarShape.CIRCLE, Role.MEMBER to AvatarShape.SQUARE), members.map { it.role to it.avatar!!.shape })
+        assertEquals(listOf("Owner" to AvatarShape.CIRCLE, "User" to AvatarShape.SQUARE), members.map { it.role.name to it.avatar!!.shape })
         assertNotEquals(members[0].avatar!!.color, members[1].avatar!!.color)
     }
 }

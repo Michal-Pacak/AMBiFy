@@ -27,6 +27,12 @@ sealed class AppDestination(val route: String) {
     data object CommunityPeople : AppDestination("community/{id}/people/{section}") {
         fun of(communityId: String, section: String) = "community/$communityId/people/$section"
     }
+    data object CommunityPermissions : AppDestination("community/{id}/permissions") {
+        fun of(communityId: String) = "community/$communityId/permissions"
+    }
+    data object CommunityRequests : AppDestination("community/{id}/requests") {
+        fun of(communityId: String) = "community/$communityId/requests"
+    }
     data object Platform : AppDestination("platform")
 }
 

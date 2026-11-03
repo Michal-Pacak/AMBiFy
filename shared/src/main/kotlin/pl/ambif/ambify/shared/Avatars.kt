@@ -14,7 +14,7 @@ enum class AvatarShape { CIRCLE, SQUARE, TRIANGLE, STAR, HEXAGON, DIAMOND }
 data class Avatar(val initials: String, val color: String, val shape: AvatarShape)
 
 object Avatars {
-    /** Member colors, given out least-used first; minors keep the color chosen for them. */
+    /** Member colors, given out least-used first. */
     val PALETTE = listOf("#8EC3F0", "#E3A8C0", "#7FD3CF", "#B9A7EE", "#F2C27B", "#9AD7A4", "#F29C8B", "#C9C9CF")
 
     /** First letters of the first and last word ("Anna Maria Kowalska" → "AK"); a single word gives its first two letters. */

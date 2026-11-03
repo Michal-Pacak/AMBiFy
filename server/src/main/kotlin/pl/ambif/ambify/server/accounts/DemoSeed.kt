@@ -1,8 +1,6 @@
 package pl.ambif.ambify.server.accounts
 
-import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.RegisterRequest
-import pl.ambif.ambify.shared.Role
 import pl.ambif.ambify.shared.SetupRequest
 
 /**
@@ -17,18 +15,19 @@ object DemoSeed {
     /** Created first, so it becomes the Platform Admin; Owner of a second test community. */
     const val PLATFORM = "platform@test.ambify"
 
-    fun seedIfEmpty(service: AccountService, tokens: AccessTokens) {
-        if (service.status().familyExists) return
+    /** Seeds the accounts; returns the test Owner's session (for module test data), or null when already seeded. */
+    fun seedIfEmpty(service: AccountService, tokens: AccessTokens): UserSession? {
+        if (service.status().familyExists) return null
         service.setup(SetupRequest("Druga społeczność testowa", "Pat Platform", PLATFORM, PASSWORD, "seed"))
         val owner = session(tokens, service.setup(SetupRequest("Społeczność testowa", "Ola Owner", OWNER, PASSWORD, "seed")))
         for ((name, email) in listOf("Adam Admin" to ADMIN, "Ula User" to USER)) {
             val code = service.createInvitation(owner).code
             service.register(RegisterRequest(code, name, email, PASSWORD, "seed"))
         }
-        val adminId = service.family(owner).members.single { it.name == "Adam Admin" }.id
-        service.setRole(owner, adminId, Role.ADMIN)
-        service.addChild(owner, ChildRequest("Bartek", "#8EC3F0"))
-        service.addChild(owner, ChildRequest("Filip", "#9AD7A4"))
+        val family = service.family(owner)
+        val adminId = family.members.single { it.name == "Adam Admin" }.id
+        service.setRole(owner, adminId, family.roles.single { it.name == "Admin" }.id)
+        return owner
     }
 
     private fun session(tokens: AccessTokens, issued: pl.ambif.ambify.shared.Tokens): UserSession {

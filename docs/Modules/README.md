@@ -27,8 +27,8 @@ Each module is documented independently and can evolve without affecting the pla
 | [Missions](Missions.md) | Tasks, points and rewards | ⏳ |
 | [Shopping](Shopping.md) | Shared shopping lists | ⏳ |
 | [Communication](Communication.md) | Messaging and discussions | ⏳ |
-| Timetable | Children's school timetable (from vulcan_digest) | ⏳ |
-| School | Tests, homework and school reminders (from vulcan_digest) | ⏳ |
+| [Timetable](Timetable.md) | Children's school timetable (from eduVulcan) and extra activities | 🚧 |
+| School | Tests, homework and school reminders (from eduVulcan) | ⏳ |
 | [Finance](Finance.md) | Budget and expense tracking | ⏳ |
 | [Inventory](Inventory.md) | Household inventory | ⏳ |
 | [Documents](Documents.md) | Shared document storage | ⏳ |

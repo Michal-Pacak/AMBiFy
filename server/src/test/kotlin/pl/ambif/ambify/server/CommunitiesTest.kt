@@ -143,8 +143,8 @@ class CommunitiesTest {
             client.send("POST", AccountPaths.COMMUNITIES, CreateCommunityRequest("Dziadkowie"), ania.accessToken).body()
         val pacakowie = client.me(michal).communityId!!
 
-        assertEquals(Role.MEMBER, client.me(ania).role)
-        assertEquals(Role.OWNER, client.me(ania, dziadkowie.id).role)
+        assertEquals("User", client.me(ania).role?.name)
+        assertEquals("Owner", client.me(ania, dziadkowie.id).role?.name)
         assertEquals(listOf("Pacakowie", "Dziadkowie"), client.me(ania).communities.map { it.name })
         val michalInDziadkowie = client.send<Unit>("GET", AccountPaths.FAMILY, token = michal.accessToken, community = dziadkowie.id)
         assertEquals(HttpStatusCode.NotFound, michalInDziadkowie.status)
@@ -259,7 +259,6 @@ class CommunitiesTest {
                 it.execute("INSERT INTO users VALUES ('u1', 'org', 'Michał', 'michal@pacak.waw.pl', 'h', 'OWNER', 0, NULL, 'calendar,home', 10)")
                 it.execute("INSERT INTO users VALUES ('u2', 'org', 'Ania', 'ania@pacak.waw.pl', 'h', 'ADMIN', 0, NULL, NULL, 20)")
                 it.execute("INSERT INTO sessions VALUES ('s1', 'u1', 'hash', 'S24', 10, 10)")
-                it.execute("INSERT INTO child_profiles VALUES ('c1', 'org', 'Bartek', '#8EC3F0', 30)")
             }
         }
 
@@ -267,17 +266,16 @@ class CommunitiesTest {
         val service = AccountService(migrated, testTokens())
         val michal = service.me(UserSession("u1", "s1"))
 
-        assertEquals(Role.OWNER, michal.role)
+        assertEquals("Owner", michal.role?.name)
         assertEquals("Pacakowie", michal.familyName)
         assertTrue(michal.platformAdmin)
         assertFalse(service.me(UserSession("u2", "s1")).platformAdmin)
         assertTrue(service.sessionActive("u1", "s1"))
         assertEquals(listOf("calendar", "home"), service.moduleOrder(UserSession("u1", "s1")))
         val family = service.family(UserSession("u1", "s1"))
-        assertEquals(listOf("Michał" to Role.OWNER, "Ania" to Role.ADMIN), family.members.map { it.name to it.role })
-        assertEquals(listOf("Bartek"), family.children.map { it.name })
-        // Roles now live in memberships.
-        service.setRole(UserSession("u1", "s1"), "u2", Role.MEMBER)
-        assertEquals(Role.MEMBER, service.me(UserSession("u2", "s1")).role)
+        assertEquals(listOf("Michał" to "Owner", "Ania" to "Admin"), family.members.map { it.name to it.role.name })
+        // Roles are the community's own since V005.
+        service.setRole(UserSession("u1", "s1"), "u2", family.roles.single { it.name == "User" }.id)
+        assertEquals("User", service.me(UserSession("u2", "s1")).role?.name)
     }
 }

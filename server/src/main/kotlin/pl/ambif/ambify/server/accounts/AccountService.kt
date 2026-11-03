@@ -20,13 +20,12 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import pl.ambif.ambify.shared.AccountRules
+import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.Avatar
 import pl.ambif.ambify.shared.AvatarShape
 import pl.ambif.ambify.shared.Avatars
 import pl.ambif.ambify.shared.ChangePasswordRequest
-import pl.ambif.ambify.shared.ChildProfile
-import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.CommunitySummary
 import pl.ambif.ambify.shared.Device
@@ -36,8 +35,15 @@ import pl.ambif.ambify.shared.Invitation
 import pl.ambif.ambify.shared.LoginRequest
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Member
+import pl.ambif.ambify.shared.Mode
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.PasswordResetCode
+import pl.ambif.ambify.shared.Permissions
+import pl.ambif.ambify.shared.RoleCreate
+import pl.ambif.ambify.shared.RequestQueued
+import pl.ambif.ambify.shared.PermissionTable
+import pl.ambif.ambify.shared.PermissionCell
+import pl.ambif.ambify.shared.PendingRequest
 import pl.ambif.ambify.shared.PlatformCommunity
 import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.RegisterRequest
@@ -49,8 +55,8 @@ import pl.ambif.ambify.shared.Tokens
 /** A refusal shown to the user: HTTP status, stable code for the app, Polish message. */
 class ApiException(val status: HttpStatusCode, val code: String, override val message: String) : RuntimeException(message)
 
-/** The caller inside one community: their account row, the community and their role there. */
-private class Membership(val user: ResultRow, val organizationId: String, val role: Role)
+/** The caller inside one community: their account row, the community, their role there and all its roles. */
+class Membership internal constructor(val user: ResultRow, val organizationId: String, val role: Role, val roles: List<Role>)
 
 class AccountService(
     private val database: Database,
@@ -188,6 +194,11 @@ class AccountService(
         val user = user(session.userId)
         val communities = communities(session.userId)
         val current = communities.firstOrNull { it.id == session.communityId } ?: communities.firstOrNull()
+        val permissions = current?.let { community ->
+            val roles = rolesOf(community.id)
+            val overrides = overrides(community.id)
+            Action.entries.associateWith { Permissions.effective(it, community.role, roles, overrides) }
+        } ?: emptyMap()
         Me(
             id = user[Users.id],
             name = user[Users.name],
@@ -197,6 +208,7 @@ class AccountService(
             communityId = current?.id,
             platformAdmin = user[Users.platformAdmin],
             communities = communities,
+            permissions = permissions,
         )
     }
 
@@ -212,7 +224,7 @@ class AccountService(
             val avatar = Memberships.selectAll()
                 .where { (Memberships.userId eq userId) and (Memberships.organizationId eq organizationId) }
                 .single().memberAvatar(name)
-            CommunitySummary(organizationId, row[Organizations.name], Role.valueOf(row[Memberships.role]), avatar)
+            CommunitySummary(organizationId, row[Organizations.name], role(row[Memberships.role]), avatar)
         }
     }
 
@@ -247,8 +259,7 @@ class AccountService(
     fun renameCommunity(session: UserSession, name: String) {
         val communityName = Validate.name(name, "Nazwa społeczności")
         transaction(database) {
-            val membership = membership(session)
-            if (membership.role != Role.OWNER) throw forbidden()
+            val membership = requireAction(session, Action.RENAME_COMMUNITY)
             Organizations.update({ Organizations.id eq membership.organizationId }) { it[Organizations.name] = communityName }
         }
     }
@@ -257,7 +268,7 @@ class AccountService(
     fun leave(session: UserSession) {
         transaction(database) {
             val membership = membership(session)
-            if (membership.role == Role.OWNER) {
+            if (membership.role.owner) {
                 throw ApiException(
                     HttpStatusCode.Conflict, "owner_cannot_leave",
                     "Owner nie może opuścić swojej społeczności. Przekazanie roli Ownera będzie dostępne później.",
@@ -275,8 +286,8 @@ class AccountService(
         val communityName = Validate.name(name, "Nazwa społeczności")
         return transaction(database) {
             val user = user(session.userId)
-            val owned = Memberships.selectAll()
-                .where { (Memberships.userId eq session.userId) and (Memberships.role eq Role.OWNER.name) }.count()
+            val owned = Memberships.join(CommunityRoles, JoinType.INNER, Memberships.role, CommunityRoles.id).selectAll()
+                .where { (Memberships.userId eq session.userId) and (CommunityRoles.isOwner eq true) }.count()
             val paid = when {
                 owned == 0L -> false
                 user[Users.platformAdmin] -> true
@@ -289,7 +300,8 @@ class AccountService(
                     "Jesteś już Ownerem darmowej społeczności. Kolejna wymaga jednorazowej opłaty (wkrótce dostępne).",
                 )
             }
-            CommunitySummary(insertCommunity(session.userId, communityName, paid), communityName, Role.OWNER)
+            val organizationId = insertCommunity(session.userId, communityName, paid)
+            CommunitySummary(organizationId, communityName, rolesOf(organizationId).first { it.owner })
         }
     }
 
@@ -301,7 +313,7 @@ class AccountService(
             throw ApiException(HttpStatusCode.Conflict, "already_member", "Już należysz do tej społeczności.")
         }
         acceptInvitation(invitation, session.userId)
-        CommunitySummary(organizationId, communityName(organizationId), Role.MEMBER)
+        CommunitySummary(organizationId, communityName(organizationId), lowestRole(organizationId))
     }
 
     fun family(session: UserSession): Family = transaction(database) {
@@ -312,11 +324,9 @@ class AccountService(
             name = communityName(organizationId),
             members = membersOf(organizationId)
                 .orderBy(Memberships.joinedAt)
-                .map { Member(it[Users.id], it[Users.name], Role.valueOf(it[Memberships.role]), it.memberAvatar(it[Users.name])) },
-            children = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }
-                .orderBy(ChildProfiles.createdAt)
-                .map { it.toChild() },
-            invitations = if (!membership.role.canManage) emptyList() else Invitations.selectAll()
+                .map { Member(it[Users.id], it[Users.name], role(it[Memberships.role]), it.memberAvatar(it[Users.name])) },
+            roles = membership.roles,
+            invitations = if (can(membership, Action.INVITE) != Mode.ALLOWED) emptyList() else Invitations.selectAll()
                 .where { (Invitations.organizationId eq organizationId) and Invitations.usedBy.isNull() and (Invitations.expiresAt greater clock()) }
                 .orderBy(Invitations.createdAt)
                 .map { Invitation(it[Invitations.code], it[Invitations.expiresAt]) },
@@ -324,7 +334,7 @@ class AccountService(
     }
 
     fun createInvitation(session: UserSession): Invitation = transaction(database) {
-        val manager = requireManager(session)
+        val manager = requireAction(session, Action.INVITE)
         val now = clock()
         val invitation = Invitation(Secrets.code(6), now + AccountRules.INVITATION_DAYS * DAY_MS)
         Invitations.insert {
@@ -339,86 +349,43 @@ class AccountService(
 
     fun cancelInvitation(session: UserSession, code: String) {
         transaction(database) {
-            val manager = requireManager(session)
+            val manager = requireAction(session, Action.INVITE)
             Invitations.deleteWhere {
                 (Invitations.code eq code) and (organizationId eq manager.organizationId) and usedBy.isNull()
             }
         }
     }
 
-    fun addChild(session: UserSession, request: ChildRequest): ChildProfile {
-        val name = Validate.name(request.name, "Imię")
-        val color = Validate.color(request.color)
-        return transaction(database) {
-            val manager = requireManager(session)
-            val childId = Secrets.id()
-            ChildProfiles.insert {
-                it[id] = childId
-                it[organizationId] = manager.organizationId
-                it[ChildProfiles.name] = name
-                it[ChildProfiles.color] = color
-                it[createdAt] = clock()
-            }
-            ensureAvatars(manager.organizationId)
-            child(childId)
-        }
-    }
-
-    fun updateChild(session: UserSession, childId: String, request: ChildRequest): ChildProfile {
-        val name = Validate.name(request.name, "Imię")
-        val color = Validate.color(request.color)
-        return transaction(database) {
-            val manager = requireManager(session)
-            val before = ChildProfiles.selectAll()
-                .where { (ChildProfiles.id eq childId) and (ChildProfiles.organizationId eq manager.organizationId) }
-                .singleOrNull() ?: throw notFound()
-            ChildProfiles.update({ ChildProfiles.id eq childId }) {
-                it[ChildProfiles.name] = name
-                it[ChildProfiles.color] = color
-                if (Avatars.initials(name) != Avatars.initials(before[ChildProfiles.name])) it[avatarShape] = null
-            }
-            ensureAvatars(manager.organizationId)
-            child(childId)
-        }
-    }
-
-    fun deleteChild(session: UserSession, childId: String) {
-        transaction(database) {
-            val manager = requireManager(session)
-            ChildProfiles.deleteWhere { (id eq childId) and (organizationId eq manager.organizationId) }
-        }
-    }
-
     /** Takes the person out of this community; their account and other communities stay. */
     fun removeMember(session: UserSession, memberId: String) {
         transaction(database) {
-            removeMembership(memberId, requireManageable(session, memberId).organizationId)
+            removeMembership(memberId, requireManageable(session, memberId, Action.REMOVE_MEMBERS).organizationId)
         }
     }
 
-    /** A one-time code (valid 24 h) the Owner or an Admin hands to someone who forgot the password. */
+    /** A one-time code (valid 24 h) handed to someone of a lower role who forgot the password. */
     fun createResetCode(session: UserSession, memberId: String): PasswordResetCode = transaction(database) {
-        requireManageable(session, memberId, allowSelf = true)
+        requireManageable(session, memberId, Action.REMOVE_MEMBERS, allowSelf = true)
         insertResetCode(memberId)
     }
 
-    /** Only the Owner hands out and takes back the Admin role. */
-    fun setRole(session: UserSession, memberId: String, role: Role) {
-        if (role != Role.ADMIN && role != Role.MEMBER) {
-            throw ApiException(HttpStatusCode.BadRequest, "invalid_role", "Można nadać tylko rolę Admin albo User.")
-        }
+    /** Gives a person of a lower role another role that is also lower than the caller's (never the Owner's). */
+    fun setRole(session: UserSession, memberId: String, roleId: String) {
         transaction(database) {
-            val manager = requireManageable(session, memberId)
-            if (manager.role != Role.OWNER) throw forbidden()
+            val manager = requireManageable(session, memberId, Action.ASSIGN_ROLES)
+            val target = manager.roles.firstOrNull { it.id == roleId } ?: throw notFound()
+            if (target.owner || target.rank >= manager.role.rank) {
+                throw ApiException(HttpStatusCode.BadRequest, "invalid_role", "Można nadać tylko rolę niższą od własnej.")
+            }
             Memberships.update({ (Memberships.userId eq memberId) and (Memberships.organizationId eq manager.organizationId) }) {
-                it[Memberships.role] = role.name
+                it[Memberships.role] = target.id
             }
         }
     }
 
     fun signOutMember(session: UserSession, memberId: String) {
         transaction(database) {
-            requireManageable(session, memberId)
+            requireManageable(session, memberId, Action.REMOVE_MEMBERS)
             Sessions.deleteWhere { userId eq memberId }
         }
     }
@@ -459,7 +426,7 @@ class AccountService(
 
     /** The Owner or an Admin switches a module the community has on or off for everyone. */
     fun setModule(session: UserSession, module: ModuleId, enabled: Boolean): CommunityModules = transaction(database) {
-        val manager = requireManager(session)
+        val manager = requireAction(session, Action.SWITCH_MODULES)
         val organizationId = manager.organizationId
         if (module !in Entitlements.owned(grants(organizationId))) {
             throw ApiException(HttpStatusCode.Forbidden, "not_owned", "Ta społeczność nie ma modułu ${module.label}.")
@@ -484,6 +451,177 @@ class AccountService(
         }
     }
 
+    // --- roles, the permission table and requests waiting for approval ---
+
+    /**
+     * Runs an approved request: registered by the module that queues it (e.g. the timetable), with the community,
+     * the person who asked and what they asked for (JSON).
+     */
+    val approvalHandlers = mutableMapOf<Action, (organizationId: String, requesterId: String, payload: String) -> Unit>()
+
+    /** The whole table for the current community; anyone in it may look, only the Owner changes it. */
+    fun permissionTable(session: UserSession): PermissionTable = transaction(database) {
+        val membership = membership(session)
+        val overrides = overrides(membership.organizationId)
+        PermissionTable(
+            roles = membership.roles,
+            cells = membership.roles.flatMap { role ->
+                Action.entries.map { action ->
+                    PermissionCell(
+                        role.id, action, Permissions.effective(action, role, membership.roles, overrides),
+                        isDefault = (role.id to action) !in overrides,
+                    )
+                }
+            },
+        )
+    }
+
+    /** The Owner sets what [roleId] may do with [action]; null (or the default itself) puts the default back. */
+    fun setPermission(session: UserSession, roleId: String, action: Action, mode: Mode?): PermissionTable {
+        transaction(database) {
+            val owner = requireAction(session, Action.EDIT_PERMISSIONS)
+            val role = owner.roles.firstOrNull { it.id == roleId } ?: throw notFound()
+            if (role.owner || action.ownerOnly) {
+                throw ApiException(HttpStatusCode.BadRequest, "fixed", "To uprawnienie należy tylko do Ownera i nie można go zmienić.")
+            }
+            if (mode == Mode.APPROVAL && !action.approvable) {
+                throw ApiException(HttpStatusCode.BadRequest, "no_approval", "Tego działania nie da się wykonywać po zatwierdzeniu.")
+            }
+            RolePermissions.deleteWhere { (RolePermissions.roleId eq roleId) and (RolePermissions.action eq action.name) }
+            val ordered = owner.roles.filterNot { it.owner }
+            val default = Permissions.defaultFor(action, ordered.indexOfFirst { it.id == roleId }, ordered.size)
+            if (mode != null && mode != default) {
+                RolePermissions.insert {
+                    it[RolePermissions.roleId] = roleId
+                    it[RolePermissions.action] = action.name
+                    it[RolePermissions.mode] = mode.name
+                }
+            }
+        }
+        return permissionTable(session)
+    }
+
+    /** A new role right below [RoleCreate.belowRoleId] (the Owner's role: at the top). */
+    fun createRole(session: UserSession, request: RoleCreate): List<Role> {
+        val name = Validate.name(request.name, "Nazwa roli")
+        return transaction(database) {
+            val owner = requireAction(session, Action.MANAGE_ROLES)
+            if (owner.roles.any { it.name.equals(name, ignoreCase = true) }) {
+                throw ApiException(HttpStatusCode.Conflict, "role_exists", "Rola o tej nazwie już jest.")
+            }
+            val index = owner.roles.indexOfFirst { it.id == request.belowRoleId }.takeIf { it >= 0 } ?: throw notFound()
+            val newId = Secrets.id()
+            CommunityRoles.insert {
+                it[id] = newId
+                it[organizationId] = owner.organizationId
+                it[CommunityRoles.name] = name
+                it[rank] = 0
+                it[isOwner] = false
+                it[createdAt] = clock()
+            }
+            val order = owner.roles.map { it.id }.toMutableList().apply { add(index + 1, newId) }
+            renumber(order)
+            rolesOf(owner.organizationId)
+        }
+    }
+
+    fun renameRole(session: UserSession, roleId: String, name: String): List<Role> {
+        val roleName = Validate.name(name, "Nazwa roli")
+        return transaction(database) {
+            val owner = requireAction(session, Action.MANAGE_ROLES)
+            val role = owner.roles.firstOrNull { it.id == roleId && !it.owner } ?: throw notFound()
+            CommunityRoles.update({ CommunityRoles.id eq role.id }) { it[CommunityRoles.name] = roleName }
+            rolesOf(owner.organizationId)
+        }
+    }
+
+    /** One place up or down among the roles under the Owner. */
+    fun moveRole(session: UserSession, roleId: String, up: Boolean): List<Role> = transaction(database) {
+        val owner = requireAction(session, Action.MANAGE_ROLES)
+        val order = owner.roles.filterNot { it.owner }.map { it.id }.toMutableList()
+        val index = order.indexOf(roleId).takeIf { it >= 0 } ?: throw notFound()
+        val other = if (up) index - 1 else index + 1
+        if (other in order.indices) {
+            order[index] = order[other].also { order[other] = order[index] }
+            renumber(listOf(owner.roles.first { it.owner }.id) + order)
+        }
+        rolesOf(owner.organizationId)
+    }
+
+    /** Only a role nobody has; one role under the Owner always stays (new people join with the lowest). */
+    fun deleteRole(session: UserSession, roleId: String): List<Role> = transaction(database) {
+        val owner = requireAction(session, Action.MANAGE_ROLES)
+        val role = owner.roles.firstOrNull { it.id == roleId && !it.owner } ?: throw notFound()
+        if (Memberships.selectAll().where { Memberships.role eq role.id }.count() > 0) {
+            throw ApiException(HttpStatusCode.Conflict, "role_in_use", "Ktoś ma tę rolę. Najpierw nadaj tym osobom inną.")
+        }
+        if (owner.roles.count { !it.owner } <= 1) {
+            throw ApiException(HttpStatusCode.Conflict, "last_role", "Musi zostać co najmniej jedna rola poza Ownerem.")
+        }
+        CommunityRoles.deleteWhere { id eq role.id }
+        rolesOf(owner.organizationId)
+    }
+
+    /** Requests the caller may decide on: waiting, for actions their role may do at once. */
+    fun requests(session: UserSession): List<PendingRequest> = transaction(database) {
+        val membership = membership(session)
+        PermissionRequests.join(Users, JoinType.INNER, PermissionRequests.requesterId, Users.id).selectAll()
+            .where { (PermissionRequests.organizationId eq membership.organizationId) and (PermissionRequests.status eq PENDING) }
+            .orderBy(PermissionRequests.createdAt)
+            .mapNotNull { row ->
+                val action = Action.entries.firstOrNull { it.name == row[PermissionRequests.action] } ?: return@mapNotNull null
+                if (can(membership, action) != Mode.ALLOWED) return@mapNotNull null
+                PendingRequest(row[PermissionRequests.id], action, row[Users.name], row[PermissionRequests.summary], row[PermissionRequests.createdAt])
+            }
+    }
+
+    /** Queues [action] for approval; the module runs it later through [approvalHandlers]. Must run in a transaction. */
+    internal fun queueRequest(membership: Membership, action: Action, payload: String, summary: String): RequestQueued {
+        val requestId = Secrets.id()
+        PermissionRequests.insert {
+            it[id] = requestId
+            it[organizationId] = membership.organizationId
+            it[requesterId] = membership.user[Users.id]
+            it[PermissionRequests.action] = action.name
+            it[PermissionRequests.payload] = payload
+            it[PermissionRequests.summary] = summary
+            it[status] = PENDING
+            it[createdAt] = clock()
+        }
+        return RequestQueued(requestId, "Wysłano do zatwierdzenia. Zadziała, gdy zatwierdzi je Admin albo Owner.")
+    }
+
+    fun decide(session: UserSession, requestId: String, approve: Boolean) {
+        transaction(database) {
+            val membership = membership(session)
+            val request = PermissionRequests.selectAll()
+                .where { (PermissionRequests.id eq requestId) and (PermissionRequests.organizationId eq membership.organizationId) }
+                .singleOrNull() ?: throw notFound()
+            if (request[PermissionRequests.status] != PENDING) {
+                throw ApiException(HttpStatusCode.Conflict, "decided", "Ta prośba została już rozpatrzona.")
+            }
+            val action = Action.valueOf(request[PermissionRequests.action])
+            if (can(membership, action) != Mode.ALLOWED) throw forbidden()
+            if (approve) {
+                val handler = approvalHandlers[action] ?: throw ApiException(HttpStatusCode.Conflict, "no_handler", "Tej prośby nie da się teraz wykonać.")
+                handler(membership.organizationId, request[PermissionRequests.requesterId], request[PermissionRequests.payload])
+            }
+            PermissionRequests.update({ PermissionRequests.id eq requestId }) {
+                it[status] = if (approve) APPROVED else REJECTED
+                it[decidedBy] = session.userId
+                it[decidedAt] = clock()
+            }
+        }
+    }
+
+    /** Ranks spread evenly in [order] (highest first); the Owner's role keeps its fixed top rank. */
+    private fun renumber(order: List<String>) {
+        val roles = order.filter { id -> !CommunityRoles.selectAll().where { CommunityRoles.id eq id }.single()[CommunityRoles.isOwner] }
+        roles.forEachIndexed { index, id ->
+            CommunityRoles.update({ CommunityRoles.id eq id }) { it[rank] = (roles.size - index) * 100 }
+        }
+    }
+
     // --- Platform Admin ---
 
     fun platformCommunities(session: UserSession): List<PlatformCommunity> = transaction(database) {
@@ -491,13 +629,12 @@ class AccountService(
         Organizations.selectAll().orderBy(Organizations.createdAt).map { organization ->
             val organizationId = organization[Organizations.id]
             val members = membersOf(organizationId)
-                .map { it[Users.name] to Role.valueOf(it[Memberships.role]) }
+                .map { it[Users.name] to role(it[Memberships.role]) }
             PlatformCommunity(
                 id = organizationId,
                 name = organization[Organizations.name],
-                ownerName = members.firstOrNull { it.second == Role.OWNER }?.first,
+                ownerName = members.firstOrNull { it.second.owner }?.first,
                 members = members.size,
-                minors = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }.count().toInt(),
                 createdAt = organization[Organizations.createdAt],
                 paidFounding = organization[Organizations.paidFounding],
                 grants = grants(organizationId).sorted(),
@@ -574,16 +711,27 @@ class AccountService(
             it[createdBy] = ownerId
             it[paidFounding] = paid
         }
-        insertMembership(ownerId, organizationId, Role.OWNER)
+        val ownerRole = "$organizationId:owner"
+        for ((suffix, roleName, rank) in listOf(Triple("owner", "Owner", OWNER_RANK), Triple("admin", "Admin", 200), Triple("user", "User", 100))) {
+            CommunityRoles.insert {
+                it[id] = "$organizationId:$suffix"
+                it[CommunityRoles.organizationId] = organizationId
+                it[CommunityRoles.name] = roleName
+                it[CommunityRoles.rank] = rank
+                it[isOwner] = suffix == "owner"
+                it[createdAt] = now
+            }
+        }
+        insertMembership(ownerId, organizationId, ownerRole)
         return organizationId
     }
 
     /** The icon is handed out at once, so it never depends on who joins later. */
-    private fun insertMembership(userId: String, organizationId: String, role: Role) {
+    private fun insertMembership(userId: String, organizationId: String, roleId: String) {
         Memberships.insert {
             it[Memberships.userId] = userId
             it[Memberships.organizationId] = organizationId
-            it[Memberships.role] = role.name
+            it[Memberships.role] = roleId
             it[joinedAt] = clock()
         }
         ensureAvatars(organizationId)
@@ -596,16 +744,12 @@ class AccountService(
     }
 
     /**
-     * Hands out icons to the people of a community who have none yet, in the order they joined (members and
-     * minors together): the first shape nobody with the same initials uses, and for members the least-used color.
-     * Icons already handed out never change.
+     * Hands out icons to the people of a community who have none yet, in the order they joined: the first shape
+     * nobody with the same initials uses, and the least-used color. Icons already handed out never change.
      */
     private fun ensureAvatars(organizationId: String) {
         val members = membersOf(organizationId).toList()
-        val minors = ChildProfiles.selectAll().where { ChildProfiles.organizationId eq organizationId }.toList()
-        if (members.none { it[Memberships.avatarShape] == null || it[Memberships.avatarColor] == null } &&
-            minors.none { it[ChildProfiles.avatarShape] == null }
-        ) return
+        if (members.none { it[Memberships.avatarShape] == null || it[Memberships.avatarColor] == null }) return
 
         class Person(val initials: String, val since: Long, var shape: AvatarShape?, var color: String?, val save: (AvatarShape, String) -> Unit)
         val people = members.map { row ->
@@ -618,11 +762,6 @@ class AccountService(
                     it[avatarColor] = color
                 }
             }
-        } + minors.map { row ->
-            Person(
-                Avatars.initials(row[ChildProfiles.name]), row[ChildProfiles.createdAt],
-                row[ChildProfiles.avatarShape]?.let(AvatarShape::valueOf), row[ChildProfiles.color],
-            ) { shape, _ -> ChildProfiles.update({ ChildProfiles.id eq row[ChildProfiles.id] }) { it[avatarShape] = shape.name } }
         }
         for (person in people.sortedBy { it.since }) {
             if (person.shape != null && person.color != null) continue
@@ -634,14 +773,11 @@ class AccountService(
         }
     }
 
-    private fun ResultRow.memberAvatar(name: String): Avatar? {
+    internal fun ResultRow.memberAvatar(name: String): Avatar? {
         val shape = this[Memberships.avatarShape] ?: return null
         val color = this[Memberships.avatarColor] ?: return null
         return Avatar(Avatars.initials(name), color, AvatarShape.valueOf(shape))
     }
-
-    private fun child(childId: String): ChildProfile =
-        ChildProfiles.selectAll().where { ChildProfiles.id eq childId }.single().toChild()
 
     private fun validInvitation(code: String): ResultRow {
         val invitation = Invitations.selectAll().where { Invitations.code eq code }.singleOrNull()
@@ -652,7 +788,7 @@ class AccountService(
     }
 
     private fun acceptInvitation(invitation: ResultRow, userId: String) {
-        insertMembership(userId, invitation[Invitations.organizationId], Role.MEMBER)
+        insertMembership(userId, invitation[Invitations.organizationId], lowestRole(invitation[Invitations.organizationId]).id)
         Invitations.update({ Invitations.code eq invitation[Invitations.code] }) { it[usedBy] = userId }
     }
 
@@ -690,7 +826,7 @@ class AccountService(
         Users.selectAll().where { Users.email eq email.trim().lowercase() }.singleOrNull()
             ?: throw ApiException(HttpStatusCode.NotFound, "no_account", "Nie ma konta z tym e-mailem.")
 
-    private fun membersOf(organizationId: String) =
+    internal fun membersOf(organizationId: String) =
         Memberships.join(Users, JoinType.INNER, Memberships.userId, Users.id).selectAll()
             .where { Memberships.organizationId eq organizationId }
 
@@ -722,22 +858,40 @@ class AccountService(
         } else {
             rows.firstOrNull() ?: return null
         }
-        return Membership(user, row[Memberships.organizationId], Role.valueOf(row[Memberships.role]))
+        val organizationId = row[Memberships.organizationId]
+        return Membership(user, organizationId, role(row[Memberships.role]), rolesOf(organizationId))
     }
 
-    private fun membership(session: UserSession): Membership = membershipOrNull(session)
+    /** The caller in the current community; fails for someone without a community. Must run in a transaction. */
+    internal fun membership(session: UserSession): Membership = membershipOrNull(session)
         ?: throw ApiException(HttpStatusCode.Conflict, "no_community", "Najpierw załóż społeczność albo dołącz do niej z kodem.")
 
-    /** Owner or Admin: may invite, manage minors and manage people with a lower role. */
-    private fun requireManager(session: UserSession): Membership {
+    /** How the caller's role may do [action] in their community. Must run in a transaction. */
+    internal fun can(membership: Membership, action: Action): Mode =
+        Permissions.effective(action, membership.role, membership.roles, overrides(membership.organizationId))
+
+    /** Names of the community's members whose role may do [action] at once. Must run in a transaction. */
+    internal fun membersAllowed(organizationId: String, action: Action): List<String> {
+        val roles = rolesOf(organizationId)
+        val overrides = overrides(organizationId)
+        return membersOf(organizationId).orderBy(Memberships.joinedAt)
+            .filter { Permissions.effective(action, role(it[Memberships.role]), roles, overrides) == Mode.ALLOWED }
+            .map { it[Users.name] }
+    }
+
+    /** The caller, when their role may do [action] at once. Must run in a transaction. */
+    internal fun requireAction(session: UserSession, action: Action): Membership {
         val membership = membership(session)
-        if (!membership.role.canManage) throw forbidden()
+        if (can(membership, action) != Mode.ALLOWED) throw forbidden()
         return membership
     }
 
-    /** A person of the same community with a lower role than the caller (or the caller, when [allowSelf]); returns the caller. */
-    private fun requireManageable(session: UserSession, memberId: String, allowSelf: Boolean = false): Membership {
-        val manager = requireManager(session)
+    /**
+     * A person of the same community with a lower role than the caller (or the caller, when [allowSelf]), and the
+     * caller's role may do [action]; returns the caller.
+     */
+    private fun requireManageable(session: UserSession, memberId: String, action: Action, allowSelf: Boolean = false): Membership {
+        val manager = if (allowSelf && memberId == session.userId) membership(session) else requireAction(session, action)
         if (memberId == session.userId) {
             if (allowSelf) return manager
             throw ApiException(HttpStatusCode.BadRequest, "self", "Tej operacji nie można wykonać na własnym koncie.")
@@ -745,9 +899,32 @@ class AccountService(
         val member = Memberships.selectAll()
             .where { (Memberships.userId eq memberId) and (Memberships.organizationId eq manager.organizationId) }
             .singleOrNull() ?: throw notFound()
-        if (Role.valueOf(member[Memberships.role]).rank >= manager.role.rank) throw forbidden()
+        if (role(member[Memberships.role]).rank >= manager.role.rank) throw forbidden()
         return manager
     }
+
+    // --- roles and permissions ---
+
+    /** A community's roles, highest first. */
+    internal fun rolesOf(organizationId: String): List<Role> =
+        CommunityRoles.selectAll().where { CommunityRoles.organizationId eq organizationId }
+            .orderBy(CommunityRoles.rank, SortOrder.DESC)
+            .map { it.toRole() }
+
+    private fun role(roleId: String): Role =
+        CommunityRoles.selectAll().where { CommunityRoles.id eq roleId }.single().toRole()
+
+    private fun lowestRole(organizationId: String): Role = rolesOf(organizationId).last()
+
+    private fun ResultRow.toRole() = Role(this[CommunityRoles.id], this[CommunityRoles.name], this[CommunityRoles.rank], this[CommunityRoles.isOwner])
+
+    private fun overrides(organizationId: String): Map<Pair<String, Action>, Mode> =
+        RolePermissions.join(CommunityRoles, JoinType.INNER, RolePermissions.roleId, CommunityRoles.id).selectAll()
+            .where { CommunityRoles.organizationId eq organizationId }
+            .mapNotNull { row ->
+                val action = Action.entries.firstOrNull { it.name == row[RolePermissions.action] } ?: return@mapNotNull null
+                (row[RolePermissions.roleId] to action) to Mode.valueOf(row[RolePermissions.mode])
+            }.toMap()
 
     private fun requirePlatformAdmin(session: UserSession) {
         if (!user(session.userId)[Users.platformAdmin]) throw forbidden()
@@ -764,21 +941,19 @@ class AccountService(
 
     private fun idleLimitMs() = AccountRules.SESSION_IDLE_DAYS * DAY_MS
 
-    private fun ResultRow.toChild() = ChildProfile(
-        this[ChildProfiles.id], this[ChildProfiles.name], this[ChildProfiles.color],
-        this[ChildProfiles.avatarShape]?.let { Avatar(Avatars.initials(this[ChildProfiles.name]), this[ChildProfiles.color], AvatarShape.valueOf(it)) },
-    )
-
     private companion object {
         const val DAY_MS = 24 * 60 * 60 * 1000L
         const val GRANTED = "GRANTED"
+        const val OWNER_RANK = 1_000_000
+        const val PENDING = "PENDING"
+        const val APPROVED = "APPROVED"
+        const val REJECTED = "REJECTED"
     }
 }
 
-private object Validate {
+internal object Validate {
     // Plain ASCII addresses only: a typo with a Polish letter would create an account nobody can sign in to.
     private val EMAIL = Regex("^[a-z0-9._%+-]+@[a-z0-9-]+(\\.[a-z0-9-]+)*\\.[a-z]{2,}$")
-    private val COLOR = Regex("^#[0-9A-Fa-f]{6}$")
 
     fun name(value: String, field: String): String {
         val trimmed = value.trim()
@@ -806,10 +981,5 @@ private object Validate {
                 "Hasło musi mieć co najmniej ${AccountRules.MIN_PASSWORD_LENGTH} znaków.",
             )
         }
-    }
-
-    fun color(value: String): String {
-        if (!COLOR.matches(value)) throw ApiException(HttpStatusCode.BadRequest, "invalid_color", "Nieprawidłowy kolor.")
-        return value.uppercase()
     }
 }

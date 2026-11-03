@@ -183,7 +183,6 @@ private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale("pl", "PL"))
 
 private fun summary(community: PlatformCommunity): String = buildString {
     append("Owner: ${community.ownerName ?: "brak"} · ${community.members} os.")
-    if (community.minors > 0) append(" · ${community.minors} Nieletnich")
 }
 
 @Composable

@@ -2,7 +2,7 @@ package pl.ambif.ambify.server.accounts
 
 import org.jetbrains.exposed.v1.core.Table
 
-// Mirrors of the tables created by the SQL migrations V002–V004 (the SQL files are the source of truth).
+// Mirrors of the tables created by the SQL migrations V002–V005 (the SQL files are the source of truth).
 
 object Organizations : Table("organizations") {
     val id = text("id")
@@ -52,13 +52,34 @@ object DisabledModules : Table("disabled_modules") {
     override val primaryKey = PrimaryKey(organizationId, module)
 }
 
-object ChildProfiles : Table("child_profiles") {
+object CommunityRoles : Table("community_roles") {
     val id = text("id")
     val organizationId = text("organization_id")
     val name = text("name")
-    val color = text("color")
+    val rank = integer("rank")
+    val isOwner = bool("is_owner")
     val createdAt = long("created_at")
-    val avatarShape = text("avatar_shape").nullable()
+    override val primaryKey = PrimaryKey(id)
+}
+
+object RolePermissions : Table("role_permissions") {
+    val roleId = text("role_id")
+    val action = text("action")
+    val mode = text("mode")
+    override val primaryKey = PrimaryKey(roleId, action)
+}
+
+object PermissionRequests : Table("permission_requests") {
+    val id = text("id")
+    val organizationId = text("organization_id")
+    val requesterId = text("requester_id")
+    val action = text("action")
+    val payload = text("payload")
+    val summary = text("summary")
+    val status = text("status")
+    val createdAt = long("created_at")
+    val decidedBy = text("decided_by").nullable()
+    val decidedAt = long("decided_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

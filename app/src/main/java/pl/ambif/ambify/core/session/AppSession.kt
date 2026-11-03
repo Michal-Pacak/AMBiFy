@@ -1,6 +1,9 @@
 package pl.ambif.ambify.core.session
 
 import android.content.Context
+import pl.ambif.ambify.modules.timetable.ReminderScheduler
+import pl.ambif.ambify.modules.timetable.TimetableCache
+import pl.ambif.ambify.shared.ModuleId
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -38,6 +41,7 @@ sealed interface SessionState {
  * One instance for the whole app (see [LocalAppSession]).
  */
 class AppSession(context: Context) {
+    private val appContext = context.applicationContext
     private val preferences = context.getSharedPreferences("session", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -141,6 +145,14 @@ class AppSession(context: Context) {
         if ((_state.value as? SessionState.SignedIn)?.me?.communityId == null) return
         runCatching { showModules(api.modules()) }
         runCatching { syncModuleOrder() }
+        refreshReminders()
+    }
+
+    /** My reminders of extra activities (Plan lekcji), planned on this phone for this and next week. */
+    suspend fun refreshReminders() {
+        val me = (_state.value as? SessionState.SignedIn)?.me ?: return
+        if (_modules.value?.enabled?.contains(ModuleId.TIMETABLE) != true) return
+        runCatching { ReminderScheduler.refresh(appContext, api, me.id) }
     }
 
     suspend fun logout() {
@@ -170,6 +182,7 @@ class AppSession(context: Context) {
 
     private fun clear() {
         preferences.edit { clear() }
+        TimetableCache.clear(appContext)
         _modules.value = null
         _state.value = SessionState.SignedOut
     }

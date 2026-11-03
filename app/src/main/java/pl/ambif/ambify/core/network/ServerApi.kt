@@ -15,8 +15,6 @@ import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.ChangePasswordRequest
-import pl.ambif.ambify.shared.ChildProfile
-import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.CommunitySummary
 import pl.ambif.ambify.shared.CreateCommunityRequest
@@ -44,6 +42,24 @@ import pl.ambif.ambify.shared.ResetPasswordRequest
 import pl.ambif.ambify.shared.Role
 import pl.ambif.ambify.shared.RoleRequest
 import pl.ambif.ambify.shared.Tokens
+import pl.ambif.ambify.shared.Action
+import pl.ambif.ambify.shared.ExtraActivity
+import pl.ambif.ambify.shared.ExtraActivityRequest
+import pl.ambif.ambify.shared.ExtraSaveResult
+import pl.ambif.ambify.shared.DiaryConnectRequest
+import pl.ambif.ambify.shared.DiaryConnection
+import pl.ambif.ambify.shared.Mode
+import pl.ambif.ambify.shared.PendingRequest
+import pl.ambif.ambify.shared.PermissionChange
+import pl.ambif.ambify.shared.PermissionPaths
+import pl.ambif.ambify.shared.PermissionTable
+import pl.ambif.ambify.shared.RoleCreate
+import pl.ambif.ambify.shared.RoleMove
+import pl.ambif.ambify.shared.RoleRename
+import pl.ambif.ambify.shared.Student
+import pl.ambif.ambify.shared.StudentLink
+import pl.ambif.ambify.shared.TimetablePaths
+import pl.ambif.ambify.shared.TimetableWeek
 
 /** A server answer together with how long the request took. */
 data class Timed<T>(val value: T, val millis: Long)
@@ -97,12 +113,9 @@ class ServerApi(
     suspend fun leaveCommunity() = send("POST", AccountPaths.LEAVE, null, auth = true)
     suspend fun createInvitation(): Invitation = post(AccountPaths.INVITATIONS, null as String?)
     suspend fun cancelInvitation(code: String) = send("DELETE", "${AccountPaths.INVITATIONS}/$code", null, auth = true)
-    suspend fun addChild(request: ChildRequest): ChildProfile = post(AccountPaths.CHILDREN, request)
-    suspend fun updateChild(id: String, request: ChildRequest) = send("PUT", "${AccountPaths.CHILDREN}/$id", json.encodeToString(request), auth = true)
-    suspend fun deleteChild(id: String) = send("DELETE", "${AccountPaths.CHILDREN}/$id", null, auth = true)
     suspend fun removeMember(id: String) = send("DELETE", "${AccountPaths.MEMBERS}/$id", null, auth = true)
     suspend fun createResetCode(memberId: String): PasswordResetCode = post("${AccountPaths.MEMBERS}/$memberId/password-reset", null as String?)
-    suspend fun setRole(memberId: String, role: Role) = send("PUT", "${AccountPaths.MEMBERS}/$memberId/role", json.encodeToString(RoleRequest(role)), auth = true)
+    suspend fun setRole(memberId: String, roleId: String) = send("PUT", "${AccountPaths.MEMBERS}/$memberId/role", json.encodeToString(RoleRequest(roleId)), auth = true)
     suspend fun signOutMember(memberId: String) = send("POST", "${AccountPaths.MEMBERS}/$memberId/sign-out", null, auth = true)
 
     suspend fun createCommunity(name: String): CommunitySummary = post(AccountPaths.COMMUNITIES, CreateCommunityRequest(name))
@@ -110,6 +123,30 @@ class ServerApi(
     suspend fun modules(): CommunityModules = get(ModulePaths.MODULES)
     suspend fun setModule(module: ModuleId, enabled: Boolean): CommunityModules =
         json.decodeFromString(send("PUT", "${ModulePaths.MODULES}/${module.name}", json.encodeToString(ModuleSwitch(enabled)), auth = true))
+
+    suspend fun permissionTable(): PermissionTable = get(PermissionPaths.PERMISSIONS)
+    suspend fun setPermission(roleId: String, action: Action, mode: Mode?): PermissionTable =
+        json.decodeFromString(send("PUT", "${PermissionPaths.PERMISSIONS}/$roleId/${action.name}", json.encodeToString(PermissionChange(mode)), auth = true))
+    suspend fun createRole(name: String, belowRoleId: String): List<Role> = post(PermissionPaths.ROLES, RoleCreate(name, belowRoleId))
+    suspend fun renameRole(roleId: String, name: String): List<Role> =
+        json.decodeFromString(send("PUT", "${PermissionPaths.ROLES}/$roleId", json.encodeToString(RoleRename(name)), auth = true))
+    suspend fun moveRole(roleId: String, up: Boolean): List<Role> = post("${PermissionPaths.ROLES}/$roleId/move", RoleMove(up))
+    suspend fun deleteRole(roleId: String): List<Role> = json.decodeFromString(send("DELETE", "${PermissionPaths.ROLES}/$roleId", null, auth = true))
+    suspend fun requests(): List<PendingRequest> = get(PermissionPaths.REQUESTS)
+    suspend fun decide(requestId: String, approve: Boolean) =
+        send("POST", "${PermissionPaths.REQUESTS}/$requestId/${if (approve) "approve" else "reject"}", null, auth = true)
+
+    suspend fun timetable(week: String? = null): TimetableWeek = get(TimetablePaths.TIMETABLE + (week?.let { "?week=$it" } ?: ""))
+    suspend fun addExtras(request: ExtraActivityRequest): ExtraSaveResult = post(TimetablePaths.EXTRAS, request)
+    suspend fun updateExtra(id: String, request: ExtraActivityRequest): ExtraActivity =
+        json.decodeFromString(send("PUT", "${TimetablePaths.EXTRAS}/$id", json.encodeToString(request), auth = true))
+    suspend fun deleteExtra(id: String) = send("DELETE", "${TimetablePaths.EXTRAS}/$id", null, auth = true)
+    suspend fun linkStudent(studentId: String, memberId: String?): List<Student> =
+        json.decodeFromString(send("PUT", "${TimetablePaths.STUDENTS}/$studentId", json.encodeToString(StudentLink(memberId)), auth = true))
+    suspend fun diaryConnections(): List<DiaryConnection> = get(TimetablePaths.DIARY)
+    suspend fun connectVulcan(tokens: List<String>): DiaryConnection = post(TimetablePaths.DIARY_VULCAN, DiaryConnectRequest(tokens))
+    suspend fun syncDiary(id: String): DiaryConnection = post("${TimetablePaths.DIARY}/$id/sync", null as String?)
+    suspend fun disconnectDiary(id: String) = send("DELETE", "${TimetablePaths.DIARY}/$id", null, auth = true)
 
     suspend fun platformCommunities(): List<PlatformCommunity> = get(PlatformPaths.COMMUNITIES)
     suspend fun setGrant(communityId: String, key: String, granted: Boolean) =
@@ -170,7 +207,8 @@ class ServerApi(
                 val connection = URI(baseUrl + path).toURL().openConnection() as HttpURLConnection
                 connection.requestMethod = method
                 connection.connectTimeout = TIMEOUT_MS
-                connection.readTimeout = TIMEOUT_MS
+                // The server talks to the school diary while answering these: much slower than the rest.
+                connection.readTimeout = if (path.startsWith(TimetablePaths.DIARY)) DIARY_TIMEOUT_MS else TIMEOUT_MS
                 connection.setRequestProperty(ApiHeaders.APP_VERSION_CODE, BuildConfig.VERSION_CODE.toString())
                 connection.setRequestProperty(ApiHeaders.APP_VERSION_NAME, BuildConfig.VERSION_NAME)
                 accessToken?.let {
@@ -196,5 +234,6 @@ class ServerApi(
 
     private companion object {
         const val TIMEOUT_MS = 6000
+        const val DIARY_TIMEOUT_MS = 60_000
     }
 }

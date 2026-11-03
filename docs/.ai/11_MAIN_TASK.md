@@ -3,10 +3,10 @@
 Roadmap: [02_Roadmap.md](../02_Roadmap.md) (approved 2026-10-14).
 
 Current stage:
-Stage 3.1 - Settings, avatars, floating cards (v0.5.1)
+Stage 4 - Roles, permissions, Timetable (v0.6)
 
 Next stage:
-Stage 4 - Timetable from vulcan_digest (v0.6)
+Stage 5 - Lists (v0.7)
 
 In the background, when convenient:
 Stage 1A - AI Gateway (v0.3.1)

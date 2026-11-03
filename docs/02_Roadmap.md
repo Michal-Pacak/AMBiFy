@@ -103,11 +103,16 @@ Business model (2026-10-27, owner's decision): anyone can found a community. The
 - [x] Avatars: initials on a color; same initials in a community get a different shape; handed out once per community and never changed by others joining
 - [x] Floating Luxury cards (sink towards the touch, gold rings), switchable in Ustawienia → Aplikacja
 
-### Stage 4 — Timetable from vulcan_digest (v0.6)
+### Stage 4 — Roles, permissions, Timetable (v0.6)
 
-- [ ] Child profile linked to the student in Vulcan
-- [ ] vulcan_digest exports the timetable to the AMBiFy server after its daily run
-- [ ] Timetable screen: tab per child, day/week view, current lesson highlighted, offline copy
+- [x] Nieletni removed: children are Users with their own e-mail
+- [x] Own roles of a community: Owner is fixed, the others (start: Admin, User) are named and ordered by the Owner
+- [x] Permission table (role × action × allowed / after approval / not allowed) with defaults; the Owner changes it, everyone can read it; requests "after approval" wait for an Admin or the Owner ([04_User_Roles.md](04_User_Roles.md))
+- [x] The timetable comes straight from the school diary: an Owner/Admin connects eduVulcan in the app (sign-in on eduvulcan.pl inside the app, the password never reaches AMBiFy), several parent accounts per community, daily update at 18:00 and "Odśwież teraz", substitutions and cancelled lessons ([Timetable](Modules/Timetable.md)); vulcan_digest is no longer needed
+- [x] Timetable screen: tab per student, day/week view, current lesson highlighted, lesson details
+- [x] Extra activities: for one or more students, recurrence (every N days/weeks/months/years, weekdays, end, skipping days off), reminders per person (notification or alarm), "Dodaj do kalendarza" with a choice of calendars (works with Stage 6)
+- [x] Offline copy of the timetable: the phone keeps the server's range (a week back to four ahead) and shows it without a connection, read-only ("Bez połączenia z serwerem · plan z …")
+- [ ] Later: adding and changing extra activities offline (sent when the connection is back)
 
 ### Stage 5 — Lists (v0.7)
 
@@ -119,20 +124,20 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 
 ### Stage 6 — Calendar v1 (v0.8)
 
-- [ ] Events: title, time, all-day, location, description, participants (members and child profiles)
+- [ ] Events: title, time, all-day, location, description, participants (members)
+- [ ] Extra activities marked "Dodaj do kalendarza" appear in the chosen calendars
 - [ ] Month view, day/week agenda, create/edit/delete, filter by person
 - [ ] Google Calendar: Google accounts connected in Ustawienia → Konto; for each community the person picks the Google calendar synchronized with it (see [Calendar](Modules/Calendar.md))
 
 ### Stage 7 — School & Dashboard (v0.9)
 
-- [ ] Structured school summaries (tests, homework, reminders) from vulcan_digest
+- [ ] Structured school summaries (tests, homework, reminders) from the same eduVulcan connection
 - [ ] School screen per child
 - [ ] Dashboard: today's events, children's lessons today/tomorrow, upcoming tests
 
 ### Stage 8 — Children as users (v0.10)
 
-- [ ] Child profile becomes an account (login set by a parent)
-- [ ] Limited permissions managed by parents
+- [x] Done differently in Stage 4: children are Users with their own e-mail; what they may do is set in the permission table (e.g. a role "Dziecko")
 
 ### Later — Quick unlock
 
@@ -147,6 +152,8 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 ### Later
 
 Missions → Communication → Google Calendar sync → push notifications → Finance, Documents.
+
+Other school diaries (after v1.0 of the current scope): Librus Synergia first, then Mobidziennik and others — each one more implementation of `SchoolDiary` on the server.
 
 ---
 

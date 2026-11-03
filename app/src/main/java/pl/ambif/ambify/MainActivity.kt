@@ -1,9 +1,12 @@
 package pl.ambif.ambify
 
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,6 +27,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (BuildConfig.TEST_LOGIN) offerHomeScreenShortcut()
+        askForLocalNetwork()
         setContent {
             val cardAnimations by session.device.cardAnimations.collectAsState()
             val cardMotion = cardAnimations && !session.device.systemAnimationsOff()
@@ -34,6 +38,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** Android 17+ blocks addresses on the home network (where the AMBiFy server is) without this permission. */
+    private fun askForLocalNetwork() {
+        if (Build.VERSION.SDK_INT < 37) return
+        if (checkSelfPermission(LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED) return
+        localNetwork.launch(LOCAL_NETWORK)
+    }
+
+    private val localNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     /**
      * AMBiFy TEST only: asks once to put its icon on the home screen (Samsung adds new apps only to the drawer),
@@ -54,5 +67,9 @@ class MainActivity : ComponentActivity() {
         if (!ShortcutManagerCompat.isRequestPinShortcutSupported(this)) return
         ShortcutManagerCompat.requestPinShortcut(this, shortcut, null)
         preferences.edit { putBoolean("shortcut_offered", true) }
+    }
+
+    private companion object {
+        const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     }
 }

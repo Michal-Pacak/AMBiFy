@@ -20,6 +20,10 @@ import pl.ambif.ambify.server.accounts.AccountService
 import pl.ambif.ambify.server.accounts.ApiException
 import pl.ambif.ambify.server.accounts.DemoSeed
 import pl.ambif.ambify.server.accounts.accountRoutes
+import pl.ambif.ambify.server.timetable.DiarySchedule
+import pl.ambif.ambify.server.timetable.TimetableService
+import pl.ambif.ambify.server.timetable.diary.Vault
+import pl.ambif.ambify.server.timetable.timetableRoutes
 import pl.ambif.ambify.server.accounts.installAccountAuth
 import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
@@ -32,15 +36,23 @@ import pl.ambif.ambify.shared.HealthStatus
 fun main() {
     val config = ServerConfig.fromEnv()
     val database = Db.open(config.databasePath)
-    val tokens = AccessTokens(AccessTokens.loadOrCreateKey(File(config.databasePath).absoluteFile.resolveSibling("jwt.key")))
-    if (System.getenv("AMBIFY_DEMO") == "1") DemoSeed.seedIfEmpty(AccountService(database, tokens), tokens)
+    val dataDir = File(config.databasePath).absoluteFile.parentFile
+    val tokens = AccessTokens(AccessTokens.loadOrCreateKey(dataDir.resolve("jwt.key")))
+    val vault = Vault.loadOrCreate(dataDir.resolve("diary.key"))
+    val accounts = AccountService(database, tokens)
+    val timetable = TimetableService(database, accounts, vault)
+    if (System.getenv("AMBIFY_DEMO") == "1") {
+        DemoSeed.seedIfEmpty(accounts, tokens)?.let { timetable.seedDemo(it) }
+    }
+    DiarySchedule.start(timetable)
     embeddedServer(Netty, port = config.port, host = config.host) {
-        module(database, Diagnostics.platform(database, config, serverVersion()), tokens)
+        module(database, Diagnostics.platform(database, config, serverVersion()), tokens, vault)
     }.start(wait = true)
 }
 
-fun Application.module(database: Database, diagnostics: Diagnostics, tokens: AccessTokens) {
+fun Application.module(database: Database, diagnostics: Diagnostics, tokens: AccessTokens, vault: Vault = Vault.random()) {
     val accounts = AccountService(database, tokens)
+    val timetable = TimetableService(database, accounts, vault)
     install(ContentNegotiation) {
         json()
     }
@@ -53,6 +65,7 @@ fun Application.module(database: Database, diagnostics: Diagnostics, tokens: Acc
     installAccountAuth(accounts, tokens)
     routing {
         accountRoutes(accounts)
+        timetableRoutes(timetable)
         // Light status for the app; any failing check turns it into "degraded".
         get(ApiPaths.HEALTH) {
             val results = diagnostics.run(call.appInfo())

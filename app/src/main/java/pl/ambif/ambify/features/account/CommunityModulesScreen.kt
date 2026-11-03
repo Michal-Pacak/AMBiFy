@@ -44,7 +44,9 @@ import pl.ambif.ambify.core.session.SessionState
 import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.Feature
 import pl.ambif.ambify.shared.ModuleId
-import pl.ambif.ambify.shared.Role
+import pl.ambif.ambify.shared.Action
+import pl.ambif.ambify.shared.Me
+import pl.ambif.ambify.shared.Mode
 import pl.ambif.ambify.shared.Tier
 import pl.ambif.ambify.ui.icons.AppIcons
 import androidx.compose.foundation.BorderStroke
@@ -71,8 +73,10 @@ fun CommunityModulesScreen(communityId: String, onBack: () -> Unit) {
     val me = (state as? SessionState.SignedIn)?.me ?: return
     val community = me.communities.firstOrNull { it.id == communityId }
     var modules by remember { mutableStateOf<CommunityModules?>(null) }
-    val manager = community?.role?.canManage == true
-    val owner = community?.role == Role.OWNER
+    // My permissions in that community (not necessarily the current one).
+    var communityMe by remember { mutableStateOf<Me?>(null) }
+    val manager = communityMe?.permissions?.get(Action.SWITCH_MODULES) == Mode.ALLOWED
+    val owner = community?.role?.owner == true
     var notice by remember { mutableStateOf<String?>(null) }
     val buy = { label: String -> notice = "Zakup modułu $label będzie dostępny wkrótce." }
 
@@ -83,6 +87,7 @@ fun CommunityModulesScreen(communityId: String, onBack: () -> Unit) {
 
     LaunchedEffect(communityId) {
         try {
+            communityMe = api.me()
             show(api.modules())
         } catch (e: ServerError) {
             notice = e.message

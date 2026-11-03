@@ -16,11 +16,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import pl.ambif.ambify.shared.AccountPaths
+import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.ChangePasswordRequest
-import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.CreateCommunityRequest
 import pl.ambif.ambify.shared.EmailRequest
 import pl.ambif.ambify.shared.GrantRequest
@@ -30,11 +30,16 @@ import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ModuleOrder
 import pl.ambif.ambify.shared.ModulePaths
 import pl.ambif.ambify.shared.ModuleSwitch
+import pl.ambif.ambify.shared.PermissionChange
+import pl.ambif.ambify.shared.PermissionPaths
 import pl.ambif.ambify.shared.PlatformPaths
 import pl.ambif.ambify.shared.ProfileUpdate
 import pl.ambif.ambify.shared.RefreshRequest
 import pl.ambif.ambify.shared.RegisterRequest
 import pl.ambif.ambify.shared.ResetPasswordRequest
+import pl.ambif.ambify.shared.RoleCreate
+import pl.ambif.ambify.shared.RoleMove
+import pl.ambif.ambify.shared.RoleRename
 import pl.ambif.ambify.shared.RoleRequest
 import pl.ambif.ambify.shared.SetupRequest
 
@@ -107,14 +112,6 @@ fun Route.accountRoutes(service: AccountService) {
             service.cancelInvitation(call.session(), call.parameters["code"]!!)
             call.respond(HttpStatusCode.NoContent)
         }
-        post(AccountPaths.CHILDREN) { call.respond(service.addChild(call.session(), call.receive<ChildRequest>())) }
-        put("${AccountPaths.CHILDREN}/{id}") {
-            call.respond(service.updateChild(call.session(), call.parameters["id"]!!, call.receive<ChildRequest>()))
-        }
-        delete("${AccountPaths.CHILDREN}/{id}") {
-            service.deleteChild(call.session(), call.parameters["id"]!!)
-            call.respond(HttpStatusCode.NoContent)
-        }
         delete("${AccountPaths.MEMBERS}/{id}") {
             service.removeMember(call.session(), call.parameters["id"]!!)
             call.respond(HttpStatusCode.NoContent)
@@ -123,7 +120,7 @@ fun Route.accountRoutes(service: AccountService) {
             call.respond(service.createResetCode(call.session(), call.parameters["id"]!!))
         }
         put("${AccountPaths.MEMBERS}/{id}/role") {
-            service.setRole(call.session(), call.parameters["id"]!!, call.receive<RoleRequest>().role)
+            service.setRole(call.session(), call.parameters["id"]!!, call.receive<RoleRequest>().roleId)
             call.respond(HttpStatusCode.NoContent)
         }
         post("${AccountPaths.MEMBERS}/{id}/sign-out") {
@@ -136,6 +133,30 @@ fun Route.accountRoutes(service: AccountService) {
             call.respond(service.createCommunity(call.session(), call.receive<CreateCommunityRequest>().name))
         }
         post(AccountPaths.JOIN) { call.respond(service.join(call.session(), call.receive<JoinRequest>().code)) }
+
+        get(PermissionPaths.ROLES) { call.respond(service.permissionTable(call.session()).roles) }
+        post(PermissionPaths.ROLES) { call.respond(service.createRole(call.session(), call.receive<RoleCreate>())) }
+        put("${PermissionPaths.ROLES}/{id}") {
+            call.respond(service.renameRole(call.session(), call.parameters["id"]!!, call.receive<RoleRename>().name))
+        }
+        post("${PermissionPaths.ROLES}/{id}/move") {
+            call.respond(service.moveRole(call.session(), call.parameters["id"]!!, call.receive<RoleMove>().up))
+        }
+        delete("${PermissionPaths.ROLES}/{id}") { call.respond(service.deleteRole(call.session(), call.parameters["id"]!!)) }
+        get(PermissionPaths.PERMISSIONS) { call.respond(service.permissionTable(call.session())) }
+        put("${PermissionPaths.PERMISSIONS}/{roleId}/{action}") {
+            val action = Action.entries.firstOrNull { it.name == call.parameters["action"] } ?: throw notFound()
+            call.respond(service.setPermission(call.session(), call.parameters["roleId"]!!, action, call.receive<PermissionChange>().mode))
+        }
+        get(PermissionPaths.REQUESTS) { call.respond(service.requests(call.session())) }
+        post("${PermissionPaths.REQUESTS}/{id}/approve") {
+            service.decide(call.session(), call.parameters["id"]!!, approve = true)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post("${PermissionPaths.REQUESTS}/{id}/reject") {
+            service.decide(call.session(), call.parameters["id"]!!, approve = false)
+            call.respond(HttpStatusCode.NoContent)
+        }
 
         get(ModulePaths.MODULES) { call.respond(service.modules(call.session())) }
         put("${ModulePaths.MODULES}/{module}") {
@@ -159,7 +180,7 @@ fun Route.accountRoutes(service: AccountService) {
     }
 }
 
-private fun ApplicationCall.session(): UserSession =
+internal fun ApplicationCall.session(): UserSession =
     principal<UserSession>()!!.copy(communityId = request.headers[ApiHeaders.COMMUNITY]?.ifBlank { null })
 
-private fun notFound() = ApiException(HttpStatusCode.NotFound, "not_found", "Nie znaleziono.")
+internal fun notFound() = ApiException(HttpStatusCode.NotFound, "not_found", "Nie znaleziono.")

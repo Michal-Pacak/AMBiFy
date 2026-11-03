@@ -38,6 +38,9 @@ import pl.ambif.ambify.features.settings.AppSettingsScreen
 import pl.ambif.ambify.features.settings.CommunitiesScreen
 import pl.ambif.ambify.features.settings.CommunityPeopleScreen
 import pl.ambif.ambify.features.settings.CommunitySection
+import pl.ambif.ambify.features.settings.PermissionsScreen
+import pl.ambif.ambify.features.settings.RequestsScreen
+import pl.ambif.ambify.features.timetable.TimetableScreen
 import pl.ambif.ambify.features.settings.SettingsScreen
 import pl.ambif.ambify.features.platform.PlatformScreen
 import pl.ambif.ambify.features.calendar.CalendarScreen
@@ -197,10 +200,7 @@ fun AppNavHost(
             }
 
             composable(AppDestination.Timetable.route) {
-                ModulePlaceholderScreen(
-                    title = ModuleId.TIMETABLE.label,
-                    description = "Tygodniowy plan lekcji uczniów.",
-                )
+                TimetableScreen(resetKey = moduleReselections)
             }
 
             composable(AppDestination.School.route) {
@@ -238,8 +238,12 @@ fun AppNavHost(
                     onBack = { navController.popBackStack() },
                     onOpen = { id, section ->
                         navController.navigate(
-                            if (section == CommunitySection.MODULES) AppDestination.CommunityModules.of(id)
-                            else AppDestination.CommunityPeople.of(id, section.name),
+                            when (section) {
+                                CommunitySection.MODULES -> AppDestination.CommunityModules.of(id)
+                                CommunitySection.PERMISSIONS -> AppDestination.CommunityPermissions.of(id)
+                                CommunitySection.REQUESTS -> AppDestination.CommunityRequests.of(id)
+                                else -> AppDestination.CommunityPeople.of(id, section.name)
+                            },
                         )
                     },
                 )
@@ -263,6 +267,20 @@ fun AppNavHost(
                     section = section,
                     onBack = { navController.popBackStack() },
                 )
+            }
+
+            composable(
+                AppDestination.CommunityPermissions.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                PermissionsScreen(communityId = entry.arguments?.getString("id").orEmpty(), onBack = { navController.popBackStack() })
+            }
+
+            composable(
+                AppDestination.CommunityRequests.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                RequestsScreen(communityId = entry.arguments?.getString("id").orEmpty(), onBack = { navController.popBackStack() })
             }
 
             composable(AppDestination.Platform.route) {

@@ -19,7 +19,6 @@ object AccountPaths {
     const val MODULE_ORDER = "/me/module-order"
     const val FAMILY = "/family"
     const val INVITATIONS = "/family/invitations"
-    const val CHILDREN = "/family/children"
     const val MEMBERS = "/family/members"
     const val COMMUNITIES = "/communities"
     const val JOIN = "/communities/join"
@@ -42,18 +41,15 @@ object AccountRules {
     const val LOCK_MINUTES = 15L
 }
 
-/** Role in one community, shown as Owner / Admin / User; a higher [rank] may manage lower ones. */
+/**
+ * A role in one community. The Owner's role is fixed ([owner]); the others are the community's own, named by
+ * its Owner (a new community starts with Admin and User). A higher [rank] may manage people of lower ones.
+ */
 @Serializable
-enum class Role(val rank: Int) {
-    OWNER(3),
-    ADMIN(2),
-    MEMBER(1);
-
-    val canManage: Boolean get() = this == OWNER || this == ADMIN
-}
+data class Role(val id: String, val name: String, val rank: Int, val owner: Boolean = false)
 
 @Serializable
-data class RoleRequest(val role: Role)
+data class RoleRequest(val roleId: String)
 
 /** Error body for every non-2xx answer; `code` is stable, `message` is Polish text for the user. */
 @Serializable
@@ -107,6 +103,8 @@ data class Me(
     val communityId: String? = null,
     val platformAdmin: Boolean = false,
     val communities: List<CommunitySummary> = emptyList(),
+    /** What my role may do in the current community (every action of [Action]). */
+    val permissions: Map<Action, Mode> = emptyMap(),
 )
 
 /** [avatar] is the person's own icon in that community. */
@@ -130,7 +128,6 @@ data class PlatformCommunity(
     val name: String,
     val ownerName: String?,
     val members: Int,
-    val minors: Int,
     val createdAt: Long,
     /** False for the free first community of its Owner. */
     val paidFounding: Boolean,
@@ -149,20 +146,15 @@ data class EmailRequest(val email: String)
 data class Member(val id: String, val name: String, val role: Role, val avatar: Avatar? = null)
 
 @Serializable
-data class ChildProfile(val id: String, val name: String, val color: String, val avatar: Avatar? = null)
-
-@Serializable
-data class ChildRequest(val name: String, val color: String)
-
-@Serializable
 data class Invitation(val code: String, val expiresAt: Long)
 
 @Serializable
 data class Family(
     val name: String,
     val members: List<Member>,
-    val children: List<ChildProfile>,
-    /** Only the Owner and Admins see pending invitations. */
+    /** The community's roles, highest first (the Owner's role included). */
+    val roles: List<Role>,
+    /** Only those who may invite see pending invitations. */
     val invitations: List<Invitation>,
 )
 

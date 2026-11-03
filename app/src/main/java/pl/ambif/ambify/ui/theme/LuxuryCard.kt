@@ -215,17 +215,29 @@ fun LuxuryCard(
 /** The round gold button on a card that opens what the card is about (the card itself only floats). */
 @Composable
 fun LuxuryOpenButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
+    LuxuryOpenMark(
         modifier = modifier
-            .size(44.dp)
             .clip(CircleShape)
-            .background(Luxury.GoldBase.copy(alpha = 0.1f))
-            .border(1.dp, Luxury.BorderBrush, CircleShape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
+    )
+}
+
+/**
+ * The same gold circle with an arrow ("dalej") at the end of a row that opens something: the whole row answers the
+ * touch, so the mark itself is not a separate button. One look for "dalej" everywhere in the app.
+ */
+@Composable
+fun LuxuryOpenMark(modifier: Modifier = Modifier, size: Dp = 44.dp) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Luxury.GoldBase.copy(alpha = 0.1f))
+            .border(1.dp, Luxury.BorderBrush, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(AppIcons.Forward, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(20.dp))
+        Icon(AppIcons.Forward, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(size * 0.45f))
     }
 }
 

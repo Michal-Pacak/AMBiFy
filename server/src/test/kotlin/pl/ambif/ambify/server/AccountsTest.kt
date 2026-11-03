@@ -29,8 +29,6 @@ import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.ChangePasswordRequest
-import pl.ambif.ambify.shared.ChildProfile
-import pl.ambif.ambify.shared.ChildRequest
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.Family
 import pl.ambif.ambify.shared.Invitation
@@ -92,7 +90,8 @@ class AccountsTest {
         val owner = client.setupOwner()
         val me: Me = client.send<Unit>("GET", AccountPaths.ME, token = owner.accessToken).body()
 
-        assertEquals(Role.OWNER, me.role)
+        assertEquals("Owner", me.role?.name)
+        assertTrue(me.role!!.owner)
         assertEquals("michal@pacak.waw.pl", me.email)
         assertEquals("Pacakowie", me.familyName)
         assertTrue(me.platformAdmin)
@@ -183,7 +182,7 @@ class AccountsTest {
     }
 
     @Test
-    fun devicesChildrenAndModuleOrder() = accountsApp {
+    fun devicesRolesAndModuleOrder() = accountsApp {
         val phone = client.setupOwner()
         val tablet: Tokens = client.send("POST", AuthPaths.LOGIN, LoginRequest("michal@pacak.waw.pl", "sekretne1", "Tablet")).body()
         val devices: List<Device> = client.send<Unit>("GET", AccountPaths.SESSIONS, token = phone.accessToken).body()
@@ -193,13 +192,8 @@ class AccountsTest {
         assertEquals("Tablet", tabletDevice.name)
         assertEquals(HttpStatusCode.Unauthorized, client.send<Unit>("GET", AccountPaths.ME, token = tablet.accessToken).status)
 
-        val child: ChildProfile = client.send("POST", AccountPaths.CHILDREN, ChildRequest("Bartek", "#8ec3f0"), phone.accessToken).body()
-        client.send("PUT", "${AccountPaths.CHILDREN}/${child.id}", ChildRequest("Bartuś", "#8EC3F0"), phone.accessToken)
-        val badColor = client.send("POST", AccountPaths.CHILDREN, ChildRequest("Filip", "zielony"), phone.accessToken)
         val family: Family = client.send<Unit>("GET", AccountPaths.FAMILY, token = phone.accessToken).body()
-
-        assertEquals(listOf(Triple(child.id, "Bartuś", "#8EC3F0")), family.children.map { Triple(it.id, it.name, it.color) })
-        assertEquals(HttpStatusCode.BadRequest, badColor.status)
+        assertEquals(listOf("Owner", "Admin", "User"), family.roles.map { it.name })
 
         client.send("PUT", AccountPaths.MODULE_ORDER, ModuleOrder(listOf("calendar", "home", "BAD;route")), phone.accessToken)
         val order: ModuleOrder = client.send<Unit>("GET", AccountPaths.MODULE_ORDER, token = phone.accessToken).body()
@@ -214,17 +208,19 @@ class AccountsTest {
         val ownerMe = client.send<Unit>("GET", AccountPaths.ME, token = owner.accessToken).body<Me>()
 
         assertEquals(HttpStatusCode.Forbidden, client.send<Unit>("POST", AccountPaths.INVITATIONS, token = ania.accessToken).status)
-        client.send("PUT", "${AccountPaths.MEMBERS}/${anna.id}/role", RoleRequest(Role.ADMIN), owner.accessToken)
+        val roles = client.send<Unit>("GET", AccountPaths.FAMILY, token = owner.accessToken).body<Family>().roles.associateBy { it.name }
+        client.send("PUT", "${AccountPaths.MEMBERS}/${anna.id}/role", RoleRequest(roles.getValue("Admin").id), owner.accessToken)
 
         val admin = ania
         val user = client.inviteAndJoin(admin, "ula@pacak.waw.pl")
         val ula = client.send<Unit>("GET", AccountPaths.ME, token = user.accessToken).body<Me>()
-        assertEquals(Role.ADMIN, client.send<Unit>("GET", AccountPaths.ME, token = admin.accessToken).body<Me>().role)
-        assertEquals(Role.MEMBER, ula.role)
+        assertEquals("Admin", client.send<Unit>("GET", AccountPaths.ME, token = admin.accessToken).body<Me>().role?.name)
+        assertEquals("User", ula.role?.name)
         assertEquals(HttpStatusCode.OK, client.send<Unit>("POST", "${AccountPaths.MEMBERS}/${ula.id}/password-reset", token = admin.accessToken).status)
         assertEquals(HttpStatusCode.Forbidden, client.send<Unit>("POST", "${AccountPaths.MEMBERS}/${ownerMe.id}/sign-out", token = admin.accessToken).status)
-        assertEquals(HttpStatusCode.Forbidden, client.send("PUT", "${AccountPaths.MEMBERS}/${ula.id}/role", RoleRequest(Role.ADMIN), admin.accessToken).status)
-        assertEquals(HttpStatusCode.BadRequest, client.send("PUT", "${AccountPaths.MEMBERS}/${ula.id}/role", RoleRequest(Role.OWNER), owner.accessToken).status)
+        // An Admin may give roles (default of the permission table), but only roles lower than their own.
+        assertEquals(HttpStatusCode.BadRequest, client.send("PUT", "${AccountPaths.MEMBERS}/${ula.id}/role", RoleRequest(roles.getValue("Admin").id), admin.accessToken).status)
+        assertEquals(HttpStatusCode.BadRequest, client.send("PUT", "${AccountPaths.MEMBERS}/${ula.id}/role", RoleRequest(roles.getValue("Owner").id), owner.accessToken).status)
     }
 
     @Test
@@ -240,9 +236,9 @@ class AccountsTest {
         ).map { email ->
             val tokens = service.login(LoginRequest(email, pl.ambif.ambify.server.accounts.DemoSeed.PASSWORD, "t"))
             val session = testTokens().verifier.verify(tokens.accessToken)
-            service.me(pl.ambif.ambify.server.accounts.UserSession(session.subject, session.getClaim("sid").asString())).role
+            service.me(pl.ambif.ambify.server.accounts.UserSession(session.subject, session.getClaim("sid").asString())).role?.name
         }
-        assertEquals(listOf(Role.OWNER, Role.ADMIN, Role.MEMBER), roles)
+        assertEquals(listOf("Owner", "Admin", "User"), roles)
     }
 
     @Test
