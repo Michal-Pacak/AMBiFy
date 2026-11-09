@@ -27,6 +27,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,6 +51,9 @@ import pl.ambif.ambify.features.account.ServerCard
 import pl.ambif.ambify.features.account.ServerStatus
 import pl.ambif.ambify.features.account.SwitchRow
 import pl.ambif.ambify.features.account.diagnosticsState
+import pl.ambif.ambify.features.account.downloadLink
+import pl.ambif.ambify.features.update.AppVersionCard
+import pl.ambif.ambify.modules.update.AppUpdater
 import pl.ambif.ambify.features.account.label
 import pl.ambif.ambify.features.account.status
 import pl.ambif.ambify.shared.Device
@@ -199,6 +204,12 @@ fun AppSettingsScreen(onBack: () -> Unit) {
     var serverStatus by remember { mutableStateOf<ServerStatus>(ServerStatus.Checking) }
     var diagnostics by remember { mutableStateOf<DiagnosticsState?>(null) }
 
+    val context = LocalContext.current
+    val updater = remember { AppUpdater.of(context) }
+    val update by updater.state.collectAsState()
+    var checking by remember { mutableStateOf(false) }
+    var lastChecked by remember { mutableStateOf(updater.lastChecked) }
+
     LaunchedEffect(Unit) { serverStatus = api.status() }
 
     SettingsLayout(title = "Aplikacja", onBack = onBack) {
@@ -221,6 +232,24 @@ fun AppSettingsScreen(onBack: () -> Unit) {
                     serverStatus = api.status()
                 }
             },
+        )
+        AppVersionCard(
+            state = update,
+            lastChecked = lastChecked,
+            checking = checking,
+            onCheck = {
+                checking = true
+                updater.check {
+                    checking = false
+                    lastChecked = updater.lastChecked
+                }
+            },
+            onShareLink = {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, "Pobierz aplikację AMBiFy (działa w domowym Wi‑Fi): $downloadLink")
+                context.startActivity(Intent.createChooser(send, "Wyślij link do pobrania"))
+            },
+            onUpdate = updater::installNow,
         )
     }
 

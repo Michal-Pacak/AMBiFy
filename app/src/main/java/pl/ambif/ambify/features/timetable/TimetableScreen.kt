@@ -265,7 +265,8 @@ fun TimetableScreen(resetKey: Int = 0) {
                     )
                     return@Column
                 }
-                StudentTabs(students, selected?.id) { studentId = it }
+                // Only one student (e.g. a child who sees just their own plan): no need for the picker.
+                if (students.size > 1) StudentTabs(students, selected?.id) { studentId = it }
                 val student = selected ?: return@Column
                 WeekSwitch(LocalDate.parse(current.monday), today) { shift ->
                     val next = LocalDate.parse(monday).plusWeeks(shift.toLong())
@@ -356,7 +357,7 @@ private fun ViewSwitch(view: TimetableView, onPick: (TimetableView) -> Unit) {
                     if (option == TimetableView.DAY) "Dzień" else "Tydzień",
                     fontSize = 13.sp,
                     fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
-                    color = if (on) Luxury.Surface else Color(0xFFC9C9CF),
+                    color = if (on) Luxury.Surface else Luxury.TextMuted,
                 )
             }
         }
@@ -380,7 +381,7 @@ private fun StudentTabs(students: List<Student>, selected: String?, onPick: (Str
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PersonAvatar(student.name, student.avatar, size = 30.dp)
-                Text(student.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.GoldLight else Color(0xFFC9C9CF))
+                Text(student.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
             }
         }
     }
@@ -420,7 +421,7 @@ private fun DayPicker(monday: LocalDate, day: LocalDate, today: LocalDate, onPic
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                val color = if (on) Luxury.Surface else Color(0xFFC9C9CF)
+                val color = if (on) Luxury.Surface else Luxury.TextMuted
                 Text(DayShort[offset], fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
                 Text(date.dayMonth(), fontSize = 12.sp, color = color)
             }
@@ -530,7 +531,7 @@ private fun RunningLesson(lesson: Lesson, span: Pair<LocalTime, LocalTime>, now:
             Text("${lesson.position}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Luxury.GoldLight, textAlign = TextAlign.Center, modifier = Modifier.width(26.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(lesson.subject, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Text(lessonDetails(lesson), fontSize = 12.sp, color = Color(0xFFC9C9CF))
+                Text(lessonDetails(lesson), fontSize = 12.sp, color = Luxury.TextMuted)
             }
             Text(
                 "TERAZ",
@@ -631,7 +632,7 @@ private fun WeekGrid(week: TimetableWeek, student: Student, today: LocalDate, on
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text(activity.name.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(activity.startTime.shortTime(), fontSize = 9.sp, color = Color(0xFFC9C9CF))
+                            Text(activity.startTime.shortTime(), fontSize = 9.sp, color = Luxury.TextMuted)
                         }
                     }
                 }
@@ -829,7 +830,7 @@ private fun ExtraItem(activity: ExtraActivity, color: Color, onEdit: () -> Unit,
             Text(
                 "${describe(activity.recurrence, LocalDate.parse(activity.startDate))} · ${activity.startTime.shortTime()}–${activity.endTime.shortTime()}",
                 fontSize = 12.sp,
-                color = Color(0xFFC9C9CF),
+                color = Luxury.TextMuted,
             )
             val details = listOfNotNull(
                 activity.place,

@@ -179,6 +179,14 @@ class ReminderReceiver : BroadcastReceiver() {
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) ReminderScheduler.restore(context)
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        ReminderScheduler.restore(context)
+        pl.ambif.ambify.modules.update.AppUpdater.of(context).restoreNight()
+        if (pl.ambif.ambify.BuildConfig.KIDS) {
+            pl.ambif.ambify.modules.monitor.MonitorQueue.of(context).add(
+                listOf(pl.ambif.ambify.shared.MonitorEvent(pl.ambif.ambify.shared.MonitorEventType.BOOT, System.currentTimeMillis(), "telefon uruchomiony")),
+            )
+            pl.ambif.ambify.modules.monitor.MonitorScheduler.scheduleNight(context)
+        }
     }
 }

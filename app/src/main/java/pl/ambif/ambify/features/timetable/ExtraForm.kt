@@ -344,7 +344,7 @@ internal fun PersonChip(name: String, avatar: pl.ambif.ambify.shared.Avatar?, on
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PersonAvatar(name, avatar, size = 26.dp)
-        Text(name, fontSize = 15.sp, color = if (on) Luxury.GoldLight else Color(0xFFC9C9CF))
+        Text(name, fontSize = 15.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
     }
 }
 
@@ -365,7 +365,7 @@ internal fun Chip(label: String, on: Boolean, enabled: Boolean = true, onClick: 
             fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
             color = when {
                 on -> Luxury.Surface
-                enabled -> Color(0xFFC9C9CF)
+                enabled -> Luxury.TextMuted
                 else -> Luxury.Disabled
             },
         )
@@ -579,7 +579,7 @@ private fun ReminderDialog(
                         .then(if (on) Modifier.background(Luxury.GoldBase.copy(alpha = 0.14f)) else Modifier)
                         .clickable { kind = option },
                     contentAlignment = Alignment.Center,
-                ) { Text(label, fontSize = 14.sp, color = if (on) Luxury.GoldLight else Color(0xFFC9C9CF)) }
+                ) { Text(label, fontSize = 14.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted) }
             }
         }
         Text(

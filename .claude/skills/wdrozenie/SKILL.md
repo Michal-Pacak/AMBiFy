@@ -24,6 +24,16 @@ Aplikacja TEST (`pl.ambif.ambify.test`, czerwona ikona, przyciski „Wejdź jako
 ~/Android/Sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Od v0.6.1 telefony aktualizują się same z serwera. Nową wersję TEST publikujesz tak (`app/whatsnew.txt` = „Co nowego”):
+
+```
+server/deploy/publish-app.sh --test                 # APK + latest.json dla serwera testowego
+server/deploy/publish-app.sh --test --min 10        # starsze niż versionCode 10 muszą się zaktualizować
+```
+
+Próbne aktualizacje: `-Pambify.versionCode=10 -Pambify.versionName=0.6.2` (przekazywane do Gradle). Po próbach
+wróć AMBiFy TEST do zwykłego numeru przez `adb install -r -d` (`-d` pozwala obniżyć wersję).
+
 Po instalacji powiedz Michałowi, co zmieniło się w wersji TEST i co ma sprawdzić.
 
 ## 2. Wersja prawdziwa (tylko po akceptacji Michała)
@@ -33,6 +43,16 @@ server/deploy/deploy.sh                  # prawdziwy serwer (konto ambify, /opt/
 ./gradlew :app:assembleDebug
 ~/Android/Sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+Potem publikacja do pobrania i samodzielnej aktualizacji domowników (`/opt/ambify-server/releases`,
+strona `http://192.168.1.122:8090/pobierz`):
+
+```
+server/deploy/publish-app.sh
+```
+
+Wszystkie wersje podpisuje `~/.android/debug.keystore` (kopia: `/mnt/nas/Backup/serverek/klucze/`). Inny klucz =
+telefony nie przyjmą aktualizacji i trzeba odinstalować aplikację (utrata logowania).
 
 ## Nigdy
 

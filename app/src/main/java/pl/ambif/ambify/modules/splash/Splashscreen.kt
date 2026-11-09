@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import pl.ambif.ambify.BuildConfig
 import pl.ambif.ambify.R
 import pl.ambif.ambify.ui.branding.BrandLogo
 import pl.ambif.ambify.ui.theme.AMBiFyTheme
@@ -88,6 +90,11 @@ fun SplashScreen(
                 painter = painterResource(id = R.drawable.ambif_logo),
                 contentDescription = "AMBiF Logo",
                 modifier = Modifier.size(80.dp),
+            )
+            Text(
+                text = "ver. ${BuildConfig.VERSION_NAME}",
+                color = Color(0xFFB89A52),
+                style = SplashPoweredByStyle.copy(fontSize = 10.sp),
             )
             Spacer(modifier = Modifier.height(40.dp))
         }

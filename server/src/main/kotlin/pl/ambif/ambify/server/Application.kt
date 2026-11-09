@@ -25,6 +25,10 @@ import pl.ambif.ambify.server.timetable.TimetableService
 import pl.ambif.ambify.server.timetable.diary.Vault
 import pl.ambif.ambify.server.timetable.timetableRoutes
 import pl.ambif.ambify.server.accounts.installAccountAuth
+import pl.ambif.ambify.server.monitor.MonitorService
+import pl.ambif.ambify.server.monitor.monitorRoutes
+import pl.ambif.ambify.server.releases.AppReleases
+import pl.ambif.ambify.server.releases.releaseRoutes
 import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
@@ -46,11 +50,25 @@ fun main() {
     }
     DiarySchedule.start(timetable)
     embeddedServer(Netty, port = config.port, host = config.host) {
-        module(database, Diagnostics.platform(database, config, serverVersion()), tokens, vault)
+        module(
+            database,
+            Diagnostics.platform(database, config, serverVersion()),
+            tokens,
+            vault,
+            AppReleases(File(config.releasesDir)),
+            MonitorService(File(config.monitorDir)),
+        )
     }.start(wait = true)
 }
 
-fun Application.module(database: Database, diagnostics: Diagnostics, tokens: AccessTokens, vault: Vault = Vault.random()) {
+fun Application.module(
+    database: Database,
+    diagnostics: Diagnostics,
+    tokens: AccessTokens,
+    vault: Vault = Vault.random(),
+    releases: AppReleases = AppReleases(File("releases")),
+    monitor: MonitorService = MonitorService(File("monitor")),
+) {
     val accounts = AccountService(database, tokens)
     val timetable = TimetableService(database, accounts, vault)
     install(ContentNegotiation) {
@@ -66,6 +84,8 @@ fun Application.module(database: Database, diagnostics: Diagnostics, tokens: Acc
     routing {
         accountRoutes(accounts)
         timetableRoutes(timetable)
+        releaseRoutes(releases)
+        monitorRoutes(monitor)
         // Light status for the app; any failing check turns it into "degraded".
         get(ApiPaths.HEALTH) {
             val results = diagnostics.run(call.appInfo())

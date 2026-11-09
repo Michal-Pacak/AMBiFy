@@ -1,0 +1,5 @@
+Nowa wersja pokazuje się w okienku; przycisk „Aktualizacja” na górze ekranu otwiera je ponownie
+Po aktualizacji AMBiFy sama się uruchamia
+Czytelniejsze, jaśniejsze napisy
+Ekrany przewijają się także w poziomie telefonu
+Numer wersji na ekranie startowym

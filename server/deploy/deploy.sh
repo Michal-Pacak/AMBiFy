@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 ./gradlew :server:test :server:installDist -q --console=plain
 
-rsync -a --delete server/build/install/server/ /opt/ambify-server/
+# releases/ holds the app for download (publish-app.sh), not part of the program: never deleted here.
+rsync -a --delete --exclude=/releases/ --exclude=/monitor/ server/build/install/server/ /opt/ambify-server/
 sudo -n /usr/bin/systemctl restart ambify-server.service
 
 for _ in $(seq 1 30); do

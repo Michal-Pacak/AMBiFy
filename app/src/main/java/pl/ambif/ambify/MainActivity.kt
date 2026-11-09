@@ -14,18 +14,30 @@ import androidx.core.content.edit
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import pl.ambif.ambify.core.session.AppSession
 import pl.ambif.ambify.core.session.LocalAppSession
+import pl.ambif.ambify.features.update.ForcedUpdateScreen
+import pl.ambif.ambify.features.update.InstallPermissionScreen
+import pl.ambif.ambify.modules.monitor.MonitorCollector
+import pl.ambif.ambify.modules.monitor.MonitorScheduler
+import pl.ambif.ambify.modules.update.AppUpdater
+import pl.ambif.ambify.modules.update.UpdateRules
+import pl.ambif.ambify.modules.update.UpdatedReceiver
+import pl.ambif.ambify.modules.update.UpdateState
 import pl.ambif.ambify.ui.navigation.AppNavHost
 import pl.ambif.ambify.ui.theme.AMBiFyTheme
 import pl.ambif.ambify.ui.theme.LocalCardMotion
 
 class MainActivity : ComponentActivity() {
     private val session by lazy { AppSession(applicationContext) }
+    private val updater by lazy { AppUpdater.of(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        UpdatedReceiver.clearNotice(this)
         if (BuildConfig.TEST_LOGIN) offerHomeScreenShortcut()
         askForLocalNetwork()
         setContent {
@@ -33,9 +45,30 @@ class MainActivity : ComponentActivity() {
             val cardMotion = cardAnimations && !session.device.systemAnimationsOff()
             CompositionLocalProvider(LocalAppSession provides session, LocalCardMotion provides cardMotion) {
                 AMBiFyTheme {
-                    AppNavHost()
+                    val update by updater.state.collectAsState()
+                    val latest by updater.latest.collectAsState()
+                    val forced = latest?.takeIf { UpdateRules.isForced(it) }
+                    when {
+                        update is UpdateState.NeedsPermission -> InstallPermissionScreen(
+                            onOpenSettings = { startActivity(updater.permissionSettings()) },
+                            onCancel = updater::cancelPermission,
+                        )
+                        // This app no longer works with the server: nothing but updating.
+                        forced != null -> ForcedUpdateScreen(update, forced, onUpdate = { updater.installNow(forced) })
+                        else -> AppNavHost()
+                    }
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updater.onResume()
+        if (BuildConfig.KIDS) runCatching {
+            MonitorCollector.collect(applicationContext)
+            MonitorScheduler.scheduleNight(applicationContext)
+            lifecycleScope.launch { runCatching { MonitorCollector.sync(applicationContext) } }
         }
     }
 

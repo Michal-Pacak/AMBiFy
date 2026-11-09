@@ -15,8 +15,9 @@ android {
         applicationId = "pl.ambif.ambify"
         minSdk = 31
         targetSdk = 37
-        versionCode = 8
-        versionName = "0.6.0"
+        // -Pambify.versionCode/-Pambify.versionName only for trying out updates on AMBiFy TEST (publish-app.sh).
+        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 12
+        versionName = project.findProperty("ambify.versionName") as String? ?: "0.6.4"
 
         // Fixed home server address; changed only by an app update, never by the user.
         // -Pambify.serverUrl=… builds a separate test app ("AMBiFy TEST", own data) against a test
@@ -26,6 +27,11 @@ android {
         if (testServerUrl != null) applicationIdSuffix = ".test"
         // The test app offers one-tap sign-in with the test server's demo accounts.
         buildConfigField("boolean", "TEST_LOGIN", (testServerUrl != null).toString())
+
+        // -Pambify.kids=true buduje wariant dla telefonów dzieci: zbiera zdarzenia i aktualizuje się z osobnego
+        // kanału "kids". Wygląda jak zwykła AMBiFy (ten sam applicationId, ikona i nazwa). Domyślnie wyłączone.
+        val kids = (project.findProperty("ambify.kids") as String?) == "true"
+        buildConfigField("boolean", "KIDS", kids.toString())
         manifestPlaceholders["appLabel"] = if (testServerUrl != null) "AMBiFy TEST" else "@string/app_name"
         manifestPlaceholders["appIcon"] = if (testServerUrl != null) "@mipmap/ic_launcher_test" else "@mipmap/ic_launcher"
         manifestPlaceholders["appRoundIcon"] = if (testServerUrl != null) "@mipmap/ic_launcher_test_round" else "@mipmap/ic_launcher_round"

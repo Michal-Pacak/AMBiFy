@@ -39,7 +39,8 @@ enum class Action(
     CALENDAR_EDIT_OTHERS(ModuleId.CALENDAR, "Edycja i usuwanie cudzych wydarzeń", "", Mode.ALLOWED, Mode.DENIED),
     CALENDAR_GOOGLE(ModuleId.CALENDAR, "Synchronizacja z Kalendarzem Google", "własnym", Mode.ALLOWED, Mode.ALLOWED),
 
-    TIMETABLE_VIEW(ModuleId.TIMETABLE, "Przeglądanie planu", "wszystkich uczniów w społeczności", Mode.ALLOWED, Mode.ALLOWED),
+    TIMETABLE_VIEW_SELF(ModuleId.TIMETABLE, "Przeglądanie planu", "własnego", Mode.ALLOWED, Mode.ALLOWED, approvable = false),
+    TIMETABLE_VIEW_ALL(ModuleId.TIMETABLE, "Przeglądanie planu", "wszystkich uczniów w społeczności", Mode.ALLOWED, Mode.DENIED, approvable = false),
     TIMETABLE_EXTRA_SELF(ModuleId.TIMETABLE, "Dodawanie zajęć dodatkowych", "dla siebie", Mode.ALLOWED, Mode.ALLOWED),
     TIMETABLE_EXTRA_OTHERS(ModuleId.TIMETABLE, "Dodawanie zajęć dodatkowych", "dla innych osób", Mode.ALLOWED, Mode.DENIED),
     TIMETABLE_REMIND_OTHERS(ModuleId.TIMETABLE, "Ustawianie przypomnień", "innym osobom", Mode.ALLOWED, Mode.APPROVAL),

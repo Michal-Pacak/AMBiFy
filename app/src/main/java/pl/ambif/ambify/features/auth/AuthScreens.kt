@@ -62,11 +62,12 @@ import pl.ambif.ambify.shared.ResetPasswordRequest
 import pl.ambif.ambify.shared.Tier
 import pl.ambif.ambify.ui.branding.BrandLogo
 import pl.ambif.ambify.ui.icons.AppIcons
+import pl.ambif.ambify.ui.theme.Luxury
 
 internal object AuthColors {
     val Gold = Color(0xFFD4A93C)
     val OnGold = Color(0xFF1A1A1A)
-    val Muted = Color(0xFFC9C9CF)
+    val Muted = Luxury.TextMuted
     val Field = Color(0xFF1C1C1F)
     val FieldBorder = Color(0xFF5A5A60)
     val Tonal = Color(0xFF3B4258)

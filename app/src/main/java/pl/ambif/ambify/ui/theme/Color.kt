@@ -11,8 +11,9 @@ object Luxury {
     val CardBottom = Color(0xFF19191C)
     val PopupTop = Color(0xFF2A2A2F)
     val Text = Color(0xFFF1ECE0)
-    val TextMuted = Color(0xFFA9A9B1)
-    val Disabled = Color(0xFF85858D)
+    /** Text colors: never black or gray (approved 2026-11-09) — warm champagne and sand instead. */
+    val TextMuted = Color(0xFFD8CBA8)
+    val Disabled = Color(0xFFC2B28A)
 
     /** Metallic gold: [Base] is the classic gold, [Light] its highlight, [Deep] and [Shadow] its dark side. */
     val GoldBase = Color(0xFFD4AF37)

@@ -114,6 +114,13 @@ Business model (2026-10-27, owner's decision): anyone can found a community. The
 - [x] Offline copy of the timetable: the phone keeps the server's range (a week back to four ahead) and shows it without a connection, read-only ("Bez połączenia z serwerem · plan z …")
 - [ ] Later: adding and changing extra activities offline (sent when the connection is back)
 
+### v0.6.1 — Download and self-update from the home server
+
+- [x] `http://192.168.1.122:8090/pobierz`: download page for new phones in the home Wi‑Fi (the link is also in every shared invitation)
+- [x] The app checks the server (at start, then at most every 6 h; "Sprawdź aktualizacje" in Ustawienia → Aplikacja) and offers "Zaktualizuj" / "W nocy" (3:00) / "Odłóż o 1 h"; SHA‑256 checked, data and sign-in kept
+- [x] Forced update when the server needs a newer app (`minVersionCode`)
+- [x] Publishing: `server/deploy/publish-app.sh [--test]`; the signing key is backed up on the NAS
+
 ### Stage 5 — Lists (v0.7)
 
 One list engine for several list types: shopping, tasks, deadlines (a new type is configuration, not new code).

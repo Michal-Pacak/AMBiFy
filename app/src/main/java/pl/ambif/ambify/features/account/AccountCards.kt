@@ -55,7 +55,9 @@ import pl.ambif.ambify.features.auth.rememberSubmit
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import pl.ambif.ambify.BuildConfig
 import pl.ambif.ambify.shared.Action
+import pl.ambif.ambify.shared.AppPaths
 import pl.ambif.ambify.shared.Avatar
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.Device
@@ -95,8 +97,12 @@ private val dayFormat = SimpleDateFormat("dd.MM", Locale.forLanguageTag("pl-PL")
 
 internal fun formatDay(millis: Long): String = dayFormat.format(Date(millis))
 
+/** The page where a new person downloads the app (only in the home Wi‑Fi). */
+internal val downloadLink = BuildConfig.SERVER_URL + AppPaths.DOWNLOAD
+
 internal fun invitationText(communityName: String, code: String, expiresAt: Long) =
-    "Dołącz do społeczności $communityName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)})."
+    "Dołącz do społeczności $communityName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)}). " +
+        "Aplikację pobierzesz tutaj (w domowym Wi‑Fi): $downloadLink"
 
 internal fun Role.label() = name
 

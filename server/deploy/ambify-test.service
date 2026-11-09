@@ -8,6 +8,8 @@ Environment=AMBIFY_HOST=0.0.0.0
 Environment=AMBIFY_PORT=18090
 Environment=AMBIFY_DB=%h/.local/share/ambify-test/ambify.db
 Environment=AMBIFY_BACKUP_DIR=%h/.local/share/ambify-test/backup
+Environment=AMBIFY_RELEASES=%h/.local/share/ambify-test/releases
+Environment=AMBIFY_MONITOR=%h/.local/share/ambify-test/monitor
 Environment=AMBIFY_DEMO=1
 Environment=JAVA_OPTS=-Xmx192m
 ExecStart=%h/.local/opt/ambify-test/bin/server

@@ -12,6 +12,12 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The app updates itself from the home server (not from the Play Store). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Build „kids” (telefon dziecka): zbieranie zdarzeń użycia i zmian ustawień. Nadawane ręcznie w ustawieniach;
+         nieużywane w buildach prod/test (kolektor działa tylko gdy BuildConfig.KIDS). -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:allowBackup="true"
@@ -44,6 +50,25 @@
             android:turnScreenOn="true"
             android:theme="@style/Theme.AMBiFy" />
         <receiver android:name=".modules.timetable.ReminderReceiver" android:exported="false" />
+        <receiver android:name=".modules.update.UpdateReceiver" android:exported="false" />
+        <!-- Po samoaktualizacji: otwiera nową wersję / powiadamia, że gotowe (akcja chroniona, wysyła ją tylko system). -->
+        <receiver android:name=".modules.update.UpdatedReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- Build „kids”: zmiana zegara/strefy, instalacje/odinstalowania; nocna zbiórka idzie jawnym Intentem. -->
+        <receiver android:name=".modules.monitor.MonitorReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
         <receiver android:name=".modules.timetable.BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

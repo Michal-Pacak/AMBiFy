@@ -1,5 +1,6 @@
 package pl.ambif.ambify.core.network
 
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
@@ -13,6 +14,8 @@ import pl.ambif.ambify.shared.AccountPaths
 import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
+import pl.ambif.ambify.shared.AppPaths
+import pl.ambif.ambify.shared.AppRelease
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.CommunityModules
@@ -32,6 +35,8 @@ import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ModuleOrder
 import pl.ambif.ambify.shared.ModulePaths
 import pl.ambif.ambify.shared.ModuleSwitch
+import pl.ambif.ambify.shared.MonitorEventBatch
+import pl.ambif.ambify.shared.MonitorPaths
 import pl.ambif.ambify.shared.PasswordResetCode
 import pl.ambif.ambify.shared.PlatformCommunity
 import pl.ambif.ambify.shared.PlatformPaths
@@ -86,7 +91,6 @@ class ServerApi(
     private val community: () -> String? = { null },
 ) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val refreshLock = Mutex()
 
     /** The same connection, but every request is about community [communityId] (not the current one). */
     fun forCommunity(communityId: String) = ServerApi(baseUrl, tokens) { communityId }
@@ -94,6 +98,40 @@ class ServerApi(
     suspend fun health(): Timed<HealthResponse> = timed { get(ApiPaths.HEALTH, auth = false) }
 
     suspend fun diagnostics(): Timed<DiagnosticsResponse> = timed { get(ApiPaths.DIAGNOSTICS, auth = false) }
+
+    /** The newest published app; [ServerError] "no_release" when nothing is published yet. Build kids czyta kanał kids. */
+    suspend fun latestRelease(): AppRelease = get(AppPaths.latest(BuildConfig.KIDS), auth = false)
+
+    /** Saves the published APK [release] into [target]; [onProgress] gets the bytes so far. */
+    suspend fun downloadApk(release: AppRelease, target: File, onProgress: (Long) -> Unit) = withContext(Dispatchers.IO) {
+        try {
+            val connection = URI("$baseUrl${AppPaths.apk(BuildConfig.KIDS)}/${release.file}").toURL().openConnection() as HttpURLConnection
+            connection.connectTimeout = TIMEOUT_MS
+            connection.readTimeout = DOWNLOAD_TIMEOUT_MS
+            try {
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    throw ServerError("http_${connection.responseCode}", "Serwer nie oddał nowej wersji (${connection.responseCode}).")
+                }
+                connection.inputStream.use { input ->
+                    target.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            total += read
+                            onProgress(total)
+                        }
+                    }
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (e: IOException) {
+            throw ServerError("network", "Brak połączenia z serwerem AMBiFy.")
+        }
+    }
 
     suspend fun register(request: RegisterRequest): Tokens = post(AuthPaths.REGISTER, request, auth = false)
     suspend fun login(request: LoginRequest): Tokens = post(AuthPaths.LOGIN, request, auth = false)
@@ -148,6 +186,10 @@ class ServerApi(
     suspend fun syncDiary(id: String): DiaryConnection = post("${TimetablePaths.DIARY}/$id/sync", null as String?)
     suspend fun disconnectDiary(id: String) = send("DELETE", "${TimetablePaths.DIARY}/$id", null, auth = true)
 
+    /** Build kids: dosyła paczkę zdarzeń telefonu dziecka na jego konto (serwer dopisuje je do pliku logu). */
+    suspend fun sendMonitorEvents(batch: MonitorEventBatch) =
+        send("POST", MonitorPaths.EVENTS, json.encodeToString(batch), auth = true)
+
     suspend fun platformCommunities(): List<PlatformCommunity> = get(PlatformPaths.COMMUNITIES)
     suspend fun setGrant(communityId: String, key: String, granted: Boolean) =
         send("PUT", "${PlatformPaths.COMMUNITIES}/$communityId/grants/$key", json.encodeToString(GrantRequest(granted)), auth = true)
@@ -171,26 +213,42 @@ class ServerApi(
         val usedToken = if (auth) tokens?.accessToken else null
         val first = execute(method, path, body, usedToken)
         if (!auth || first.code != HttpURLConnection.HTTP_UNAUTHORIZED) return first.bodyOrThrow()
-        if (!renewTokens(usedToken)) {
-            tokens?.onSessionExpired()
-            return first.bodyOrThrow()
+        when (renewTokens(usedToken)) {
+            Renewal.RENEWED -> return execute(method, path, body, tokens?.accessToken).bodyOrThrow()
+            // The server said no to the refresh token: the session really is over.
+            Renewal.REJECTED -> {
+                tokens?.onSessionExpired()
+                return first.bodyOrThrow()
+            }
+            // No network or the server is restarting: keep the session, try again later.
+            Renewal.UNAVAILABLE -> throw ServerError("network", "Brak połączenia z serwerem AMBiFy.")
         }
-        return execute(method, path, body, tokens?.accessToken).bodyOrThrow()
     }
 
-    /** True when there is a fresh access token (renewed here or by a request running at the same time). */
-    private suspend fun renewTokens(expiredAccessToken: String?): Boolean = refreshLock.withLock {
-        val store = tokens ?: return false
-        if (store.accessToken != null && store.accessToken != expiredAccessToken) return true
-        val refreshToken = store.refreshToken ?: return false
+    private enum class Renewal { RENEWED, REJECTED, UNAVAILABLE }
+
+    /**
+     * Renews the access token (or notices it was renewed by a request running at the same time).
+     * The lock is shared by every [ServerApi] in the app: the refresh token changes on each renewal, so two
+     * renewals at once with the same token would make the second one fail and sign the person out.
+     */
+    private suspend fun renewTokens(expiredAccessToken: String?): Renewal = refreshLock.withLock {
+        val store = tokens ?: return Renewal.REJECTED
+        if (store.accessToken != null && store.accessToken != expiredAccessToken) return Renewal.RENEWED
+        val refreshToken = store.refreshToken ?: return Renewal.REJECTED
         val answer = runCatching {
             execute("POST", AuthPaths.REFRESH, json.encodeToString(RefreshRequest(refreshToken)), null)
-        }.getOrNull() ?: return false
-        if (answer.code != HttpURLConnection.HTTP_OK) return false
-        val renewed = json.decodeFromString<Tokens>(answer.body)
-        store.accessToken = renewed.accessToken
-        store.refreshToken = renewed.refreshToken
-        true
+        }.getOrNull() ?: return Renewal.UNAVAILABLE
+        when (answer.code) {
+            HttpURLConnection.HTTP_OK -> {
+                val renewed = json.decodeFromString<Tokens>(answer.body)
+                store.accessToken = renewed.accessToken
+                store.refreshToken = renewed.refreshToken
+                Renewal.RENEWED
+            }
+            HttpURLConnection.HTTP_UNAUTHORIZED -> Renewal.REJECTED
+            else -> Renewal.UNAVAILABLE
+        }
     }
 
     private class Answer(val code: Int, val body: String)
@@ -233,7 +291,10 @@ class ServerApi(
         }
 
     private companion object {
+        /** One for the whole app process, see [renewTokens]. */
+        val refreshLock = Mutex()
         const val TIMEOUT_MS = 6000
         const val DIARY_TIMEOUT_MS = 60_000
+        const val DOWNLOAD_TIMEOUT_MS = 30_000
     }
 }

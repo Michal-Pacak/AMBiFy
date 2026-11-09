@@ -243,7 +243,9 @@ class TimetableService(
         val membership = viewer(session)
         val monday = Recurrences.mondayOf(day)
         val sunday = monday.plusDays(6)
-        val students = students(membership.organizationId)
+        val me = membership.user[Users.id]
+        // "View all" shows every student; otherwise only students linked to the caller's own account.
+        val students = students(membership.organizationId).let { all -> if (seesAll(membership)) all else all.filter { it.memberId == me } }
         val lessons = students.associate { student ->
             student.id to Lessons.selectAll()
                 .where { (Lessons.studentId eq student.id) and (Lessons.date.between(monday.toString(), sunday.toString())) }
@@ -253,7 +255,8 @@ class TimetableService(
                     Lesson(it[Lessons.date], it[Lessons.position], it[Lessons.subject], it[Lessons.room], it[Lessons.teacher], it[Lessons.time], change)
                 }
         }
-        val activities = activities(membership.organizationId)
+        val visible = students.map { it.id }.toSet()
+        val activities = activities(membership.organizationId).filter { it.studentId in visible }
         val occurrences = activities.flatMap { activity ->
             val schoolDays = lessons[activity.studentId].orEmpty().map { it.date }.toSet()
             // A weekday without lessons in a week that has lessons on other days: a holiday or a day off.
@@ -341,10 +344,19 @@ class TimetableService(
 
     // --- helpers; all run inside a transaction ---
 
+    /** Has access to the timetable: the module and at least "view own" (else nothing to show). */
     private fun viewer(session: UserSession): Membership {
         accounts.requireModule(session, ModuleId.TIMETABLE)
-        return accounts.requireAction(session, Action.TIMETABLE_VIEW)
+        val membership = accounts.membership(session)
+        val canView = accounts.can(membership, Action.TIMETABLE_VIEW_ALL) == Mode.ALLOWED ||
+            accounts.can(membership, Action.TIMETABLE_VIEW_SELF) == Mode.ALLOWED
+        if (!canView) throw ApiException(HttpStatusCode.Forbidden, "forbidden", "Twoja rola nie może przeglądać planu.")
+        return membership
     }
+
+    /** Whether the caller sees every student's plan (else only students linked to their own account). */
+    private fun seesAll(membership: Membership): Boolean =
+        accounts.can(membership, Action.TIMETABLE_VIEW_ALL) == Mode.ALLOWED
 
     private fun upsertStudent(organizationId: String, name: String, clazz: String): String {
         val existing = Students.selectAll().where { (Students.organizationId eq organizationId) and (Students.name eq name) }.singleOrNull()

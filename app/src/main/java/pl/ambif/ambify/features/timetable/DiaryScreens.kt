@@ -104,7 +104,7 @@ internal fun FramedButton(label: String, gold: Boolean = true, modifier: Modifie
         border = BorderStroke(1.dp, if (gold) Luxury.GoldLink else Outline),
         shape = RoundedCornerShape(22.dp),
         modifier = modifier.heightIn(min = 44.dp),
-    ) { Text(label, color = if (gold) Luxury.GoldText else Color(0xFFC9C9CF), fontSize = 14.sp) }
+    ) { Text(label, color = if (gold) Luxury.GoldText else Luxury.TextMuted, fontSize = 14.sp) }
 }
 
 /**
@@ -119,7 +119,7 @@ internal fun NoTimetable(week: TimetableWeek, canLink: Boolean, communityName: S
                 Text("Połącz z dziennikiem szkolnym", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                 Text(
                     "AMBiFy pobierze plan lekcji Twoich dzieci z eduVulcan, razem z zastępstwami i odwołanymi lekcjami, i będzie go sama odświeżać.",
-                    style = MaterialTheme.typography.bodyMedium, color = Color(0xFFC9C9CF), textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium, color = Luxury.TextMuted, textAlign = TextAlign.Center,
                 )
             }
             LuxuryDivider()
@@ -138,7 +138,7 @@ internal fun NoTimetable(week: TimetableWeek, canLink: Boolean, communityName: S
                 Text("Planu jeszcze nie ma", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "Plan pojawi się tutaj, gdy Owner lub Admin połączy społeczność „$communityName” z dziennikiem eduVulcan.",
-                    style = MaterialTheme.typography.bodyMedium, color = Color(0xFFC9C9CF), textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium, color = Luxury.TextMuted, textAlign = TextAlign.Center,
                 )
                 if (week.diaryLinkers.isNotEmpty()) {
                     Text("Kto może to zrobić: ${week.diaryLinkers.joinToString()}.", fontSize = 13.sp, color = Luxury.TextMuted, textAlign = TextAlign.Center)
@@ -202,7 +202,7 @@ internal fun DiaryConnectScreen(members: List<Member>, onBack: () -> Unit, onDon
                 ScreenTitle("Logowanie do eduVulcan", "krok 2 z 3 · eduvulcan.pl", onBack = { step = ConnectStep.INTRO })
                 Text(
                     "Hasło wpisujesz na stronie Vulcana. AMBiFy go nie widzi. Po zalogowaniu przejdziemy dalej sami.",
-                    fontSize = 12.sp, color = Color(0xFFC9C9CF), modifier = Modifier.padding(horizontal = 8.dp),
+                    fontSize = 12.sp, color = Luxury.TextMuted, modifier = Modifier.padding(horizontal = 8.dp),
                 )
             }
             EduVulcanLogin(modifier = Modifier.weight(1f).fillMaxWidth(), onTokens = ::connect)
@@ -244,7 +244,7 @@ internal fun DiaryConnectScreen(members: List<Member>, onBack: () -> Unit, onDon
             Notice("Połączono. W dzienniku ${pupilsWord(found.size)}.", Ok)
             Text(
                 "Czy któreś dziecko ma własne konto w AMBiFy? Wtedy zobaczy swój plan jako „mój” i dostanie swoje przypomnienia.",
-                style = MaterialTheme.typography.bodyMedium, color = Color(0xFFC9C9CF),
+                style = MaterialTheme.typography.bodyMedium, color = Luxury.TextMuted,
             )
             found.forEach { pupil ->
                 val student = students.firstOrNull { it.id == pupil.studentId }
@@ -296,7 +296,7 @@ private fun AccountChips(members: List<Member>, selected: String?, onPick: (Stri
                     .clickable { if (!on) onPick(id) }
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(label, fontSize = 14.sp, color = if (on) Luxury.GoldLight else Color(0xFFC9C9CF)) }
+            ) { Text(label, fontSize = 14.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted) }
         }
     }
 }
@@ -520,10 +520,10 @@ private fun ConnectionBox(connection: DiaryConnection, busy: Boolean, onSync: ()
                 modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(color.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 3.dp),
             )
         }
-        if (connection.addedByName.isNotBlank()) Text("Połączył(a): ${connection.addedByName}", fontSize = 13.sp, color = Color(0xFFC9C9CF))
+        if (connection.addedByName.isNotBlank()) Text("Połączył(a): ${connection.addedByName}", fontSize = 13.sp, color = Luxury.TextMuted)
         Text(
             "Uczniowie: " + connection.pupils.joinToString { if (it.clazz.isBlank()) it.name else "${it.name} (${it.clazz})" }.ifBlank { "—" },
-            fontSize = 13.sp, color = Color(0xFFC9C9CF),
+            fontSize = 13.sp, color = Luxury.TextMuted,
         )
         connection.lastError?.let { Text(it, fontSize = 13.sp, color = Color(0xFFFFC9C3)) }
         Text("Ostatnia aktualizacja: ${syncTime(connection.lastSyncAt)} · następna ${nextSync()}", fontSize = 12.sp, color = Luxury.TextMuted)

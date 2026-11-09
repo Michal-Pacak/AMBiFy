@@ -201,9 +201,32 @@ class TimetableTest {
         assertEquals(listOf("Bartosz", "Filip"), connection.pupils.map { it.name })
         assertEquals("Michał Pacak", connection.addedByName)
         assertNotNull(connection.lastSyncAt)
-        val week = w.timetable.week(w.user, monday)
-        assertTrue(week.diaryConnected)
+        val userWeek = w.timetable.week(w.user, monday)
+        assertTrue(userWeek.diaryConnected)
+        // The lowest role sees only its own plan; Bartosz is not linked yet, so no students show for the User.
+        assertTrue(userWeek.students.isEmpty())
+        val week = w.timetable.week(w.owner, monday)
         assertEquals(5, week.lessons.getValue(connection.pupils.last().studentId).size)
+    }
+
+    @Test
+    fun aRoleSeesOnlyItsOwnPlanUntilAllowedToSeeAll() {
+        val w = world()
+        val bartosz = w.timetable.week(w.owner, monday).students.first { it.name == "Bartosz" }
+        w.timetable.linkStudent(w.owner, bartosz.id, w.accounts.me(w.user).id)
+
+        // The lowest role (User) sees only the student linked to their account.
+        assertEquals(listOf("Bartosz"), w.timetable.week(w.user, monday).students.map { it.name })
+
+        // Allowed to see all: every student shows.
+        val user = w.accounts.permissionTable(w.owner).roles.single { it.name == "User" }
+        w.accounts.setPermission(w.owner, user.id, Action.TIMETABLE_VIEW_ALL, Mode.ALLOWED)
+        assertEquals(listOf("Bartosz", "Filip"), w.timetable.week(w.user, monday).students.map { it.name })
+
+        // Denied both "own" and "all": no access to the timetable at all.
+        w.accounts.setPermission(w.owner, user.id, Action.TIMETABLE_VIEW_ALL, Mode.DENIED)
+        w.accounts.setPermission(w.owner, user.id, Action.TIMETABLE_VIEW_SELF, Mode.DENIED)
+        assertEquals("forbidden", assertFailsWith<ApiException> { w.timetable.week(w.user, monday) }.code)
     }
 
     @Test

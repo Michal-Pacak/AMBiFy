@@ -28,6 +28,11 @@ import pl.ambif.ambify.core.navigation.NoBarRoutes
 import pl.ambif.ambify.core.navigation.SignedOutRoutes
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.features.update.UpdateActions
+import pl.ambif.ambify.features.update.UpdateBadge
+import pl.ambif.ambify.features.update.UpdatePopup
+import pl.ambif.ambify.features.update.hasNews
+import pl.ambif.ambify.modules.update.AppUpdater
 import pl.ambif.ambify.features.auth.LoginScreen
 import pl.ambif.ambify.features.auth.RegisterScreen
 import pl.ambif.ambify.features.auth.ResetPasswordScreen
@@ -101,8 +106,21 @@ fun AppNavHost(
         if (BuildConfig.TEST_LOGIN) activity?.finishAndRemoveTask() else activity?.moveTaskToBack(true)
     }
 
+    // The newer AMBiFy: a popup (by itself once per run) and the "Aktualizacja" button at the top of every screen.
+    val context = LocalContext.current
+    val updater = remember { AppUpdater.of(context) }
+    val update by updater.state.collectAsState()
+    val updatePopup by updater.popupOpen.collectAsState()
+    val pastSplash = currentDestination != null && currentDestination.route != AppDestination.Splash.route
+    if (pastSplash && updatePopup && update.hasNews()) {
+        UpdatePopup(update, remember(updater) {
+            UpdateActions(updater::installNow, updater::installAtNight, updater::closePopup, updater::cancelNight)
+        })
+    }
+
     Scaffold(
         modifier = modifier,
+        topBar = { if (pastSplash) UpdateBadge(update, onClick = updater::openPopup) },
         bottomBar = {
             if (showNavigationBar) {
                 ModuleBar(

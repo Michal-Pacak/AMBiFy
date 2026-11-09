@@ -1,8 +1,10 @@
 package pl.ambif.ambify.ui.theme
 
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 /** Always the Luxury colors: no wallpaper-based dynamic colors, no light variant. */
@@ -34,9 +36,8 @@ private val LuxuryColorScheme = darkColorScheme(
 
 @Composable
 fun AMBiFyTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = LuxuryColorScheme,
-        typography = Typography,
-        content = content,
-    )
+    MaterialTheme(colorScheme = LuxuryColorScheme, typography = Typography) {
+        // Text without its own color is cream everywhere, also outside a Scaffold/Surface (Compose's default is black).
+        CompositionLocalProvider(LocalContentColor provides Luxury.Text, content = content)
+    }
 }
