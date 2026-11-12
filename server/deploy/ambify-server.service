@@ -14,15 +14,17 @@ Environment=AMBIFY_PORT=8080
 Environment=AMBIFY_DB=/var/lib/ambify/ambify.db
 Environment=AMBIFY_NAS=/mnt/nas
 Environment=AMBIFY_BACKUP_DIR=/mnt/nas/Backup/serverek/ambify
+# Kids event logs (JSONL per child); readable by the deploying user for analysis.
+Environment=AMBIFY_MONITOR=/var/lib/ambify-monitor
 Environment=JAVA_OPTS=-Xmx256m
 ExecStart=/opt/ambify-server/bin/server
 Restart=on-failure
 RestartSec=5
 
-# Hardening: the server may write only its database directory.
+# Hardening: the server may write only its database and kids-log directories.
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/ambify
+ReadWritePaths=/var/lib/ambify /var/lib/ambify-monitor
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true

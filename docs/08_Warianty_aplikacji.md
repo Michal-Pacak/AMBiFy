@@ -59,7 +59,7 @@ zbieranie, jak i kanał aktualizacji. Publikuj więc wersje dla dzieci wyłączn
 ```
 /opt/ambify-server/releases/           ← PROD: latest.json + APK   (publish-app.sh)
 /opt/ambify-server/releases/kids/      ← KIDS: latest.json + APK   (publish-app.sh --kids)
-/opt/ambify-server/monitor/            ← logi zdarzeń KIDS, plik JSONL per dziecko
+/var/lib/ambify-monitor/               ← logi zdarzeń KIDS, plik JSONL per dziecko (ambify pisze, mlody czyta)
 ```
 `deploy.sh` nie kasuje `releases/` ani `monitor/` (rsync `--exclude`), więc wdrożenie serwera nie usuwa
 opublikowanych aplikacji ani logów.

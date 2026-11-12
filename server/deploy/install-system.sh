@@ -25,6 +25,9 @@ fi
 step "Database directory /var/lib/ambify (only ambify)"
 install -d -o ambify -g ambify -m 700 /var/lib/ambify
 
+step "Kids log directory /var/lib/ambify-monitor (ambify writes, $DEPLOY_USER reads)"
+install -d -o ambify -g "$DEPLOY_USER" -m 750 /var/lib/ambify-monitor
+
 step "Program directory /opt/ambify-server (owned by $DEPLOY_USER, ambify can only run it)"
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 /opt/ambify-server
 
