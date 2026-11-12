@@ -37,7 +37,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        UpdatedReceiver.clearNotice(this)
         if (BuildConfig.TEST_LOGIN) offerHomeScreenShortcut()
         askForLocalNetwork()
         setContent {
@@ -64,6 +63,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Only once really on the screen: after a self-update Android may start the app hidden behind the home screen
+        // (no starting itself from the background), and then this notification is the only sign the update is done.
+        UpdatedReceiver.clearNotice(this)
         updater.onResume()
         if (BuildConfig.KIDS) runCatching {
             MonitorCollector.collect(applicationContext)

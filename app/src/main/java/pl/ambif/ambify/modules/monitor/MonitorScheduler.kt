@@ -65,6 +65,7 @@ class MonitorReceiver : BroadcastReceiver() {
                 MonitorQueue.of(context).add(listOf(MonitorEvent(type, System.currentTimeMillis(), pkg, suspicious = familyLink)))
             }
             MonitorScheduler.ACTION_SYNC -> {
+                pl.ambif.ambify.modules.update.updateLog(context, "nocna zbiórka 23:30 — alarm zadziałał")
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {

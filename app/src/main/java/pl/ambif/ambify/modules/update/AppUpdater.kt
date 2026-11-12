@@ -194,12 +194,14 @@ class AppUpdater private constructor(private val context: Context) {
             download(release) ?: return@launch
             prefs.edit { putString(KEY_SCHEDULED, json.encodeToString(release)) }
             planNight()
+            updateLog(context, "zaplanowano ${release.versionName} na noc")
             _state.value = UpdateState.Scheduled(release)
         }
     }
 
     fun cancelNight() {
         val release = scheduledRelease()
+        if (release != null) updateLog(context, "anulowano noc")
         context.getSystemService(AlarmManager::class.java).cancel(nightIntent())
         prefs.edit { remove(KEY_SCHEDULED) }
         if (release != null && _state.value is UpdateState.Scheduled) _state.value = UpdateState.Available(release)
@@ -207,20 +209,29 @@ class AppUpdater private constructor(private val context: Context) {
 
     /** The night alarm went off ([UpdateReceiver]): installs the downloaded version, if it is still whole. */
     internal fun installScheduled() {
-        val release = scheduledRelease() ?: return
+        val release = scheduledRelease()
+        updateLog(context, "alarm nocny" + if (release == null) " — nic zaplanowanego" else " — instaluję ${release.versionName}")
+        release ?: return
         prefs.edit { remove(KEY_SCHEDULED) }
         val file = apkFile(release)
         if (!file.isFile || UpdateRules.sha256(file) != release.sha256) {
+            updateLog(context, "brak pobranego pliku albo uszkodzony")
             _state.value = UpdateState.Available(release)
             return
         }
         _state.value = UpdateState.Installing(release)
-        runCatching { commit(file, atNight = true) }.onFailure { failed(release, "Instalacja nie ruszyła: ${it.message}") }
+        runCatching { commit(file, atNight = true) }.onFailure {
+            updateLog(context, "instalacja nie ruszyła: ${it.message}")
+            failed(release, "Instalacja nie ruszyła: ${it.message}")
+        }
     }
 
     /** After a restart of the phone the alarm is gone; the planned version is not. */
     internal fun restoreNight() {
-        if (scheduledRelease() != null) planNight()
+        if (scheduledRelease() != null) {
+            planNight()
+            updateLog(context, "po restarcie telefonu ponownie zaplanowano noc")
+        }
     }
 
     /** From [UpdateReceiver]: Android refused or the person cancelled. */
@@ -291,6 +302,7 @@ class AppUpdater private constructor(private val context: Context) {
         val at = UpdateRules.nightInstallAt(ZonedDateTime.now(ZoneId.systemDefault())).toInstant().toEpochMilli()
         // Android may move it a little to save battery: at night that is fine.
         context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, nightIntent())
+        updateLog(context, "alarm nocny ustawiony na " + java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.ROOT).format(java.util.Date(at)))
     }
 
     private fun nightIntent(): PendingIntent = PendingIntent.getBroadcast(
@@ -328,6 +340,7 @@ class AppUpdater private constructor(private val context: Context) {
             // Mutable: Android adds the status to it.
             val pending = PendingIntent.getBroadcast(context, id, result, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             session.commit(pending.intentSender)
+            updateLog(context, "przekazano do Androida" + if (atNight) " (noc)" else "")
         }
     }
 

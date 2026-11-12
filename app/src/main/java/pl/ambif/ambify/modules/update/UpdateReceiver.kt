@@ -20,7 +20,9 @@ class UpdateReceiver : BroadcastReceiver() {
         val updater = AppUpdater.of(context)
         when (intent.action) {
             ACTION_NIGHT -> updater.installScheduled()
-            ACTION_RESULT -> when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+            ACTION_RESULT -> when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE).also {
+                updateLog(context, "odpowiedź Androida: status $it" + (intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)?.let { m -> " ($m)" } ?: ""))
+            }) {
                 PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                     val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java) ?: return
                     confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

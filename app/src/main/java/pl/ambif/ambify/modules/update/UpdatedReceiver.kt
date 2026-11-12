@@ -21,7 +21,9 @@ class UpdatedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         // The night install: nobody is looking, the app opens as usual next time.
-        if (AppUpdater.takeFinishedInstall(context) != true) return
+        val openAfter = AppUpdater.takeFinishedInstall(context)
+        updateLog(context, "zainstalowano" + when (openAfter) { true -> " (teraz)"; false -> " (w nocy)"; null -> " (spoza aplikacji)" })
+        if (openAfter != true) return
         val open = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         notifyDone(context, open)
