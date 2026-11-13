@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- The app updates itself from the home server (not from the Play Store). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Bez tego Android 12+ ignoruje „instaluj bez pytania” i każda samoaktualizacja (także nocna) czeka na stuknięcie. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Build „kids” (telefon dziecka): zbieranie zdarzeń użycia i zmian ustawień. Nadawane ręcznie w ustawieniach;
          nieużywane w buildach prod/test (kolektor działa tylko gdy BuildConfig.KIDS). -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
