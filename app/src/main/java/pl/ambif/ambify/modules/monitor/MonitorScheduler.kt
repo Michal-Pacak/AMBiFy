@@ -25,11 +25,15 @@ object MonitorScheduler {
     private const val NIGHT_HOUR = 23
     private const val NIGHT_MINUTE = 30
 
-    /** Planuje najbliższą nocną zbiórkę (23:30). Wołane przy otwarciu apki i po każdej zbiórce. */
+    /**
+     * Planuje najbliższą nocną zbiórkę (23:30) i godzinną wysyłkę w tle ([MonitorUploadWorker]). Wołane przy otwarciu
+     * apki, po starcie telefonu, po samoaktualizacji i po każdej nocnej zbiórce.
+     */
     fun scheduleNight(context: Context, now: ZonedDateTime = ZonedDateTime.now()) {
         if (!BuildConfig.KIDS) return
         val alarms = context.getSystemService(AlarmManager::class.java)
         alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextNight(now), pending(context))
+        runCatching { MonitorUploadWorker.schedulePeriodic(context) }
     }
 
     internal fun nextNight(now: ZonedDateTime): Long {
@@ -70,7 +74,8 @@ class MonitorReceiver : BroadcastReceiver() {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         MonitorCollector.collect(context)
-                        MonitorCollector.sync(context)
+                        // Śpiący telefon zwykle nie daje tu sieci — wtedy wysyłka czeka na najbliższą sieć.
+                        if (!MonitorCollector.sync(context)) MonitorUploadWorker.uploadWhenOnline(context)
                     } finally {
                         MonitorScheduler.scheduleNight(context) // następna noc
                         pending.finish()

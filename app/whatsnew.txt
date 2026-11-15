@@ -1,1 +1,7 @@
-Aktualizacja w nocy instaluje się sama, bez stukania
+Pulpit z widgetami: przycisk „Dodaj widget”, wybór widgetu według modułu
+Widget „Lekcje”: najbliższe lekcje, godzina końca lekcji albo startu w najbliższy dzień szkolny
+Kilka osób w jednym widgecie: przełącznik osób
+⋮ na widgecie: osoby, wysokość (Mała, Średnia, Duża), przesuwanie, usuwanie
+Przytrzymaj widget i przeciągnij, żeby go przenieść
+„+ N kolejne” rozwija cały dzień szkoły
+Dane z telefonu docierają same, także bez otwierania aplikacji

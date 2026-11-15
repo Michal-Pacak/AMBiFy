@@ -7,6 +7,8 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.edit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import pl.ambif.ambify.BuildConfig
 import pl.ambif.ambify.core.network.ServerApi
 import pl.ambif.ambify.core.network.TokenStore
@@ -27,8 +29,11 @@ object MonitorCollector {
     private const val DEFAULT_LOOKBACK_MS = 24 * 60 * 60 * 1000L
     // Separator pól snapshotu (znak sterujący SOH — nie występuje w odczytywanych wartościach ustawień).
     private const val FIELD = "\u0001"
+    private const val KEY_LAST_ERROR = "last_sync_error"
+    private val syncLock = Mutex()
 
     /** Zbiera nowe zdarzenia od ostatniego znacznika i wrzuca do kolejki. Bezpieczne do częstego wołania. */
+    @Synchronized
     fun collect(context: Context, now: Long = System.currentTimeMillis()) {
         if (!BuildConfig.KIDS) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -40,13 +45,31 @@ object MonitorCollector {
     }
 
     /** Wysyła kolejkę na serwer; po potwierdzeniu usuwa wysłane. Wymaga zalogowania — inaczej zdarzenia czekają. */
-    suspend fun sync(context: Context) {
-        if (!BuildConfig.KIDS) return
+    /**
+     * Zwraca `true`, gdy kolejka jest pusta albo wysłana; `false` = spróbuj później (brak sieci, serwer, logowanie).
+     * Jedna wysyłka naraz: dwie równoległe (otwarcie apki + zadanie w tle) wysłałyby to samo dwa razy, a drugie
+     * `removeFirst` skasowałoby zdarzenia dopisane w międzyczasie, zanim poszły.
+     */
+    suspend fun sync(context: Context): Boolean = syncLock.withLock {
+        if (!BuildConfig.KIDS) return@withLock true
         val queue = MonitorQueue.of(context)
         val pending = queue.peekAll()
-        if (pending.isEmpty()) return
+        if (pending.isEmpty()) return@withLock true
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         runCatching { authedApi(context).sendMonitorEvents(MonitorEventBatch(device(context), pending)) }
-            .onSuccess { queue.removeFirst(pending.size) }
+            .onSuccess {
+                queue.removeFirst(pending.size)
+                prefs.edit { remove(KEY_LAST_ERROR) }
+            }
+            .onFailure { e ->
+                // Do logu tylko nowy rodzaj błędu — bez sieci zadanie ponawia się co chwilę i zasypałoby kolejkę.
+                val reason = "${e::class.simpleName}: ${e.message?.take(120)}"
+                if (prefs.getString(KEY_LAST_ERROR, null) != reason) {
+                    prefs.edit { putString(KEY_LAST_ERROR, reason) }
+                    queue.add(listOf(MonitorEvent(MonitorEventType.OTHER, System.currentTimeMillis(), "wysyłka nieudana: $reason")))
+                }
+            }
+            .isSuccess
     }
 
     // UsageStats od ostatniego znacznika: aplikacja na wierzchu i ekran wł/wył. Nadrabia też luki po force-stop.

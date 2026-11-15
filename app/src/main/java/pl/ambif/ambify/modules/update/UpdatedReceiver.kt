@@ -23,6 +23,8 @@ class UpdatedReceiver : BroadcastReceiver() {
         // The night install: nobody is looking, the app opens as usual next time.
         val openAfter = AppUpdater.takeFinishedInstall(context)
         updateLog(context, "zainstalowano" + when (openAfter) { true -> " (teraz)"; false -> " (w nocy)"; null -> " (spoza aplikacji)" })
+        // Aktualizacja kasuje budziki aplikacji — bez tego nocna zbiórka wróciłaby dopiero po ręcznym otwarciu.
+        runCatching { pl.ambif.ambify.modules.monitor.MonitorScheduler.scheduleNight(context) }
         if (openAfter != true) return
         val open = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

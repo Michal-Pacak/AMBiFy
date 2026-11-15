@@ -16,8 +16,8 @@ android {
         minSdk = 31
         targetSdk = 37
         // -Pambify.versionCode/-Pambify.versionName only for trying out updates on AMBiFy TEST (publish-app.sh).
-        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 15
-        versionName = project.findProperty("ambify.versionName") as String? ?: "0.6.7"
+        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 16
+        versionName = project.findProperty("ambify.versionName") as String? ?: "0.6.8"
 
         // Fixed home server address; changed only by an app update, never by the user.
         // -Pambify.serverUrl=… builds a separate test app ("AMBiFy TEST", own data) against a test
@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
