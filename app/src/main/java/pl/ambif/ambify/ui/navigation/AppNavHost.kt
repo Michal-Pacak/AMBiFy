@@ -189,7 +189,11 @@ fun AppNavHost(
 
             composable(AppDestination.Home.route) {
                 val me = (sessionState as? SessionState.SignedIn)?.me
-                HomeScreen(organizationName = me?.familyName ?: "", userName = me?.name ?: "")
+                HomeScreen(
+                    organizationName = me?.familyName ?: "",
+                    userName = me?.name ?: "",
+                    onOpenModule = { module -> navController.navigateToBottomDestination(module.route) },
+                )
             }
 
             composable(AppDestination.Calendar.route) {

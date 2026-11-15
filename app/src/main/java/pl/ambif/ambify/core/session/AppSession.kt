@@ -183,6 +183,7 @@ class AppSession(context: Context) {
     private fun clear() {
         preferences.edit { clear() }
         TimetableCache.clear(appContext)
+        pl.ambif.ambify.features.home.DashboardStore(appContext).clear()
         _modules.value = null
         _state.value = SessionState.SignedOut
     }

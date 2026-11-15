@@ -15,6 +15,8 @@ import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
 import pl.ambif.ambify.shared.AppPaths
+import pl.ambif.ambify.shared.Dashboard
+import pl.ambif.ambify.shared.DashboardPaths
 import pl.ambif.ambify.shared.AppRelease
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.ChangePasswordRequest
@@ -145,6 +147,9 @@ class ServerApi(
     suspend fun signOutDevice(id: String) = send("DELETE", "${AccountPaths.SESSIONS}/$id", null, auth = true)
     suspend fun moduleOrder(): ModuleOrder = get(AccountPaths.MODULE_ORDER)
     suspend fun saveModuleOrder(order: ModuleOrder) = send("PUT", AccountPaths.MODULE_ORDER, json.encodeToString(order), auth = true)
+
+    suspend fun dashboard(): Dashboard = get(DashboardPaths.DASHBOARD)
+    suspend fun saveDashboard(dashboard: Dashboard) = send("PUT", DashboardPaths.DASHBOARD, json.encodeToString(dashboard), auth = true)
 
     suspend fun family(): Family = get(AccountPaths.FAMILY)
     suspend fun renameCommunity(name: String) = send("PUT", AccountPaths.FAMILY, json.encodeToString(CreateCommunityRequest(name)), auth = true)

@@ -113,6 +113,9 @@ Business model (2026-10-27, owner's decision): anyone can found a community. The
 - [x] Extra activities: for one or more students, recurrence (every N days/weeks/months/years, weekdays, end, skipping days off), reminders per person (notification or alarm), "Dodaj do kalendarza" with a choice of calendars (works with Stage 6)
 - [x] Offline copy of the timetable: the phone keeps the server's range (a week back to four ahead) and shows it without a connection, read-only ("Bez połączenia z serwerem · plan z …")
 - [ ] Later: adding and changing extra activities offline (sent when the connection is back)
+- [x] Dashboard widget "Lekcje" (v0.6.8): next lessons of one or more people (person switch), footer with today's end of lessons or the next school day's start, "+ N kolejne" expands the day, height Mała/Średnia/Duża, ⋮ settings, gold arrow opens the module
+- [x] Dashboard (v0.6.8): "Dodaj widget" by module, own layout per person and community (server + phone copy, works offline), hold and drag to move (full width or half, left/right), delete with undo
+- [ ] Later: more Timetable widgets (e.g. extra activities today)
 
 ### v0.6.1 — Download and self-update from the home server
 
@@ -126,6 +129,9 @@ Business model (2026-10-27, owner's decision): anyone can found a community. The
 One list engine for several list types: shopping, tasks, deadlines (a new type is configuration, not new code).
 
 - [ ] Basic: shared lists of every type, items with quantity or date, who added it, check off
+- [ ] Units: szt., kg, dag, l, opak., siatka, zgrzewka + own units; optional pack size; the unit remembered per product — all shared by the whole community, on every list
+- [ ] Dashboard widgets of Lists
+- [x] (done in v0.6.8, Stage 4) Dashboard: "Dodaj widget" → Widgety screen grouped by module; a chosen widget stays on the Dashboard, the button moves below the widgets. Each person has their own Dashboard, separate in every community. A widget with a setting (whose timetable, which list) can be added many times, each copy with a different setting; a widget without settings once. Widgets of a premium module without premium are shown locked ("Kup premium")
 - [ ] Offline first: local database + synchronization (reused by later modules)
 - [ ] Premium features: reminders (`LISTS_REMINDERS`), shopping list generated from planned meals (`LISTS_MEAL_PLAN`), moving a task to Missions (`LISTS_TO_MISSIONS`)
 
@@ -145,6 +151,10 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 ### Stage 8 — Children as users (v0.10)
 
 - [x] Done differently in Stage 4: children are Users with their own e-mail; what they may do is set in the permission table (e.g. a role "Dziecko")
+
+### Later — Android home screen widgets
+
+- [ ] The Dashboard widgets also as Android widgets on the phone's home screen (outside the app) — separate stage, mock-ups first
 
 ### Later — Quick unlock
 
@@ -168,6 +178,7 @@ Other school diaries (after v1.0 of the current scope): Librus Synergia first, t
 
 Every new module is delivered the same way:
 
+0. Mock-ups for the owner's approval — the module's screens **and at least one Dashboard widget** (more only when each one is really useful: quality, not quantity). A module without a widget is not finished.
 1. `:shared` — data models, module key, permissions.
 2. `:server` — tables (migration), API routes, permission checks, tests.
 3. `:app` — `features/<module>/{data, domain, ui}`, navigation entry, line icon.

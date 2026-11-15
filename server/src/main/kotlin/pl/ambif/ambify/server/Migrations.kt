@@ -16,6 +16,7 @@ object Migrations {
         "V004__avatars.sql",
         "V005__roles_timetable.sql",
         "V006__school_diary.sql",
+        "V007__dashboard.sql",
     )
 
     /** First line of a file that rebuilds a table: it runs with foreign keys off, checked before commit. */

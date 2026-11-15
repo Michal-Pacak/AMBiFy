@@ -23,6 +23,8 @@ import pl.ambif.ambify.shared.AccountRules
 import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.Avatar
+import pl.ambif.ambify.shared.Dashboard
+import pl.ambif.ambify.shared.Dashboards
 import pl.ambif.ambify.shared.AvatarShape
 import pl.ambif.ambify.shared.Avatars
 import pl.ambif.ambify.shared.ChangePasswordRequest
@@ -406,6 +408,33 @@ class AccountService(
         Memberships.selectAll()
             .where { (Memberships.userId eq session.userId) and (Memberships.organizationId eq membership.organizationId) }
             .single()[Memberships.moduleOrder]?.split(',')?.filter { it.isNotBlank() } ?: emptyList()
+    }
+
+    /** The caller's own Dashboard in the current community; empty for someone without a community. */
+    fun dashboard(session: UserSession): Dashboard = transaction(database) {
+        val membership = membershipOrNull(session) ?: return@transaction Dashboard()
+        Memberships.selectAll()
+            .where { (Memberships.userId eq session.userId) and (Memberships.organizationId eq membership.organizationId) }
+            .single()[Memberships.dashboard]
+            ?.let { runCatching { dashboardJson.decodeFromString<Dashboard>(it) }.getOrNull() } ?: Dashboard()
+    }
+
+    /** Saves the whole Dashboard (the app sends it after every change); short ids and keys only. */
+    fun saveDashboard(session: UserSession, dashboard: Dashboard) {
+        val token = Regex("[A-Za-z0-9_-]{1,64}")
+        val cleaned = Dashboards.normalized(
+            Dashboard(
+                dashboard.widgets
+                    .filter { it.id.matches(token) && it.type.matches(token) }
+                    .map { it.copy(people = it.people.filter { p -> p.matches(token) }.distinct().take(20)) },
+            ),
+        )
+        transaction(database) {
+            val membership = membershipOrNull(session) ?: return@transaction
+            Memberships.update({ (Memberships.userId eq session.userId) and (Memberships.organizationId eq membership.organizationId) }) {
+                it[Memberships.dashboard] = dashboardJson.encodeToString(cleaned)
+            }
+        }
     }
 
     fun saveModuleOrder(session: UserSession, routes: List<String>) {
@@ -983,3 +1012,5 @@ internal object Validate {
         }
     }
 }
+
+private val dashboardJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }

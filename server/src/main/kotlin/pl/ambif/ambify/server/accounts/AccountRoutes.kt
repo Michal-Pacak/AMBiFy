@@ -16,6 +16,8 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import pl.ambif.ambify.shared.AccountPaths
+import pl.ambif.ambify.shared.Dashboard
+import pl.ambif.ambify.shared.DashboardPaths
 import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
@@ -90,6 +92,11 @@ fun Route.accountRoutes(service: AccountService) {
         get(AccountPaths.SESSIONS) { call.respond(service.devices(call.session())) }
         delete("${AccountPaths.SESSIONS}/{id}") {
             service.signOutDevice(call.session(), call.parameters["id"]!!)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        get(DashboardPaths.DASHBOARD) { call.respond(service.dashboard(call.session())) }
+        put(DashboardPaths.DASHBOARD) {
+            service.saveDashboard(call.session(), call.receive<Dashboard>())
             call.respond(HttpStatusCode.NoContent)
         }
         get(AccountPaths.MODULE_ORDER) { call.respond(ModuleOrder(service.moduleOrder(call.session()))) }

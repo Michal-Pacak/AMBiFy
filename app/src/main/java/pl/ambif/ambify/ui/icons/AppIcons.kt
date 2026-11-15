@@ -69,6 +69,32 @@ object AppIcons {
         }
     }
 
+    val Plus: ImageVector by lazy {
+        line("Plus") {
+            moveTo(12f, 5f)
+            lineTo(12f, 19f)
+            moveTo(5f, 12f)
+            lineTo(19f, 12f)
+        }
+    }
+
+    val Close: ImageVector by lazy {
+        line("Close") {
+            moveTo(6f, 6f)
+            lineTo(18f, 18f)
+            moveTo(18f, 6f)
+            lineTo(6f, 18f)
+        }
+    }
+
+    val Up: ImageVector by lazy {
+        line("Up") {
+            moveTo(6f, 15f)
+            lineTo(12f, 9f)
+            lineTo(18f, 15f)
+        }
+    }
+
     val More: ImageVector by lazy {
         ImageVector.Builder("More", 24.dp, 24.dp, 24f, 24f).apply {
             for (y in listOf(5f, 12f, 19f)) {
