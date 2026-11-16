@@ -56,17 +56,10 @@ internal fun CalendarNavIcon() {
     }
 }
 
+/** The settings gear ([AppIcons.Gear]), the same in the module bar, the Timetable header and on widgets. */
 @Composable
-internal fun SettingsNavIcon() = LineNavIcon {
-    // Gear: a ring with eight teeth around a hub.
-    line { addOval(androidx.compose.ui.geometry.Rect(0.22f, 0.22f, 0.78f, 0.78f)) }
-    line { addOval(androidx.compose.ui.geometry.Rect(0.4f, 0.4f, 0.6f, 0.6f)) }
-    repeat(8) { i ->
-        val angle = Math.toRadians(i * 45.0)
-        val (cos, sin) = kotlin.math.cos(angle).toFloat() to kotlin.math.sin(angle).toFloat()
-        line { moveTo(0.5f + 0.28f * cos, 0.5f + 0.28f * sin); lineTo(0.5f + 0.42f * cos, 0.5f + 0.42f * sin) }
-    }
-}
+internal fun SettingsNavIcon() =
+    androidx.compose.material3.Icon(pl.ambif.ambify.ui.icons.AppIcons.Gear, contentDescription = null, modifier = Modifier.size(22.dp))
 
 /** Draws stroked paths given in unit coordinates (0..1 of the icon size). */
 private class LineIconPainter(

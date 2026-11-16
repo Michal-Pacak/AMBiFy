@@ -831,15 +831,22 @@ class AccountService(
         return code
     }
 
+    /**
+     * A new signed-in device. The person's older sessions with the same device name go: a phone that lost its
+     * sign-in (reinstall, cleared data) would otherwise stay on the device list several times (owner's decision
+     * 2026-11-16; two phones with the very same name sign each other out).
+     */
     private fun startSession(userId: String, deviceName: String): Tokens {
         val now = clock()
         val sessionId = Secrets.id()
         val refreshToken = Secrets.token()
+        val name = deviceName.trim().take(60).ifBlank { "Telefon" }
+        Sessions.deleteWhere { (Sessions.userId eq userId) and (Sessions.deviceName eq name) }
         Sessions.insert {
             it[id] = sessionId
             it[Sessions.userId] = userId
             it[tokenHash] = Secrets.sha256(refreshToken)
-            it[Sessions.deviceName] = deviceName.trim().take(60).ifBlank { "Telefon" }
+            it[Sessions.deviceName] = name
             it[createdAt] = now
             it[lastUsedAt] = now
         }

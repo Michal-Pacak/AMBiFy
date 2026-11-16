@@ -182,6 +182,19 @@ class AccountsTest {
     }
 
     @Test
+    fun signingInAgainOnTheSamePhoneReplacesItsOldEntry() = accountsApp {
+        val first = client.setupOwner()
+        val tablet: Tokens = client.send("POST", AuthPaths.LOGIN, LoginRequest("michal@pacak.waw.pl", "sekretne1", "Tablet")).body()
+        // The same phone signs in again (e.g. after a reinstall): its old entry goes, the tablet stays.
+        val again: Tokens = client.send("POST", AuthPaths.LOGIN, LoginRequest("michal@pacak.waw.pl", "sekretne1", " S24 ")).body()
+
+        val devices: List<Device> = client.send<Unit>("GET", AccountPaths.SESSIONS, token = again.accessToken).body()
+        assertEquals(listOf("S24", "Tablet"), devices.map { it.name }.sorted())
+        assertEquals(HttpStatusCode.Unauthorized, client.send<Unit>("GET", AccountPaths.ME, token = first.accessToken).status)
+        assertEquals(HttpStatusCode.OK, client.send<Unit>("GET", AccountPaths.ME, token = tablet.accessToken).status)
+    }
+
+    @Test
     fun devicesRolesAndModuleOrder() = accountsApp {
         val phone = client.setupOwner()
         val tablet: Tokens = client.send("POST", AuthPaths.LOGIN, LoginRequest("michal@pacak.waw.pl", "sekretne1", "Tablet")).body()

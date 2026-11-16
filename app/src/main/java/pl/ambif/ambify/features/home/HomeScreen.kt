@@ -34,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
@@ -59,13 +58,13 @@ import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
 
-/** The settings window of a widget: a new one (from the picker) or one on the Dashboard (from its ⋮). */
+/** The settings window of a widget: a new one (from the picker) or one on the Dashboard (from its gear). */
 private data class Editing(val widget: DashboardWidget, val isNew: Boolean)
 
 /**
  * Pulpit: each person's own widgets in the current community (kept on the server, with a copy on the phone).
  * Empty → "Dodaj widget"; the button then stays below the widgets. Hold a widget and drag it to move it;
- * ⋮ on a widget opens its settings. Widgets of a module switched off are hidden (and come back with it).
+ * The gear on a widget opens its settings. Widgets of a module switched off are hidden (and come back with it).
  */
 @Composable
 fun HomeScreen(
@@ -169,13 +168,6 @@ fun HomeScreen(
                         }
                     } else {
                         AddWidgetButton { picker = true }
-                        Text(
-                            "Przytrzymaj widget i przeciągnij, żeby go przenieść · ⋮ to ustawienia widgetu",
-                            fontSize = 12.sp,
-                            color = Luxury.TextMuted,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
                     }
                 },
             ) { widget, interactive, modifier ->

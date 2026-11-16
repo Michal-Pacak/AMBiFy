@@ -131,13 +131,9 @@ private fun ModuleWidgetsPopup(
     val premium = types.filter { it.premium != null }
     LuxuryPopup(onDismiss = onDismiss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(module.label, fontSize = 20.sp, fontWeight = FontWeight.Medium)
-                Text("widgety modułu", fontSize = 12.sp, color = Luxury.TextMuted)
-            }
+            Text(module.label, fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = "Zamknij", tint = Luxury.TextMuted) }
         }
-        LuxurySectionTitle("Widgety")
         standard.forEachIndexed { index, type ->
             val there = !type.multi && onDashboard.any { it.type == type.key }
             WidgetRow(type, locked = false, there = there, onAdd = { onAdd(type) })
@@ -160,21 +156,44 @@ private fun ModuleWidgetsPopup(
 
 @Composable
 private fun WidgetRow(type: WidgetType, locked: Boolean, there: Boolean, onAdd: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    // The widget's name in the gold section style, its width in brackets; then the description and a small "Dodaj" on the right.
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(type.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (locked) Luxury.Disabled else Luxury.Text)
-            Text(type.description, fontSize = 12.sp, color = Luxury.TextMuted)
-            val meta = listOfNotNull(if (type.half) "pół szerokości" else "cała szerokość", "można dodać kilka".takeIf { type.multi })
-            Text(meta.joinToString(" · "), fontSize = 11.sp, color = Luxury.GoldText)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            LuxurySectionTitle(type.label)
+            Text(if (type.half) "(pół szerokości)" else "(cała szerokość)", fontSize = 11.sp, color = Luxury.TextMuted)
+            if (locked) Text("🔒", fontSize = 14.sp)
         }
-        when {
-            locked -> Text("🔒", fontSize = 18.sp)
-            there -> Text("Na pulpicie", fontSize = 12.sp, color = Ok)
-            else -> FramedButton("Dodaj", onClick = onAdd)
+        Text(type.description, fontSize = 14.sp, color = if (locked) Luxury.Disabled else Luxury.Text)
+        // "Dodaj" (or "Na pulpicie") on the right, under the description.
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+            when {
+                locked -> Unit
+                there -> Text("Na pulpicie", fontSize = 12.sp, color = Ok)
+                else -> SmallAddButton(onAdd)
+            }
+        }
+    }
+}
+
+/** A small outlined "Dodaj" under the widget's description (still a 48 dp touch target). */
+@Composable
+private fun SmallAddButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, Luxury.GoldLink, RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.Plus, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(14.dp))
+            Text(" Dodaj", fontSize = 13.sp, color = Luxury.GoldText)
         }
     }
 }
@@ -188,7 +207,7 @@ private fun widgetsWord(count: Int) = when {
 /**
  * Settings of a "Lekcje" widget: whose lessons (several = a switch in the widget), the height, a preview; for a
  * widget already on the Dashboard also moving it without dragging and removing it. Opened by "Dodaj" in the picker
- * and by ⋮ on the widget — the same window.
+ * and by the gear on the widget — the same window.
  */
 @Composable
 internal fun LessonsSettings(

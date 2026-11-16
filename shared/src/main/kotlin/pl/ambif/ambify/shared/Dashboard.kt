@@ -24,7 +24,7 @@ enum class WidgetType(
 ) {
     LESSONS(
         "lessons", ModuleId.TIMETABLE, "Lekcje",
-        "najbliższe lekcje i godzina końca; po lekcjach start w najbliższy dzień szkolny",
+        "Bieżąca lekcja, kolejne i godzina końca – zawsze pod ręką.",
         multi = true,
     );
 

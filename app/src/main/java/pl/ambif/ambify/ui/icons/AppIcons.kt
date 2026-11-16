@@ -95,6 +95,30 @@ object AppIcons {
         }
     }
 
+    /** Settings: a gear with six soft teeth around a hub (version B, approved 16.11.2026). */
+    val Gear: ImageVector by lazy {
+        line("Gear") {
+            val teeth = 6
+            val (outer, inner) = 10.4f to 7.7f
+            val (top, base) = 0.24 to 0.37 // half-width of a tooth at its top and base, in radians
+            fun x(radius: Float, angle: Double) = 12f + radius * kotlin.math.cos(angle).toFloat()
+            fun y(radius: Float, angle: Double) = 12f + radius * kotlin.math.sin(angle).toFloat()
+            for (i in 0 until teeth) {
+                val angle = 2 * Math.PI * i / teeth - Math.PI / 2
+                if (i == 0) moveTo(x(inner, angle - base), y(inner, angle - base)) else lineTo(x(inner, angle - base), y(inner, angle - base))
+                lineTo(x(outer, angle - top), y(outer, angle - top))
+                lineTo(x(outer, angle + top), y(outer, angle + top))
+                lineTo(x(inner, angle + base), y(inner, angle + base))
+                val next = 2 * Math.PI * (i + 1) / teeth - Math.PI / 2 - base
+                arcTo(inner, inner, 0f, false, true, x(inner, next), y(inner, next))
+            }
+            close()
+            moveTo(15.2f, 12f)
+            arcTo(3.2f, 3.2f, 0f, true, true, 8.8f, 12f)
+            arcTo(3.2f, 3.2f, 0f, true, true, 15.2f, 12f)
+        }
+    }
+
     val More: ImageVector by lazy {
         ImageVector.Builder("More", 24.dp, 24.dp, 24f, 24f).apply {
             for (y in listOf(5f, 12f, 19f)) {

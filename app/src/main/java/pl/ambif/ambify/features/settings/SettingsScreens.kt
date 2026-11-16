@@ -70,7 +70,6 @@ fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onO
     val session = LocalAppSession.current
     val state by session.state.collectAsState()
     val me = (state as? SessionState.SignedIn)?.me ?: return
-    val cardAnimations by session.device.cardAnimations.collectAsState()
 
     SettingsLayout(title = "Ustawienia", onBack = null) {
         HubCard(onClick = onOpenAccount, title = "Konto") {
@@ -85,10 +84,7 @@ fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onO
         HubCard(onClick = onOpenCommunities, title = "Społeczności") {
             Text(me.familyName ?: "Brak społeczności", style = MaterialTheme.typography.titleMedium)
             Text(
-                listOfNotNull(
-                    me.role?.let { "bieżąca · ${it.label()}" },
-                    "razem ${me.communities.size} ${communitiesWord(me.communities.size)}",
-                ).joinToString(" · "),
+                "Dostępne: ${me.communities.size}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -96,7 +92,7 @@ fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onO
         HubCard(onClick = onOpenApp, title = "Aplikacja") {
             Text("AMBiFy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Animacje kart: ${if (cardAnimations) "włączone" else "wyłączone"} · ten telefon",
+                "Ustawienia konta i aplikacji",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -259,7 +255,6 @@ fun AppSettingsScreen(onBack: () -> Unit) {
 /** The person's own icon in the current community. */
 internal fun Me.myAvatar() = communities.firstOrNull { it.id == communityId }?.avatar
 
-private fun communitiesWord(count: Int) = if (count == 1) "społeczność" else "społeczności"
 
 @Composable
 internal fun SettingsLayout(

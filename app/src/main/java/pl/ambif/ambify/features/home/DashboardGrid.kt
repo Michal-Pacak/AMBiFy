@@ -106,7 +106,7 @@ internal fun dropTarget(rows: List<GridRow>, bounds: Map<String, Rect>, pointer:
  * The Dashboard's widgets in rows, scrolled as one page with [header] above and [footer] below. Hold a widget
  * and drag it: the others move aside and the gold place under the finger shows where it lands — the whole width,
  * or a half (left or right; the other half may stay empty). Holding is only for moving: the controls of a widget
- * (⋮ = settings, the gold mark) work with a tap. [content] draws a widget; `interactive = false` for the picture
+ * (the gear = settings, the gold mark) work with a tap. [content] draws a widget; `interactive = false` for the picture
  * that follows the finger.
  */
 @Composable

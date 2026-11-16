@@ -5,14 +5,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,7 +37,6 @@ import kotlinx.coroutines.launch
 import pl.ambif.ambify.core.network.ServerError
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
-import pl.ambif.ambify.features.account.AccountCard
 import pl.ambif.ambify.features.account.AccountDialog
 import pl.ambif.ambify.features.account.ButtonsRow
 import pl.ambif.ambify.features.account.ConfirmDialog
@@ -46,8 +48,10 @@ import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Mode
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
+import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryCardShape
 import pl.ambif.ambify.ui.theme.LuxuryDivider
+import pl.ambif.ambify.ui.theme.LuxuryOpenButton
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
@@ -69,6 +73,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
     val selected = me.communities.firstOrNull { it.id == selectedId }
     var dialog by remember { mutableStateOf<AccountDialog?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var ownerCannotLeave by remember { mutableStateOf(false) }
 
     fun act(done: String?, block: suspend () -> Unit) {
         scope.launch {
@@ -82,18 +87,10 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
     }
 
     SettingsLayout(title = "Społeczności", onBack = onBack, notice = notice) {
-        AccountCard("Moje społeczności") {
-            me.communities.forEachIndexed { index, community ->
-                if (index > 0) LuxuryDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 64.dp)
-                        // No grey highlight inside a Luxury card: the card itself answers the touch.
-                        .clickable(interactionSource = null, indication = null, onClickLabel = "Pokaż akcje: ${community.name}") { selectedId = community.id },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
+        // Each community is its own card: it only floats, the gold button opens its actions.
+        me.communities.forEach { community ->
+            LuxuryCard(contentPadding = PaddingValues(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     PersonAvatar(me.name, community.avatar, size = 44.dp)
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(community.name, style = MaterialTheme.typography.titleMedium)
@@ -103,18 +100,13 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                             if (community.id == me.communityId) CurrentBadge()
                         }
                     }
-                    LuxuryOpenMark(size = 36.dp)
+                    LuxuryOpenButton("Pokaż akcje: ${community.name}", onClick = { selectedId = community.id })
                 }
             }
-            if (me.communities.isEmpty()) {
-                Text("Nie należysz do żadnej społeczności.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
         }
-        Text(
-            "Przy każdej społeczności jest Twoja ikona w niej. Gdy ktoś ma te same inicjały, ikony różnią się kształtem.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (me.communities.isEmpty()) {
+            Text("Nie należysz do żadnej społeczności.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Column {
             ButtonsRow {
                 FilledTonalButton(onClick = {
@@ -193,10 +185,23 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
             },
             onLeave = {
                 selectedId = null
+                if (community.role.owner) {
+                    ownerCannotLeave = true
+                    return@CommunityPopup
+                }
                 dialog = AccountDialog.Confirm("Opuścić społeczność ${community.name}?", "Opuść") {
                     act("Nie należysz już do społeczności ${community.name}.") { session.leaveCommunity(community.id) }
                 }
             },
+        )
+    }
+
+    if (ownerCannotLeave) {
+        AlertDialog(
+            onDismissRequest = { ownerCannotLeave = false },
+            title = { Text("Owner nie może opuścić społeczności") },
+            text = { Text("Przekazanie roli Ownera innej osobie jest w planach.") },
+            confirmButton = { TextButton(onClick = { ownerCannotLeave = false }) { Text("OK") } },
         )
     }
 
@@ -265,18 +270,9 @@ private fun CommunityPopup(
                 LuxuryDivider()
                 PopupAction("Ustaw jako bieżącą", color = Luxury.GoldText, arrow = false, onClick = onMakeCurrent)
             }
-            if (owner) {
-                LuxuryDivider()
-                Text(
-                    "Owner nie może opuścić społeczności. Przekazanie roli Ownera — w planach.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Luxury.Disabled,
-                    modifier = Modifier.padding(vertical = 10.dp),
-                )
-            } else {
-                LuxuryDivider()
-                PopupAction("Opuść społeczność", color = Color(0xFFFF8A80), arrow = false, onClick = onLeave)
-            }
+            // Also for the Owner: the tap explains why an Owner cannot leave.
+            LuxuryDivider()
+            PopupAction("Opuść społeczność", color = Color(0xFFFF8A80), arrow = false, onClick = onLeave)
         }
     }
 }

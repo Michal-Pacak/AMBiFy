@@ -86,7 +86,7 @@ private val ChipBorder = Color(0xFF3A3A40)
 /**
  * "Lekcje": the coming lessons of one person and, at the bottom, always a time: the end of lessons today, or after
  * lessons the start on the next school day. Several people = a switch of people (the choice is remembered on this
- * phone). Only its controls answer a touch (person, ⋮ = settings, the gold mark = Plan lekcji, "+ N kolejne" =
+ * phone). Only its controls answer a touch (person, the gear = settings, the gold mark = Plan lekcji, "+ N kolejne" =
  * the whole day); elsewhere the card only floats. [interactive] false: a picture of it (dragged, preview).
  */
 @Composable
@@ -120,7 +120,7 @@ internal fun LessonsWidget(
             }.joinToString(" · ")
             LuxurySectionTitle(title, modifier = Modifier.weight(1f))
             IconButton(onClick = onSettings, enabled = interactive) {
-                Icon(AppIcons.More, contentDescription = "Ustawienia widgetu Lekcje", tint = Luxury.TextMuted, modifier = Modifier.size(20.dp))
+                Icon(AppIcons.Gear, contentDescription = "Ustawienia widgetu Lekcje", tint = Luxury.TextMuted, modifier = Modifier.size(20.dp))
             }
             if (interactive) LuxuryOpenButton("Otwórz Plan lekcji", onOpen) else Box(Modifier.size(44.dp))
             Spacer(Modifier.width(4.dp))
