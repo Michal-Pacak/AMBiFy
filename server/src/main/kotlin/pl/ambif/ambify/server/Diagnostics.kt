@@ -26,6 +26,9 @@ class Diagnostics(private val checks: List<DiagnosticCheck>) {
         // Oldest app versionCode the server still works with; raise it when the API changes incompatibly.
         const val MIN_APP_VERSION_CODE = 5
 
+        /** Checks shown to requests from outside home (see [ApiHeaders.PUBLIC]). */
+        val PUBLIC_CHECKS = setOf("version", "database", "migrations")
+
         private const val GB = 1024L * 1024 * 1024
 
         fun platform(database: Database, config: ServerConfig, serverVersion: String) = Diagnostics(

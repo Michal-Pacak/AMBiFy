@@ -1,1 +1,2 @@
-Odświeżony wygląd: widgety, ustawienia i społeczności
+AMBiFy działa także poza domem: w sklepie, w szkole, na LTE i na każdym Wi-Fi
+Połączenie z serwerem jest teraz szyfrowane (HTTPS)

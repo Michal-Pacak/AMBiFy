@@ -99,7 +99,10 @@ fun Application.module(
             )
         }
         get(ApiPaths.DIAGNOSTICS) {
-            call.respond(DiagnosticsResponse(serverVersion(), diagnostics.run(call.appInfo())))
+            val results = diagnostics.run(call.appInfo())
+            // From outside home only what the app needs to tell "works / update the app"; disks, NAS and backups stay home.
+            val shown = if (call.request.headers[ApiHeaders.PUBLIC] == "1") results.filter { it.id in Diagnostics.PUBLIC_CHECKS } else results
+            call.respond(DiagnosticsResponse(serverVersion(), shown))
         }
     }
 }

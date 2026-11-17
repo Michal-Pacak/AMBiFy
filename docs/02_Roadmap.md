@@ -133,7 +133,9 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 - [ ] Dashboard widgets of Lists
 - [x] (done in v0.6.8, Stage 4) Dashboard: "Dodaj widget" → Widgety screen grouped by module; a chosen widget stays on the Dashboard, the button moves below the widgets. Each person has their own Dashboard, separate in every community. A widget with a setting (whose timetable, which list) can be added many times, each copy with a different setting; a widget without settings once. Widgets of a premium module without premium are shown locked ("Kup premium")
 - [ ] Offline first: local database + synchronization (reused by later modules)
-- [ ] Premium features: reminders (`LISTS_REMINDERS`), shopping list generated from planned meals (`LISTS_MEAL_PLAN`), moving a task to Missions (`LISTS_TO_MISSIONS`)
+- [ ] Conflicts (owner's decision 2026-11-16): when two people change the same item at the same time, the list's creator gets a notification and decides: keep one version, or "Wprowadź inne" (both versions go away; the creator may type a new value, leave it empty or remove the item). Until then the later version is shown with "do rozstrzygnięcia"; after 48 h the Owner/Admin decides. Checking off and changes of different fields are never conflicts. Marker: red outline "Konflikt" with a warning triangle, right of a short name, under a long name (mock-up approved 2026-11-16: Lists canvas, board 9; check the look on the phone in TEST)
+- [ ] Premium features: reminders (`LISTS_REMINDERS`)
+- [ ] Shown locked with "wkrótce" (owner's decision 2026-11-16), built together with their modules: shopping list generated from planned meals (`LISTS_MEAL_PLAN`, needs a meal plan), moving a task to Missions (`LISTS_TO_MISSIONS`, needs Missions)
 
 ### Stage 6 — Calendar v1 (v0.8)
 
@@ -163,8 +165,11 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 
 ### Stage 9 — Access outside home (v1.0)
 
-- [ ] `ambify.pacak.waw.pl` over HTTPS, rate limiting, fail2ban
-- [ ] Admin panel of the NAS restricted to LAN before router ports are opened
+Moved forward (owner's decision 2026-11-16): released as **v0.6.10, before Stage 5 Lists**, so changes made away from home reach the server at once and list conflicts stay rare. Steps: DNS A `ambify.pacak.waw.pl` → home IP (owner, cyberFolks); ports 443 and 80 forwarded on the Archer C6 (owner); Let's Encrypt certificate and a separate nginx block that exposes only the AMBiFy API (owner runs the sudo commands); login rate limit, fail2ban, account lockout; app switched to `https://ambify.pacak.waw.pl` (phones take it over the self-updater at home); check from LTE that the app works and the OMV panel / NAS are not reachable.
+
+- [x] (v0.6.10) `ambify.pacak.waw.pl` over HTTPS (Let's Encrypt, renews itself), rate limiting, fail2ban; `/diagnostics` from outside shows no disk/NAS/backup details
+- [x] (v0.6.10) Admin panel of the NAS restricted to LAN before router ports are opened
+- [ ] Offline copy of the timetable: AMBiFy TEST on LTE shows "connect the timetable" instead of the saved copy (found 2026-11-17)
 
 ### Later
 

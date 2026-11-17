@@ -9,6 +9,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
@@ -67,6 +68,21 @@ class ServerTest {
         assertEquals(CheckStatus.ERROR, checks.getValue("version").status)
         assertEquals(CheckStatus.OK, checks.getValue("database").status)
         assertEquals(CheckStatus.OK, checks.getValue("migrations").status)
+    }
+
+    @Test
+    fun diagnosticsFromOutsideHomeHideDisksNasAndBackups() = testApplication {
+        val database = Db.open(tempDbPath())
+        val config = ServerConfig.fromEnv(mapOf("AMBIFY_DB" to tempDbPath()))
+        application { module(database, Diagnostics.platform(database, config, "test"), testTokens()) }
+
+        val home = client.get(ApiPaths.DIAGNOSTICS)
+        val outside = client.get(ApiPaths.DIAGNOSTICS) { header(ApiHeaders.PUBLIC, "1") }
+
+        val homeIds = Json.decodeFromString<DiagnosticsResponse>(home.bodyAsText()).checks.map { it.id }.toSet()
+        val outsideIds = Json.decodeFromString<DiagnosticsResponse>(outside.bodyAsText()).checks.map { it.id }.toSet()
+        assertTrue(homeIds.containsAll(setOf("disk", "nas", "backup")))
+        assertEquals(setOf("database", "migrations"), outsideIds)
     }
 
     @Test

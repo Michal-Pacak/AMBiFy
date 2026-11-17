@@ -13,6 +13,8 @@ object ApiHeaders {
     const val APP_VERSION_NAME = "X-AMBiFy-App-Version-Name"
     /** Id of the community the request is about; without it the server uses the person's first community. */
     const val COMMUNITY = "X-AMBiFy-Community"
+    /** Set to "1" by nginx on requests from outside home (ambify.pacak.waw.pl); the app never sends it. */
+    const val PUBLIC = "X-AMBiFy-Public"
 }
 
 object HealthStatus {

@@ -16,14 +16,14 @@ android {
         minSdk = 31
         targetSdk = 37
         // -Pambify.versionCode/-Pambify.versionName only for trying out updates on AMBiFy TEST (publish-app.sh).
-        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 17
-        versionName = project.findProperty("ambify.versionName") as String? ?: "0.6.9"
+        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 18
+        versionName = project.findProperty("ambify.versionName") as String? ?: "0.6.10"
 
-        // Fixed home server address; changed only by an app update, never by the user.
+        // Fixed server address (HTTPS, works at home and outside since v0.6.10); changed only by an app update.
         // -Pambify.serverUrl=… builds a separate test app ("AMBiFy TEST", own data) against a test
         // server, installed next to the real app so tests never touch the family's sign-in.
         val testServerUrl = project.findProperty("ambify.serverUrl") as String?
-        buildConfigField("String", "SERVER_URL", "\"${testServerUrl ?: "http://192.168.1.122:8090"}\"")
+        buildConfigField("String", "SERVER_URL", "\"${testServerUrl ?: "https://ambify.pacak.waw.pl"}\"")
         if (testServerUrl != null) applicationIdSuffix = ".test"
         // The test app offers one-tap sign-in with the test server's demo accounts.
         buildConfigField("boolean", "TEST_LOGIN", (testServerUrl != null).toString())
