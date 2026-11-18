@@ -29,6 +29,15 @@ object TimetableCache {
     fun load(context: Context, communityId: String, monday: String): SavedWeek? =
         File(dir(context, communityId), "$monday.json").takeIf { it.exists() }
             ?.let { runCatching { json.decodeFromString<SavedWeek>(it.readText()) }.getOrNull() }
+            ?.let(::withLessonsConnected)
+
+    /**
+     * A copy with lessons in it came from a connected diary, even when its flag says otherwise (a copy saved by an
+     * older version, before the flag existed): offline it must show the plan, never "connect the timetable".
+     */
+    internal fun withLessonsConnected(saved: SavedWeek): SavedWeek =
+        if (saved.week.diaryConnected || saved.week.lessons.values.all { it.isEmpty() }) saved
+        else saved.copy(week = saved.week.copy(diaryConnected = true))
 
     fun clear(context: Context) {
         File(context.filesDir, DIR).deleteRecursively()

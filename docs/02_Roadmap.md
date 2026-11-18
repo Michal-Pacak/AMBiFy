@@ -169,6 +169,7 @@ Moved forward (owner's decision 2026-11-16): released as **v0.6.10, before Stage
 
 - [x] (v0.6.10) `ambify.pacak.waw.pl` over HTTPS (Let's Encrypt, renews itself), rate limiting, fail2ban; `/diagnostics` from outside shows no disk/NAS/backup details
 - [x] (v0.6.10) Admin panel of the NAS restricted to LAN before router ports are opened
+- [x] (v0.6.11) Offline copy of the timetable was never written: the app module had no kotlinx-serialization plugin (`SavedWeek`, `PlannedReminder` had no serializer, the error was swallowed; reminders of extra activities were lost after a phone restart). Plugin added + test. Offline the plan says "no connection" once, in a status bar (Komunikaty canvas)
 - [ ] Offline copy of the timetable: AMBiFy TEST on LTE shows "connect the timetable" instead of the saved copy (found 2026-11-17)
 
 ### Later

@@ -84,6 +84,8 @@ import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.navigation.SettingsNavIcon
 import pl.ambif.ambify.ui.theme.Luxury
+import pl.ambif.ambify.ui.components.MessageBar
+import pl.ambif.ambify.ui.components.MessageKind
 import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryPopup
@@ -126,6 +128,7 @@ fun TimetableScreen(resetKey: Int = 0) {
     var week by remember { mutableStateOf<TimetableWeek?>(null) }
     var members by remember { mutableStateOf<List<Member>>(emptyList()) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var noticeKind by remember { mutableStateOf(MessageKind.SUCCESS) }
     var lesson by remember { mutableStateOf<Pair<Student, Lesson>?>(null) }
     var dialog by remember { mutableStateOf<AccountDialog?>(null) }
 
@@ -141,8 +144,10 @@ fun TimetableScreen(resetKey: Int = 0) {
             try {
                 block()
                 notice = done
+                noticeKind = MessageKind.SUCCESS
             } catch (e: ServerError) {
                 notice = e.message
+                noticeKind = MessageKind.ERROR
             }
         }
     }
@@ -181,7 +186,12 @@ fun TimetableScreen(resetKey: Int = 0) {
         }
     }
     LaunchedEffect(Unit) {
-        act { members = api.family().members }
+        // Only the forms need the members (and they need the server anyway): no second "no connection" line here,
+        // the plan itself says when the server cannot be reached.
+        try {
+            members = api.family().members
+        } catch (_: ServerError) {
+        }
         session.refreshReminders()
     }
     LaunchedEffect(resetKey) { if (resetKey > 0) page = Page.Plan }
@@ -252,8 +262,13 @@ fun TimetableScreen(resetKey: Int = 0) {
                         }
                     }
                 }
-                offlineSince?.let { Text("Bez połączenia z serwerem · plan z ${savedTime(it)}", color = Luxury.TextMuted, fontSize = 13.sp) }
-                notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+                offlineSince?.let {
+                    MessageBar(
+                        MessageKind.STATUS, "Bez połączenia z serwerem",
+                        "Plan z ${savedTime(it)} — kopia w telefonie. Odświeży się sam, gdy wróci sieć.", icon = AppIcons.Offline,
+                    )
+                }
+                notice?.let { MessageBar(noticeKind, it, onClose = { notice = null }) }
                 if (current == null) return@Column
                 if (!current.diaryConnected) {
                     NoTimetable(
