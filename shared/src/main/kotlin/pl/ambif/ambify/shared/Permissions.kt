@@ -46,8 +46,10 @@ enum class Action(
     TIMETABLE_REMIND_OTHERS(ModuleId.TIMETABLE, "Ustawianie przypomnień", "innym osobom", Mode.ALLOWED, Mode.APPROVAL),
     TIMETABLE_LINK_VULCAN(ModuleId.TIMETABLE, "Łączenie z dziennikiem szkolnym", "eduVulcan, uczniowie i konta", Mode.ALLOWED, Mode.DENIED, approvable = false),
 
-    LISTS_CREATE(ModuleId.LISTS, "Tworzenie list", "", Mode.ALLOWED, Mode.ALLOWED),
-    LISTS_EDIT_ITEMS(ModuleId.LISTS, "Dodawanie i odhaczanie pozycji", "na wspólnych listach", Mode.ALLOWED, Mode.ALLOWED),
+    LISTS_CREATE(ModuleId.LISTS, "Tworzenie list", "", Mode.ALLOWED, Mode.ALLOWED, approvable = false),
+    // Not approvable: items are added offline and must show up at once.
+    LISTS_EDIT_ITEMS(ModuleId.LISTS, "Dodawanie i odhaczanie pozycji", "na wspólnych listach", Mode.ALLOWED, Mode.ALLOWED, approvable = false),
+    LISTS_TASKS_OTHERS(ModuleId.LISTS, "Zadania", "dla innych osób", Mode.ALLOWED, Mode.APPROVAL),
     LISTS_DELETE_OTHERS(ModuleId.LISTS, "Usuwanie cudzych list", "", Mode.ALLOWED, Mode.DENIED),
 
     CHAT_WRITE(ModuleId.COMMUNICATION, "Pisanie w czacie społeczności", "", Mode.ALLOWED, Mode.ALLOWED),

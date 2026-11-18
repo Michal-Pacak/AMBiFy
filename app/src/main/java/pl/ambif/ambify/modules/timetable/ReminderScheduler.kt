@@ -40,6 +40,8 @@ object ReminderScheduler {
     internal const val EXTRA_KIND = "kind"
     private const val PREFS = "reminders"
     private const val KEY_PLANNED = "planned"
+    /** The reminders of list items (premium LISTS_REMINDERS). */
+    internal const val SLOT_LISTS = "planned-lists"
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Asks the server for this and next week's activities and plans my reminders (the previous ones are replaced). */
@@ -75,20 +77,23 @@ object ReminderScheduler {
         else -> "za $minutes min"
     }
 
-    internal fun plan(context: Context, reminders: List<PlannedReminder>) {
+    /**
+     * Replaces the reminders of one [slot] (the timetable's, the lists' …) with [reminders]; the other slots stay.
+     */
+    internal fun plan(context: Context, reminders: List<PlannedReminder>, slot: String = KEY_PLANNED) {
         val alarms = context.getSystemService(AlarmManager::class.java)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        load(prefs.getString(KEY_PLANNED, null)).forEach { alarms.cancel(pending(context, it)) }
+        load(prefs.getString(slot, null)).forEach { alarms.cancel(pending(context, it)) }
         val now = System.currentTimeMillis()
         val ahead = reminders.filter { it.at > now }.distinctBy { it.id }
         ahead.forEach { schedule(context, alarms, it) }
-        prefs.edit { putString(KEY_PLANNED, json.encodeToString(ahead)) }
+        prefs.edit { putString(slot, json.encodeToString(ahead)) }
     }
 
-    /** After a restart of the phone: the alarms are gone, the saved list is not. */
+    /** After a restart of the phone: the alarms are gone, the saved lists are not. */
     internal fun restore(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        plan(context, load(prefs.getString(KEY_PLANNED, null)))
+        for (slot in listOf(KEY_PLANNED, SLOT_LISTS)) plan(context, load(prefs.getString(slot, null)), slot)
     }
 
     private fun load(saved: String?): List<PlannedReminder> =

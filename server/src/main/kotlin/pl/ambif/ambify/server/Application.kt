@@ -20,6 +20,8 @@ import pl.ambif.ambify.server.accounts.AccountService
 import pl.ambif.ambify.server.accounts.ApiException
 import pl.ambif.ambify.server.accounts.DemoSeed
 import pl.ambif.ambify.server.accounts.accountRoutes
+import pl.ambif.ambify.server.lists.ListService
+import pl.ambif.ambify.server.lists.listRoutes
 import pl.ambif.ambify.server.timetable.DiarySchedule
 import pl.ambif.ambify.server.timetable.TimetableService
 import pl.ambif.ambify.server.timetable.diary.Vault
@@ -71,6 +73,7 @@ fun Application.module(
 ) {
     val accounts = AccountService(database, tokens)
     val timetable = TimetableService(database, accounts, vault)
+    val lists = ListService(database, accounts)
     install(ContentNegotiation) {
         json()
     }
@@ -84,6 +87,7 @@ fun Application.module(
     routing {
         accountRoutes(accounts)
         timetableRoutes(timetable)
+        listRoutes(lists)
         releaseRoutes(releases)
         monitorRoutes(monitor)
         // Light status for the app; any failing check turns it into "degraded".

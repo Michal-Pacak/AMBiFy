@@ -25,7 +25,7 @@ Each module is documented independently and can evolve without affecting the pla
 | [Assistant](Assistant.md) | AI chat through the home AI gateway (Claude / GPT / Gemini, auto or chosen model) | ⏳ |
 | [Calendar](Calendar.md) | Shared organization calendar and personal Google Calendar sync | 🚧 |
 | [Missions](Missions.md) | Tasks, points and rewards | ⏳ |
-| [Shopping](Shopping.md) | Shared shopping lists | ⏳ |
+| [Lists](Lists.md) | Shared lists: shopping, tasks, deadlines — offline first, conflicts decided by the list's creator | 🚧 |
 | [Communication](Communication.md) | Messaging and discussions | ⏳ |
 | [Timetable](Timetable.md) | Children's school timetable (from eduVulcan) and extra activities | 🚧 |
 | School | Tests, homework and school reminders (from eduVulcan) | ⏳ |

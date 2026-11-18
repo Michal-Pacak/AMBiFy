@@ -28,6 +28,8 @@ Features are delivered in small, vertical stages. Every stage is one release (`v
 | Calendar | AMBiFy's own calendar first, Google Calendar sync later |
 | Module order | Accounts first, then Timetable, Shopping list and Calendar (changed 2026-10-24); the AI gateway (Stage 1A) is built when convenient, nothing depends on it |
 | AI | Own gateway (`llm_gateway`) over the official Claude / GPT / Gemini / Copilot CLIs running on our subscriptions; the paid API only as a fallback |
+| Messages (errors, warnings, status, success, info) | Official patterns for **every module** (owner accepted 2026-11-17): canvas "AMBiFy · Komunikaty" https://claude.ai/artifact/4h5Vr7MxKh5DubZTy7VDdC, described in [Luxury Theme → Messages](06_Luxury_Theme.md#messages). One cause = one message; each new screen uses the shared `Message` components, never its own coloured text |
+| Who sees / edits (owner's decision 2026-11-18) | In **every module** the choice "kto widzi / edytuje" offers people **and roles** of the community (e.g. "everyone with the role Dziecko"); a person who gets a chosen role later gains access automatically |
 
 ---
 
@@ -133,9 +135,34 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 - [ ] Dashboard widgets of Lists
 - [x] (done in v0.6.8, Stage 4) Dashboard: "Dodaj widget" → Widgety screen grouped by module; a chosen widget stays on the Dashboard, the button moves below the widgets. Each person has their own Dashboard, separate in every community. A widget with a setting (whose timetable, which list) can be added many times, each copy with a different setting; a widget without settings once. Widgets of a premium module without premium are shown locked ("Kup premium")
 - [ ] Offline first: local database + synchronization (reused by later modules)
+  - [x] Server (2026-11-17): migration V008, `POST /lists/sync` (the phone sends its waiting changes with its own ids — a change sent twice is done once — and gets everything newer than its rev; a list it was just added to comes whole), `POST /lists/conflicts/{id}`; tasks for others need `LISTS_TASKS_OTHERS` (User: after approval, shown "czeka na zatwierdzenie", refused = removed); recurring tasks/deadlines come back with the next date when checked; unknown units become the community's own; reminders only with `LISTS_REMINDERS`
+  - [x] App (2026-11-17): the copy and the queue of changes in a file per community (`ListRepository`, `ListsState`: server base + waiting changes on top); sync triggers and background sync come with the screens
+  - [x] Screens 1–6 and 9, units popup, offline line, background sync, conflict notifications — messages per the Komunikaty canvas (2026-11-17, TEST 0.7.0)
+- [x] After the first test (2026-11-18, TEST 0.7.0 code 27): patterns of lists of things, history, "co z listą?" at 100%, kind of a product, duplicates and "Połącz", PILNE, sorting per screen, access per role and person (canvas boards 10–18, V009)
+- [ ] 0.7.1 (premium): sub-lists unfolding in place with their own access (`LISTS_SUBITEMS`), then links, photos and files (`LISTS_ATTACHMENTS`)
+- [x] Shared message components (`ui/components/Messages.kt`, Komunikaty canvas) used by Lists and the Timetable's plan (2026-11-17)
+- [ ] The older screens (Timetable, Settings, Platform, Account, Diary, Extra form) moved over to them
 - [ ] Conflicts (owner's decision 2026-11-16): when two people change the same item at the same time, the list's creator gets a notification and decides: keep one version, or "Wprowadź inne" (both versions go away; the creator may type a new value, leave it empty or remove the item). Until then the later version is shown with "do rozstrzygnięcia"; after 48 h the Owner/Admin decides. Checking off and changes of different fields are never conflicts. Marker: red outline "Konflikt" with a warning triangle, right of a short name, under a long name (mock-up approved 2026-11-16: Lists canvas, board 9; check the look on the phone in TEST)
-- [ ] Premium features: reminders (`LISTS_REMINDERS`)
+- [ ] "Kto widzi i edytuje" (2026-11-18): besides the whole community or chosen people, also chosen roles; the server keeps roles next to people (standard for every module, see Key Decisions)
+- [x] Premium features: reminders (`LISTS_REMINDERS`) — planned on each person's phone (2026-11-17, TEST)
 - [ ] Shown locked with "wkrótce" (owner's decision 2026-11-16), built together with their modules: shopping list generated from planned meals (`LISTS_MEAL_PLAN`, needs a meal plan), moving a task to Missions (`LISTS_TO_MISSIONS`, needs Missions)
+
+### Platform Admin panel v2 (version to be set)
+
+Requested 2026-11-18; mock-ups approved first.
+
+- [ ] One tile "Społeczności": number of communities, a search field and a "Wszystkie" button
+- [ ] Search → popup with the matching communities; each shows, as today, basic/premium, number of modules and number of people; actions "Ustawienia" (open its setup) and "Dołącz"
+- [ ] The Platform Admin can join any community at any time with the highest permissions (Owner level), done by the server and written to the community's history
+
+### Dashboard header (version to be set)
+
+Requested 2026-11-18; mock-ups approved first.
+
+- [ ] "Witaj, <name>" centred; below it a small tile with the current community's name and the actions Zmień / Opuść
+- [ ] Zmień → popup with the user's communities; a search field when there are more than 10
+- [ ] Opuść → warning and confirmation (the Owner cannot leave, as in Ustawienia today)
+- [ ] Later: leaving confirmed with the phone's lock (PIN / pattern / fingerprint), see "Later — Quick unlock"
 
 ### Stage 6 — Calendar v1 (v0.8)
 
@@ -148,6 +175,7 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 
 - [ ] Structured school summaries (tests, homework, reminders) from the same eduVulcan connection
 - [ ] School screen per child
+- [ ] Packing list (2026-11-18): what to pack for the next school day (from the timetable and extra activities), built on the Lists engine as one more list type — details and mock-ups approved first
 - [ ] Dashboard: today's events, children's lessons today/tomorrow, upcoming tests
 
 ### Stage 8 — Children as users (v0.10)
@@ -162,6 +190,7 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 
 - [ ] The phone remembers the signed-in person; the app opens with a fingerprint, PIN or pattern instead of the password (a lock of the app on the phone, not a second password on the server) — layout approved first
 - [ ] Password recovery by e-mail link (needs Stage 9)
+- [ ] Sensitive actions (e.g. leaving a community from the Dashboard) confirmed with the phone's lock (PIN / pattern / fingerprint)
 
 ### Stage 9 — Access outside home (v1.0)
 
@@ -170,7 +199,6 @@ Moved forward (owner's decision 2026-11-16): released as **v0.6.10, before Stage
 - [x] (v0.6.10) `ambify.pacak.waw.pl` over HTTPS (Let's Encrypt, renews itself), rate limiting, fail2ban; `/diagnostics` from outside shows no disk/NAS/backup details
 - [x] (v0.6.10) Admin panel of the NAS restricted to LAN before router ports are opened
 - [x] (v0.6.11) Offline copy of the timetable was never written: the app module had no kotlinx-serialization plugin (`SavedWeek`, `PlannedReminder` had no serializer, the error was swallowed; reminders of extra activities were lost after a phone restart). Plugin added + test. Offline the plan says "no connection" once, in a status bar (Komunikaty canvas)
-- [ ] Offline copy of the timetable: AMBiFy TEST on LTE shows "connect the timetable" instead of the saved copy (found 2026-11-17)
 
 ### Later
 

@@ -402,7 +402,7 @@ private fun LinkRow(title: String, value: String, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateDialog(date: LocalDate, onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
+internal fun DateDialog(date: LocalDate, onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
     val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli())
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -418,7 +418,7 @@ private fun DateDialog(date: LocalDate, onDismiss: () -> Unit, onPick: (LocalDat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeDialog(title: String, time: LocalTime, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
+internal fun TimeDialog(title: String, time: LocalTime, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
     val state = rememberTimePickerState(initialHour = time.hour, initialMinute = time.minute, is24Hour = true)
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -436,7 +436,7 @@ private fun TimeDialog(title: String, time: LocalTime, onDismiss: () -> Unit, on
 
 /** How often: quick choices like a phone alarm, or own rule like Outlook (every N units, days, end). */
 @Composable
-private fun RecurrenceDialog(initial: Recurrence, start: LocalDate, onDismiss: () -> Unit, onDone: (Recurrence) -> Unit) {
+internal fun RecurrenceDialog(initial: Recurrence, start: LocalDate, onDismiss: () -> Unit, onDone: (Recurrence) -> Unit) {
     var rule by remember { mutableStateOf(initial) }
     var picking by remember { mutableStateOf(false) }
     val weekday = start.dayOfWeek.value

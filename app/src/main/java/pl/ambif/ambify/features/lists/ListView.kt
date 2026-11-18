@@ -1,0 +1,141 @@
+package pl.ambif.ambify.features.lists
+
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import java.time.LocalDate
+import pl.ambif.ambify.shared.Frequency
+import pl.ambif.ambify.shared.ListInfo
+import pl.ambif.ambify.shared.ListItem
+import pl.ambif.ambify.shared.ListType
+import pl.ambif.ambify.shared.Lists
+
+/** Board 17, the screen of lists: what "Sortuj" may do there. */
+internal enum class ListsSort(val label: String, val description: String) {
+    TYPE("Według rodzaju", "domyślnie · rzeczy, zadania, terminy"),
+    ALPHA("Alfabetycznie", "A–Ż"),
+    CHANGED("Ostatnio zmienione", "najnowsze na górze"),
+    DATE("Najbliższy termin", "z pilnymi i najbliższymi na górze"),
+    OWNER("Według twórcy", "nagłówki osób"),
+}
+
+/** Board 17, inside a list: what "Sortuj" may do there (within each section). */
+internal enum class ItemSort(val label: String, val description: String) {
+    ADDED("Kolejność dodania", "jak były dopisywane"),
+    ALPHA("Alfabetycznie", "A–Ż"),
+    PERSON("Według osoby", "dla kogo / kto dodał · nagłówki osób"),
+    ROLE("Według roli", "od najwyższej · nagłówki ról"),
+    DATE("Według terminu", "pilne, po terminie, najbliższe, bez daty"),
+}
+
+/**
+ * The person's own way of looking at the lists, kept on this phone only (never sent): sorting of each level,
+ * "Zostaw" after a list was done, pairs that are not duplicates. Reading [tick] makes a screen follow the changes.
+ */
+internal class ListPrefs(context: Context) {
+    private val prefs = context.getSharedPreferences("lists_view", Context.MODE_PRIVATE)
+    private var tick by mutableIntStateOf(0)
+
+    private fun changed() { tick++ }
+
+    fun listsSort(): ListsSort {
+        tick
+        return prefs.getString("lists_sort", null)?.let { runCatching { ListsSort.valueOf(it) }.getOrNull() } ?: ListsSort.TYPE
+    }
+
+    fun setListsSort(sort: ListsSort) { prefs.edit().putString("lists_sort", sort.name).apply(); changed() }
+
+    fun itemSort(list: ListInfo): ItemSort {
+        tick
+        return prefs.getString("sort_${list.id}", null)?.let { runCatching { ItemSort.valueOf(it) }.getOrNull() }
+            ?: if (list.type == ListType.DEADLINES) ItemSort.DATE else ItemSort.ADDED
+    }
+
+    fun setItemSort(list: ListInfo, sort: ItemSort) { prefs.edit().putString("sort_${list.id}", sort.name).apply(); changed() }
+
+    /** "Zostaw" after the list was done: not asked again until something newer than [addedAt] is added. */
+    fun doneAnswered(listId: String): Long = prefs.getLong("done_$listId", 0)
+
+    fun answerDone(listId: String, addedAt: Long) { prefs.edit().putLong("done_$listId", addedAt).apply(); changed() }
+
+    /** "To różne rzeczy — zostaw obie": no "Podwójnie?" for this pair any more. */
+    fun notDuplicates(a: String, b: String): Boolean {
+        tick
+        return pairKey(a, b) in prefs.getStringSet("different", emptySet()).orEmpty()
+    }
+
+    fun markDifferent(a: String, b: String) {
+        val set = prefs.getStringSet("different", emptySet()).orEmpty() + pairKey(a, b)
+        prefs.edit().putStringSet("different", set.toSet()).apply()
+        changed()
+    }
+
+    private fun pairKey(a: String, b: String) = listOf(a, b).sorted().joinToString("|")
+}
+
+/** A group of items under a header ("BARTEK · 2"); [title] null = no header. */
+internal data class ItemGroup(val title: String?, val items: List<ListItem>)
+
+/** [items] in the chosen order; by person or role they come in groups with headers, people without one last. */
+internal fun sorted(ui: ListsUi, list: ListInfo, items: List<ListItem>, sort: ItemSort): List<ItemGroup> {
+    fun person(item: ListItem): String? = if (list.type == ListType.TASKS) item.values.assigneeId else item.addedBy
+    return when (sort) {
+        ItemSort.ADDED -> listOf(ItemGroup(null, items.sortedBy { it.addedAt }))
+        ItemSort.ALPHA -> listOf(ItemGroup(null, items.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.values.name })))
+        ItemSort.DATE -> listOf(ItemGroup(null, items.sortedWith(dateOrder())))
+        ItemSort.PERSON -> items.groupBy { person(it) }.entries
+            .sortedWith(compareBy({ it.key == null }, { ui.name(it.key).lowercase() }))
+            .map { (id, group) -> ItemGroup(if (id == null) "Bez osoby" else ui.name(id), group.sortedBy { it.addedAt }) }
+        ItemSort.ROLE -> items.groupBy { ui.member(person(it))?.role }.entries
+            .sortedWith(compareBy({ it.key == null }, { -(it.key?.rank ?: 0) }))
+            .map { (role, group) -> ItemGroup(role?.name ?: "Bez osoby", group.sortedBy { it.addedAt }) }
+    }
+}
+
+/** Urgent first, then by date (late ones come first by themselves), without a date last. */
+internal fun dateOrder(): Comparator<ListItem> =
+    compareBy<ListItem>({ !it.values.urgent }, { it.values.dueDate == null }, { it.values.dueDate ?: "" }, { it.addedAt })
+
+/** The lists of the screen in the chosen order, in groups: by kind (the sections) or by creator. */
+internal fun sortedLists(ui: ListsUi, lists: List<ListInfo>, sort: ListsSort): List<Pair<String?, List<ListInfo>>> {
+    fun changed(list: ListInfo): Long =
+        maxOf(list.rev, ui.data.items.filter { it.listId == list.id }.maxOfOrNull { it.rev } ?: 0)
+    fun nearest(list: ListInfo): String {
+        val open = ui.data.itemsOf(list.id).filter { !it.checked }
+        if (open.any { it.values.urgent }) return "0000"
+        return open.mapNotNull { it.values.dueDate }.minOrNull() ?: "9999"
+    }
+    return when (sort) {
+        ListsSort.TYPE -> ListType.entries.mapNotNull { type ->
+            lists.filter { it.type == type }.takeIf { it.isNotEmpty() }?.let { typeLabel(type) to it }
+        }
+        ListsSort.ALPHA -> listOf(null to lists.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
+        ListsSort.CHANGED -> listOf(null to lists.sortedByDescending { changed(it) })
+        ListsSort.DATE -> listOf(null to lists.sortedWith(compareBy({ nearest(it) }, { it.name.lowercase() })))
+        ListsSort.OWNER -> lists.groupBy { it.createdBy }.entries
+            .sortedBy { if (it.key == ui.me.id) "" else ui.name(it.key).lowercase() }
+            .map { (id, group) -> ui.name(id) to group.sortedBy { it.name.lowercase() } }
+    }
+}
+
+internal fun typeLabel(type: ListType) = when (type) {
+    ListType.SHOPPING -> "Listy rzeczy"
+    ListType.TASKS -> "Zadania"
+    ListType.DEADLINES -> "Terminy"
+}
+
+/** All open items are done (and none of them comes back by itself, like a recurring task). */
+internal fun allDone(items: List<ListItem>): Boolean =
+    items.isNotEmpty() && items.all { it.checked } &&
+        items.none { it.values.recurrence.frequency != Frequency.NONE && it.values.dueDate != null }
+
+/** Two open items that are the same thing ("Podwójnie?"), not marked as different. */
+internal fun duplicateOf(prefs: ListPrefs, items: List<ListItem>, item: ListItem): ListItem? =
+    items.firstOrNull { other ->
+        other.id != item.id && !other.checked && !item.checked && Lists.sameThing(other.values, item.values) &&
+            !prefs.notDuplicates(other.id, item.id)
+    }
+
+internal fun isLate(item: ListItem, today: LocalDate = LocalDate.now()): Boolean =
+    !item.values.urgent && item.values.dueDate?.let { LocalDate.parse(it).isBefore(today) } == true

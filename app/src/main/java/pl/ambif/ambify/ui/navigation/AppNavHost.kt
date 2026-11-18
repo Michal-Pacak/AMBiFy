@@ -208,10 +208,7 @@ fun AppNavHost(
             }
 
             composable(AppDestination.Lists.route) {
-                ModulePlaceholderScreen(
-                    title = ModuleId.LISTS.label,
-                    description = "Wspólne listy: zakupy, zadania i terminy.",
-                )
+                pl.ambif.ambify.features.lists.ListsScreen(resetKey = moduleReselections)
             }
 
             composable(AppDestination.Communication.route) {

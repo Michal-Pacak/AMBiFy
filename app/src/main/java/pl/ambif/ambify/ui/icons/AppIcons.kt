@@ -210,6 +210,59 @@ object AppIcons {
         moveTo(21f, 12f); arcTo(9f, 9f, 0f, true, true, 3f, 12f); arcTo(9f, 9f, 0f, true, true, 21f, 12f); close()
     }
 
+    /** A suitcase (packing lists). */
+    val Suitcase: ImageVector by lazy {
+        line("Suitcase") {
+            moveTo(5f, 8f); lineTo(19f, 8f); lineTo(19f, 20f); lineTo(5f, 20f); close()
+            moveTo(9f, 8f); lineTo(9f, 5f); lineTo(15f, 5f); lineTo(15f, 8f)
+            moveTo(9f, 11f); lineTo(9f, 17f); moveTo(15f, 11f); lineTo(15f, 17f)
+        }
+    }
+
+    /** A map pin (lists of places). */
+    val Pin: ImageVector by lazy {
+        line("Pin") {
+            moveTo(12f, 21f); curveTo(8f, 16.5f, 5.5f, 13f, 5.5f, 9.5f); arcTo(6.5f, 6.5f, 0f, false, true, 18.5f, 9.5f)
+            curveTo(18.5f, 13f, 16f, 16.5f, 12f, 21f); close()
+            moveTo(14.2f, 9.5f); arcTo(2.2f, 2.2f, 0f, true, true, 9.8f, 9.5f); arcTo(2.2f, 2.2f, 0f, true, true, 14.2f, 9.5f)
+        }
+    }
+
+    /** A present (lists of gifts). */
+    val Gift: ImageVector by lazy {
+        line("Gift") {
+            moveTo(4f, 9f); lineTo(20f, 9f); lineTo(20f, 12.5f); lineTo(4f, 12.5f); close()
+            moveTo(5.5f, 12.5f); lineTo(5.5f, 20f); lineTo(18.5f, 20f); lineTo(18.5f, 12.5f)
+            moveTo(12f, 9f); lineTo(12f, 20f)
+            moveTo(12f, 9f); curveTo(10f, 5f, 6.5f, 5f, 7.5f, 7.5f); curveTo(8f, 8.6f, 10f, 9f, 12f, 9f)
+            moveTo(12f, 9f); curveTo(14f, 5f, 17.5f, 5f, 16.5f, 7.5f); curveTo(16f, 8.6f, 14f, 9f, 12f, 9f)
+        }
+    }
+
+    /** Lines with dots (a plain list). */
+    val ListLines: ImageVector by lazy {
+        line("ListLines") {
+            moveTo(9f, 6f); lineTo(20f, 6f); moveTo(9f, 12f); lineTo(20f, 12f); moveTo(9f, 18f); lineTo(20f, 18f)
+            moveTo(4f, 6f); lineTo(4.01f, 6f); moveTo(4f, 12f); lineTo(4.01f, 12f); moveTo(4f, 18f); lineTo(4.01f, 18f)
+        }
+    }
+
+    /** Arrows up and down ("Sortuj"). */
+    val Sort: ImageVector by lazy {
+        line("Sort") {
+            moveTo(7f, 4f); lineTo(7f, 20f); moveTo(3f, 16f); lineTo(7f, 20f); lineTo(11f, 16f)
+            moveTo(17f, 20f); lineTo(17f, 4f); moveTo(13f, 8f); lineTo(17f, 4f); lineTo(21f, 8f)
+        }
+    }
+
+    /** A padlock (who may do what). */
+    val Lock: ImageVector by lazy {
+        line("Lock") {
+            moveTo(5f, 11f); lineTo(19f, 11f); lineTo(19f, 21f); lineTo(5f, 21f); close()
+            moveTo(8f, 11f); lineTo(8f, 8f); arcTo(4f, 4f, 0f, false, true, 16f, 8f); lineTo(16f, 11f)
+        }
+    }
+
     private fun line(name: String, block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit): ImageVector =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
             path(

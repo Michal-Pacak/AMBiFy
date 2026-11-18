@@ -14,6 +14,11 @@ import pl.ambif.ambify.shared.AccountPaths
 import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
+import pl.ambif.ambify.shared.ConflictDecision
+import pl.ambif.ambify.shared.ListConflict
+import pl.ambif.ambify.shared.ListPaths
+import pl.ambif.ambify.shared.ListSyncRequest
+import pl.ambif.ambify.shared.ListSyncResponse
 import pl.ambif.ambify.shared.AppPaths
 import pl.ambif.ambify.shared.Dashboard
 import pl.ambif.ambify.shared.DashboardPaths
@@ -192,6 +197,9 @@ class ServerApi(
     suspend fun disconnectDiary(id: String) = send("DELETE", "${TimetablePaths.DIARY}/$id", null, auth = true)
 
     /** Build kids: dosyła paczkę zdarzeń telefonu dziecka na jego konto (serwer dopisuje je do pliku logu). */
+    suspend fun listSync(request: ListSyncRequest): ListSyncResponse = post(ListPaths.SYNC, request)
+    suspend fun resolveConflict(id: String, decision: ConflictDecision): ListConflict = post("${ListPaths.CONFLICTS}/$id", decision)
+
     suspend fun sendMonitorEvents(batch: MonitorEventBatch) =
         send("POST", MonitorPaths.EVENTS, json.encodeToString(batch), auth = true)
 

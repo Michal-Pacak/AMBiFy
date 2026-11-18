@@ -32,6 +32,7 @@ import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.CommunitySummary
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.Entitlements
+import pl.ambif.ambify.shared.Feature
 import pl.ambif.ambify.shared.Family
 import pl.ambif.ambify.shared.Invitation
 import pl.ambif.ambify.shared.LoginRequest
@@ -488,6 +489,9 @@ class AccountService(
      */
     val approvalHandlers = mutableMapOf<Action, (organizationId: String, requesterId: String, payload: String) -> Unit>()
 
+    /** Optional clean-up when a request is refused (e.g. a task for someone else shown as waiting goes away). */
+    val rejectionHandlers = mutableMapOf<Action, (organizationId: String, requesterId: String, payload: String) -> Unit>()
+
     /** The whole table for the current community; anyone in it may look, only the Owner changes it. */
     fun permissionTable(session: UserSession): PermissionTable = transaction(database) {
         val membership = membership(session)
@@ -634,6 +638,8 @@ class AccountService(
             if (approve) {
                 val handler = approvalHandlers[action] ?: throw ApiException(HttpStatusCode.Conflict, "no_handler", "Tej prośby nie da się teraz wykonać.")
                 handler(membership.organizationId, request[PermissionRequests.requesterId], request[PermissionRequests.payload])
+            } else {
+                rejectionHandlers[action]?.invoke(membership.organizationId, request[PermissionRequests.requesterId], request[PermissionRequests.payload])
             }
             PermissionRequests.update({ PermissionRequests.id eq requestId }) {
                 it[status] = if (approve) APPROVED else REJECTED
@@ -872,6 +878,9 @@ class AccountService(
     private fun grants(organizationId: String): Set<String> =
         OrganizationGrants.selectAll().where { OrganizationGrants.organizationId eq organizationId }
             .map { it[OrganizationGrants.grantKey] }.toSet()
+
+    /** Premium features that work now in the community. Must run in a transaction. */
+    internal fun communityFeatures(organizationId: String): List<Feature> = communityModules(organizationId).features
 
     private fun communityModules(organizationId: String): CommunityModules {
         val grants = grants(organizationId)

@@ -56,6 +56,22 @@ Borders: linear gradient GoldLight → GoldDeep → GoldBase → GoldShadow.
 
 ---
 
+## Messages
+
+Official for every module (owner accepted 2026-11-17, canvas "AMBiFy · Komunikaty": https://claude.ai/artifact/4h5Vr7MxKh5DubZTy7VDdC). In code: `app/.../ui/components/Messages.kt` (`MessageBar`, `BubbleHost`, `FieldError`, `MessageChip`, `FullScreenMessage`).
+
+| Kind | Colour | Icon | For |
+|------|--------|------|-----|
+| Error | red `#FF8A8A`, border `#FF6B6B` | circle with "!" | something failed, a conflict |
+| Warning | orange `#F6B66E` | triangle | works, but needs attention (connection expires soon, overdue) |
+| Status | gold `#E6C65C` | depends (no network: crossed-out Wi-Fi) | how things are now (offline with a copy on the phone) |
+| Success | green `#9FD3A0` | circle with a tick | an action worked — only for a moment |
+| Info | grey `#C9C9CF` | circle with "i" | for information (waiting for approval) |
+
+Places: **bar under the title** (a lasting state, at most one per screen), **bubble at the bottom** (result of an action; success and info go away after 4 s, an error stays until closed), **under a field** (form validation: red border + text), **chip by an item** (Konflikt, Czeka na wysłanie…), **dialog** (a decision; a red button for what cannot be undone), **whole screen** (no data and no copy, with "Spróbuj ponownie").
+
+Rules: one cause = one message (no network is said once, in the bar — not again for every failed request); text = what happened + what next, never codes or technical words; colour always with the icon and a title; no network with a copy on the phone is a *status*, not an error.
+
 ## Related Documents
 
 | Document | Description |

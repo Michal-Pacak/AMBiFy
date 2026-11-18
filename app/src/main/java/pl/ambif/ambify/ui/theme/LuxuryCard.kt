@@ -243,11 +243,11 @@ fun LuxuryOpenMark(modifier: Modifier = Modifier, size: Dp = 44.dp) {
 
 /** Card section title: small gold capitals ("BASIC · W CENIE"). */
 @Composable
-fun LuxurySectionTitle(text: String, modifier: Modifier = Modifier) {
+fun LuxurySectionTitle(text: String, modifier: Modifier = Modifier, color: Color = Luxury.GoldText) {
     Text(
         text.uppercase(),
         modifier = modifier,
-        color = Luxury.GoldText,
+        color = color,
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.6.sp,

@@ -33,6 +33,8 @@ enum class ModuleId(val route: String, val tier: Tier, val label: String) {
 @Serializable
 enum class Feature(val module: ModuleId, val label: String) {
     LISTS_REMINDERS(ModuleId.LISTS, "Przypomnienia"),
+    LISTS_ATTACHMENTS(ModuleId.LISTS, "Linki, zdjęcia i pliki"),
+    LISTS_SUBITEMS(ModuleId.LISTS, "Podlisty"),
     LISTS_MEAL_PLAN(ModuleId.LISTS, "Zakupy z posiłków"),
     LISTS_TO_MISSIONS(ModuleId.LISTS, "Przenoszenie do Misji"),
     COMMUNICATION_ATTACHMENTS(ModuleId.COMMUNICATION, "Załączniki"),
