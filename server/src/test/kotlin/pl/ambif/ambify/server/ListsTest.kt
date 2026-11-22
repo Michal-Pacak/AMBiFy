@@ -348,4 +348,84 @@ class ListsTest {
         assertEquals("3,2%", response.items.single().values.variant)
         assertEquals(listOf("mleko" to "3,2%"), response.variants.map { it.product to it.variant })
     }
+
+    @Test
+    fun theMemoryGrowsWithEveryAddAndKeepsTheNewestParameters() {
+        val w = world()
+        w.shoppingList()
+        w.add(w.owner, "i1", ItemValues("Mleko", 1.0, "l", variant = "3,2%"))
+        w.send(w.owner, change(ListChangeKind.CHECK_ITEM, "L1", "i1") { copy(checked = true) })
+        w.add(w.user, "i2", ItemValues("mleko", 2.0, "l", variant = "3,2 %"))
+        w.add(w.user, "i3", ItemValues("Mleko", 1.0, "l", variant = "2%"))
+        val memory = w.send(w.third).memory.associateBy { it.key }
+        assertEquals(setOf("mleko|3,2%", "mleko|2%"), memory.keys)
+        assertEquals(2, memory.getValue("mleko|3,2%").uses)
+        assertEquals(2.0, memory.getValue("mleko|3,2%").values.quantity)
+        assertEquals(w.user.userId, memory.getValue("mleko|3,2%").lastBy)
+
+        // A change of the item changes the remembered parameters, not the count.
+        val rev = w.send(w.owner).items.first { it.id == "i3" }.rev
+        w.edit(w.user, "i3", ItemValues("Mleko", 3.0, "l", variant = "2%"), rev, now, ItemField.QUANTITY)
+        val after = w.send(w.owner).memory.single { it.key == "mleko|2%" }
+        assertEquals(3.0, after.values.quantity)
+        assertEquals(1, after.uses)
+    }
+
+    @Test
+    fun packingIsRememberedApartFromShoppingAndDatesAreNot() {
+        val w = world()
+        w.shoppingList()
+        w.send(w.owner, change(ListChangeKind.CREATE_LIST, "P") { copy(list = ListInfo("P", ListType.SHOPPING, "Walizka", style = ListStyle.PACKING)) })
+        w.send(w.owner, change(ListChangeKind.CREATE_LIST, "D") { copy(list = ListInfo("D", ListType.DEADLINES, "Opłaty")) })
+        w.add(w.owner, "i1", ItemValues("Ręcznik"))
+        w.add(w.owner, "p1", ItemValues("Ręcznik", 2.0, "szt."), listId = "P")
+        w.add(w.owner, "d1", ItemValues("Prąd", dueDate = "2027-01-10", recurrence = Recurrence(Frequency.MONTHLY)), listId = "D")
+        val memory = w.send(w.user).memory
+        assertEquals(setOf(pl.ambif.ambify.shared.MemoryScope.SHOPPING, pl.ambif.ambify.shared.MemoryScope.PACKING, pl.ambif.ambify.shared.MemoryScope.DEADLINES), memory.map { it.scope }.toSet())
+        val deadline = memory.single { it.key == "prąd|" }
+        assertNull(deadline.values.dueDate)
+        assertEquals(Frequency.MONTHLY, deadline.values.recurrence.frequency)
+    }
+
+    @Test
+    fun aForgottenProductGoesAwayForEveryoneUntilAddedAgain() {
+        val w = world()
+        w.shoppingList()
+        w.add(w.owner, "i1", ItemValues("Kawa", variant = "ziarnista"))
+        w.add(w.owner, "i2", ItemValues("Kawa", variant = "ziarnista"))
+        val first = w.send(w.user)
+        assertTrue(w.send(w.user, change(ListChangeKind.FORGET_PRODUCT, "L1") { copy(values = ItemValues("kawa", variant = "ziarnista")) }).results.single().ok)
+        val forgotten = w.send(w.third, since = first.rev).memory.single()
+        assertTrue(forgotten.deleted)
+        // The items on the list stay.
+        assertEquals(2, w.send(w.third).items.size)
+        w.add(w.third, "i3", ItemValues("Kawa", variant = "ziarnista"))
+        val back = w.send(w.owner).memory.single()
+        assertFalse(back.deleted)
+        assertEquals(1, back.uses)
+    }
+
+    @Test
+    fun theMemoryIsBuiltFromTheListsOnceAfterTheUpdate() {
+        val w = world()
+        w.shoppingList()
+        w.add(w.owner, "i1", ItemValues("Masło"))
+        w.add(w.owner, "i2", ItemValues("Masło"))
+        w.add(w.owner, "i3", ItemValues("Chleb"))
+        w.send(w.owner, change(ListChangeKind.CHECK_ITEM, "L1", "i3") { copy(checked = true) })
+        w.send(w.owner, change(ListChangeKind.CLEAR_CHECKED, "L1"))
+        // As before 0.7.1: no memory at all.
+        org.jetbrains.exposed.v1.jdbc.transactions.transaction(w.database) {
+            exec("DELETE FROM list_memory")
+        }
+        val memory = w.send(w.user).memory.associateBy { it.key }
+        assertEquals(2, memory.getValue("masło|").uses)
+        assertTrue("chleb|" in memory)
+    }
+
+    @Test
+    fun searchingIgnoresPolishLetters() {
+        assertEquals("ser zolty", Lists.searchKey("Ser Żółty"))
+        assertEquals("kupione", ListInfo("x", ListType.SHOPPING, "x", style = ListStyle.SHOPPING.copy(doneLabel = "w koszyku")).look.doneLabel)
+    }
 }

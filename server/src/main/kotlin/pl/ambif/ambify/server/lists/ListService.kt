@@ -36,12 +36,14 @@ import pl.ambif.ambify.shared.ListConflict
 import pl.ambif.ambify.shared.ListAccess
 import pl.ambif.ambify.shared.ListInfo
 import pl.ambif.ambify.shared.ListItem
+import pl.ambif.ambify.shared.ListMemory
 import pl.ambif.ambify.shared.ListSyncRequest
 import pl.ambif.ambify.shared.ListSyncResponse
 import pl.ambif.ambify.shared.ListType
 import pl.ambif.ambify.shared.ListStyle
 import pl.ambif.ambify.shared.ListUnit
 import pl.ambif.ambify.shared.Lists
+import pl.ambif.ambify.shared.MemoryScope
 import pl.ambif.ambify.shared.Mode
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ProductUnit
@@ -105,6 +107,7 @@ class ListService(
     fun sync(session: UserSession, request: ListSyncRequest): ListSyncResponse {
         accounts.requireModule(session, ModuleId.LISTS)
         val results = request.changes.take(MAX_CHANGES).map { apply(session, it) }
+        transaction(database) { buildMemory(accounts.membership(session).organizationId) }
         return transaction(database) {
             val membership = accounts.membership(session)
             val organizationId = membership.organizationId
@@ -138,6 +141,8 @@ class ListService(
                 listIds = visibleIds.toList(),
                 variants = ListVariants.selectAll().where { (ListVariants.organizationId eq organizationId) and (ListVariants.rev greater since) }
                     .map { ProductVariant(it[ListVariants.product], it[ListVariants.variant], it[ListVariants.rev]) },
+                memory = ListMemoryTable.selectAll().where { (ListMemoryTable.organizationId eq organizationId) and (ListMemoryTable.rev greater since) }
+                    .map { toMemory(it) },
             )
         }
     }
@@ -241,6 +246,7 @@ class ListService(
                     rememberUnit(organizationId, values, change.rememberUnit, rev)
                     rememberVariant(organizationId, values, rev)
                 }
+                remember(organizationId, toInfo(list), values, me, rev, added = true, at = change.madeAt)
                 if (mode == Mode.APPROVAL) {
                     accounts.queueRequest(membership, Action.LISTS_TASKS_OTHERS, json.encodeToString(QueuedTask(itemId)), taskSummary(values, list))
                     return ChangeResult(change.id, ok = true, message = WAITS_FOR_APPROVAL, queued = true)
@@ -299,6 +305,18 @@ class ListService(
                     it[clearedAt] = change.madeAt
                     it[clearedBy] = me
                     it[ListItems.rev] = rev
+                }
+            }
+            ListChangeKind.FORGET_PRODUCT -> {
+                val list = editable(membership, change.listId, AccessLevel.ADD)
+                val key = Lists.memoryKey(change.values ?: throw invalid())
+                val scope = Lists.scopeOf(toInfo(list)).name
+                val rev = nextRev(organizationId)
+                ListMemoryTable.update({
+                    (ListMemoryTable.organizationId eq organizationId) and (ListMemoryTable.scope eq scope) and (ListMemoryTable.productKey eq key)
+                }) {
+                    it[deleted] = true
+                    it[ListMemoryTable.rev] = rev
                 }
             }
             ListChangeKind.UNCHECK_ALL -> {
@@ -398,6 +416,7 @@ class ListService(
         }
         if (type == ListType.SHOPPING && ItemField.QUANTITY in fields) rememberUnit(organizationId, shown, change.rememberUnit, rev)
         if (type == ListType.SHOPPING && ItemField.VARIANT in fields) rememberVariant(organizationId, shown, rev)
+        remember(organizationId, toInfo(list), shown, me, rev, added = false, at = change.madeAt)
         return queued ?: ChangeResult(change.id, ok = true)
     }
 
@@ -623,6 +642,75 @@ class ListService(
         }
     }
 
+    /**
+     * The community's memory (board 21): an added thing counts once more and keeps its newest parameters; a changed
+     * one only updates them (a forgotten one stays forgotten until it is added again).
+     */
+    private fun remember(organizationId: String, list: ListInfo, values: ItemValues, me: String, rev: Long, added: Boolean, at: Long) {
+        val scope = Lists.scopeOf(list).name
+        val key = Lists.memoryKey(values)
+        val kept = json.encodeToString(Lists.memoryValues(values))
+        val row = ListMemoryTable.selectAll().where {
+            (ListMemoryTable.organizationId eq organizationId) and (ListMemoryTable.scope eq scope) and (ListMemoryTable.productKey eq key)
+        }.singleOrNull()
+        if (row == null) {
+            ListMemoryTable.insert {
+                it[ListMemoryTable.organizationId] = organizationId
+                it[ListMemoryTable.scope] = scope
+                it[productKey] = key
+                it[ListMemoryTable.values] = kept
+                it[useCount] = 1
+                it[lastUsedAt] = at
+                it[lastBy] = me
+                it[deleted] = false
+                it[ListMemoryTable.rev] = rev
+            }
+            return
+        }
+        if (!added && row[ListMemoryTable.deleted]) return
+        ListMemoryTable.update({
+            (ListMemoryTable.organizationId eq organizationId) and (ListMemoryTable.scope eq scope) and (ListMemoryTable.productKey eq key)
+        }) {
+            it[ListMemoryTable.values] = kept
+            if (added) {
+                it[useCount] = if (row[ListMemoryTable.deleted]) 1 else row[ListMemoryTable.useCount] + 1
+                it[lastUsedAt] = at
+                it[lastBy] = me
+                it[deleted] = false
+            }
+            it[ListMemoryTable.rev] = rev
+        }
+    }
+
+    /**
+     * The first sync of a community after 0.7.1: the memory is built from everything already on its lists (history
+     * too), so the things bought so far are there at once. Nothing happens once the community has any memory.
+     */
+    private fun buildMemory(organizationId: String) {
+        if (ListMemoryTable.selectAll().where { ListMemoryTable.organizationId eq organizationId }.limit(1).any()) return
+        val lists = ListsTable.selectAll().where { (ListsTable.organizationId eq organizationId) and (ListsTable.deleted eq false) }
+            .associate { it[ListsTable.id] to toInfo(it) }
+        val items = ListItems.selectAll().where { (ListItems.organizationId eq organizationId) and (ListItems.deleted eq false) }
+            .mapNotNull { row -> lists[row[ListItems.listId]]?.let { list -> Triple(list, row, values(row)) } }
+            .filter { it.third.name.isNotBlank() }
+        if (items.isEmpty()) return
+        val rev = nextRev(organizationId)
+        items.groupBy { (list, _, values) -> Lists.scopeOf(list) to Lists.memoryKey(values) }.forEach { (key, group) ->
+            val (_, last, values) = group.maxBy { it.second[ListItems.addedAt] }
+            ListMemoryTable.insert {
+                it[ListMemoryTable.organizationId] = organizationId
+                it[scope] = key.first.name
+                it[productKey] = key.second
+                it[ListMemoryTable.values] = json.encodeToString(Lists.memoryValues(values))
+                it[useCount] = group.size
+                it[lastUsedAt] = last[ListItems.addedAt]
+                it[lastBy] = last[ListItems.addedBy]
+                it[deleted] = false
+                it[ListMemoryTable.rev] = rev
+            }
+        }
+    }
+
     /** Only lists of things have a style; a preset keeps its own labels, the person's own kind gets them checked. */
     private fun styleJson(list: ListInfo): String? {
         if (list.type != ListType.SHOPPING) return null
@@ -689,7 +777,9 @@ class ListService(
         return next
     }
 
-    private fun values(item: ResultRow): ItemValues = json.decodeFromString(item[ListItems.values])
+    private fun values(item: ResultRow): ItemValues = values(item[ListItems.values])
+
+    private fun values(text: String): ItemValues = json.decodeFromString(text)
 
     private fun fieldRevs(item: ResultRow): Map<String, FieldRev> = json.decodeFromString(item[ListItems.fieldRevs])
 
@@ -731,6 +821,17 @@ class ListService(
         lastDoneAt = row[ListItems.lastDoneAt],
         deleted = row[ListItems.deleted],
         rev = row[ListItems.rev],
+    )
+
+    private fun toMemory(row: ResultRow) = ListMemory(
+        scope = MemoryScope.valueOf(row[ListMemoryTable.scope]),
+        key = row[ListMemoryTable.productKey],
+        values = values(row[ListMemoryTable.values]),
+        uses = row[ListMemoryTable.useCount],
+        lastUsedAt = row[ListMemoryTable.lastUsedAt],
+        lastBy = row[ListMemoryTable.lastBy],
+        deleted = row[ListMemoryTable.deleted],
+        rev = row[ListMemoryTable.rev],
     )
 
     private fun toConflict(row: ResultRow) = ListConflict(

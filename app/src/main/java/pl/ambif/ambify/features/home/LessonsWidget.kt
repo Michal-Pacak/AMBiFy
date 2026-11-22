@@ -108,23 +108,12 @@ internal fun LessonsWidget(
     val day = student?.let { LessonsDays.of(data!!.days(it.id), now) }
 
     LuxuryCard(modifier = modifier, contentPadding = PaddingValues(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 10.dp), spacing = 0.dp) {
-        Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (people.size == 1 && student != null) {
-                PersonAvatar(student.name, student.avatar, size = 22.dp)
-                Spacer(Modifier.width(8.dp))
-            }
-            val title = buildList {
-                add("Lekcje")
-                if (people.size == 1 && student != null) add(student.name.substringBefore(' '))
-                day?.let { add(it.dayTag) }
-            }.joinToString(" · ")
-            LuxurySectionTitle(title, modifier = Modifier.weight(1f))
-            IconButton(onClick = onSettings, enabled = interactive) {
-                Icon(AppIcons.Gear, contentDescription = "Ustawienia widgetu Lekcje", tint = Luxury.TextMuted, modifier = Modifier.size(20.dp))
-            }
-            if (interactive) LuxuryOpenButton("Otwórz Plan lekcji", onOpen) else Box(Modifier.size(44.dp))
-            Spacer(Modifier.width(4.dp))
-        }
+        val single = student?.takeIf { people.size == 1 }
+        val name = listOfNotNull(single?.name?.substringBefore(' '), day?.dayTag).joinToString(" · ").ifEmpty { null }
+        WidgetHeader(
+            module = "Lekcje", name = name, interactive = interactive, onSettings = onSettings, onOpen = onOpen, openLabel = "Otwórz Plan lekcji",
+            leading = single?.let { s -> { PersonAvatar(s.name, s.avatar, size = 22.dp) } },
+        )
         if (people.size > 1) {
             PersonSwitch(people, student?.id, interactive) { id ->
                 picked = id
@@ -217,7 +206,7 @@ private fun LessonLine(lesson: Lesson, running: Boolean, past: Boolean) {
         Text(span?.first?.short() ?: lesson.time, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (running) Luxury.GoldLight else Luxury.TextMuted, modifier = Modifier.width(48.dp))
         Text(
             lesson.subject,
-            fontSize = 14.sp,
+            fontSize = WidgetText.Item,
             color = color,
             fontWeight = if (running) FontWeight.Medium else FontWeight.Normal,
             textDecoration = if (lesson.cancelled) TextDecoration.LineThrough else null,

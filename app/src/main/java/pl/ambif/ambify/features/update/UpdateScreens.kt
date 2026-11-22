@@ -38,6 +38,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import pl.ambif.ambify.shared.AppPaths
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -167,6 +170,7 @@ private fun ColumnScope.UpdateContent(state: UpdateState, actions: UpdateActions
             }
             Text("AMBiFy ${state.release.versionName} jest gotowa", fontSize = 17.sp, fontWeight = FontWeight.Medium)
             state.release.notes.forEach { Text("• $it", fontSize = 14.sp, lineHeight = 20.sp, color = Luxury.TextMuted) }
+            ChangelogLink()
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GoldPill("Zaktualizuj") { actions.installNow(state.release) }
                 Framed("W nocy", gold = true) { actions.installAtNight(state.release) }
@@ -313,6 +317,21 @@ internal fun checkedText(millis: Long, now: Long = System.currentTimeMillis()): 
     }
 }
 
+/** The full list of changes on the home server (page /zmiany), opened in the browser. */
+@Composable
+private fun ChangelogLink() {
+    val uri = LocalUriHandler.current
+    Row(
+        modifier = Modifier.clip(RoundedCornerShape(10.dp))
+            .clickable(onClickLabel = "Otwórz listę zmian", role = Role.Button) { runCatching { uri.openUri(BuildConfig.SERVER_URL + AppPaths.CHANGELOG) } }
+            .heightIn(min = 40.dp).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Pełen changelog: ", fontSize = 14.sp, color = Luxury.TextMuted)
+        Text("lista zmian ›", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldText)
+    }
+}
+
 /** Ustawienia → Aplikacja (mock-up 17): this version, checking by hand, and the link for a new person. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -349,5 +368,6 @@ fun AppVersionCard(state: UpdateState, lastChecked: Long, checking: Boolean, onC
             Framed("Sprawdź aktualizacje", gold = true, onClick = onCheck)
             Framed("Wyślij link do pobrania", gold = true, onClick = onShareLink)
         }
+        ChangelogLink()
     }
 }

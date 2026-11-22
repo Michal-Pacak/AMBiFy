@@ -140,7 +140,7 @@ fun HomeScreen(
             onDashboard = known,
             onBack = { picker = false },
             onAdd = { type ->
-                editing = Editing(DashboardWidget(UUID.randomUUID().toString().take(12), type.key, Int.MAX_VALUE, WidgetSlot.FULL), isNew = true)
+                editing = Editing(DashboardWidget(UUID.randomUUID().toString().take(12), type.key, Int.MAX_VALUE, if (type.half) WidgetSlot.LEFT else WidgetSlot.FULL), isNew = true)
             },
         )
     } else {
@@ -180,6 +180,13 @@ fun HomeScreen(
                         interactive = interactive,
                         onSettings = { editing = Editing(widget, isNew = false) },
                         onOpen = { onOpenModule(ModuleId.TIMETABLE) },
+                        modifier = modifier,
+                    )
+                    WidgetType.LIST, WidgetType.MY_TASKS, WidgetType.DEADLINES, WidgetType.ACTIVE_LISTS -> pl.ambif.ambify.features.lists.ListsWidget(
+                        widget = widget,
+                        interactive = interactive,
+                        onSettings = { editing = Editing(widget, isNew = false) },
+                        onOpen = { onOpenModule(ModuleId.LISTS) },
                         modifier = modifier,
                     )
                     null -> Unit
@@ -223,34 +230,43 @@ fun HomeScreen(
     editing?.let { open ->
         val rows = rowsOf(known)
         val index = rows.indexOfFirst { row -> row.widgets.any { it.id == open.widget.id } }
-        LessonsSettings(
+        val onMove = { up: Boolean ->
+            val list = rows.toMutableList()
+            val other = if (up) index - 1 else index + 1
+            list[index] = rows[other].also { list[other] = rows[index] }
+            arrange(list.flatMapIndexed { i, row -> row.widgets.map { it.copy(row = i) } })
+        }
+        val onSave = { saved: DashboardWidget ->
+            if (open.isNew) {
+                arrange(known + saved.copy(row = (known.maxOfOrNull { it.row } ?: -1) + 1))
+                picker = false
+            } else {
+                arrange(known.map { if (it.id == saved.id) saved else it })
+            }
+            editing = null
+        }
+        val onDelete = {
+            undo = (WidgetType.of(open.widget.type)?.label ?: "widget") to dashboard
+            arrange(known.filter { it.id != open.widget.id })
+            editing = null
+        }
+        if (WidgetType.of(open.widget.type)?.module == ModuleId.LISTS) {
+            pl.ambif.ambify.features.lists.ListsWidgetSettings(
+                widget = open.widget, isNew = open.isNew,
+                canMoveUp = index > 0, canMoveDown = index in 0 until rows.lastIndex,
+                onMove = onMove, onDismiss = { editing = null }, onSave = onSave, onDelete = onDelete,
+            )
+        } else LessonsSettings(
             widget = open.widget,
             isNew = open.isNew,
             data = timetable,
             now = now,
             canMoveUp = index > 0,
             canMoveDown = index in 0 until rows.lastIndex,
-            onMove = { up ->
-                val list = rows.toMutableList()
-                val other = if (up) index - 1 else index + 1
-                list[index] = rows[other].also { list[other] = rows[index] }
-                arrange(list.flatMapIndexed { i, row -> row.widgets.map { it.copy(row = i) } })
-            },
+            onMove = onMove,
             onDismiss = { editing = null },
-            onSave = { saved ->
-                if (open.isNew) {
-                    arrange(known + saved.copy(row = (known.maxOfOrNull { it.row } ?: -1) + 1))
-                    picker = false
-                } else {
-                    arrange(known.map { if (it.id == saved.id) saved else it })
-                }
-                editing = null
-            },
-            onDelete = {
-                undo = (WidgetType.of(open.widget.type)?.label ?: "widget") to dashboard
-                arrange(known.filter { it.id != open.widget.id })
-                editing = null
-            },
+            onSave = onSave,
+            onDelete = onDelete,
         )
     }
 }

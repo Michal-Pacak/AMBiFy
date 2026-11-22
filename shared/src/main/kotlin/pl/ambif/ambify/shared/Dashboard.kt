@@ -26,6 +26,30 @@ enum class WidgetType(
         "lessons", ModuleId.TIMETABLE, "Lekcje",
         "Bieżąca lekcja, kolejne i godzina końca – zawsze pod ręką.",
         multi = true,
+    ),
+
+    /** One chosen list ([DashboardWidget.people] = its id): check things off from the Dashboard (board 19). */
+    LIST(
+        "list", ModuleId.LISTS, "Lista",
+        "Wybrana lista: odhaczaj prosto z pulpitu. Można dodać kilka, każdy z inną listą.",
+        multi = true,
+    ),
+    MY_TASKS(
+        "my_tasks", ModuleId.LISTS, "Moje zadania",
+        "Zadania dla Ciebie ze wszystkich list, pilne na górze.",
+        multi = false, half = true,
+    ),
+    DEADLINES(
+        "deadlines", ModuleId.LISTS, "Najbliższe terminy",
+        "Pilne, po terminie i najbliższe ze wszystkich list terminów.",
+        multi = false, half = true,
+    ),
+
+    /** All the lists one sees, folded to their kinds ("Listy rzeczy (2)"); a kind opens to names and states. */
+    ACTIVE_LISTS(
+        "active_lists", ModuleId.LISTS, "Aktywne listy",
+        "Wszystkie listy zwinięte do typów — rozwiń typ, by zobaczyć nazwy i stan.",
+        multi = false,
     );
 
     companion object {
@@ -44,7 +68,8 @@ enum class WidgetSlot { FULL, LEFT, RIGHT }
 
 /**
  * One widget on the Dashboard. [row] orders the rows from the top; two half widgets share a row (LEFT and RIGHT).
- * [people]: whose data it shows (for "Lekcje" the students' ids; several = a switch in the widget).
+ * [people]: whose data it shows (for "Lekcje" the students' ids; several = a switch in the widget; for "Lista" the
+ * list's id — kept here so that older phones keep it untouched).
  */
 @Serializable
 data class DashboardWidget(

@@ -154,6 +154,28 @@ internal fun ListDialogs(
             },
             onDelete = { onDialog(ListDialog.DeleteList(dialog.list)) },
         )
+        is ListDialog.Close -> CloseDialog(ui, dialog.list, close,
+            onFinish = {
+                if (dialog.list.look.finish == ListFinish.RESET) lists.uncheckAll(dialog.list.id) else lists.clearChecked(dialog.list.id)
+                close()
+                onSaved(if (dialog.list.look.finish == ListFinish.RESET) "Odznaczono wszystko" else "Wyczyszczono ${dialog.list.look.doneLabel}", "Zostają w pamięci — dodasz je jednym stuknięciem.")
+            },
+            onArchive = {
+                lists.updateList(dialog.list.copy(archived = !dialog.list.archived))
+                close()
+                if (!dialog.list.archived) onClosed()
+                onSaved(if (dialog.list.archived) "Przywrócono z archiwum" else "Przeniesiono do archiwum", "Lista „${dialog.list.name}”.")
+            },
+            onCopy = {
+                val name = (dialog.list.name.take(52) + " (kopia)")
+                val id = lists.copyList(dialog.list, name, ui.data.itemsOf(dialog.list.id))
+                close()
+                onCreated(id)
+                onSaved("Zrobiono kopię", "„$name” — nic nie jest odhaczone.")
+            },
+            onDelete = { onDialog(ListDialog.DeleteList(dialog.list)) },
+        )
+        is ListDialog.Memory -> MemoryDialog(ui, dialog.list, lists, close, onNew = { onDialog(ListDialog.Item(dialog.list, null)) }, onSaved = onSaved)
         is ListDialog.DeleteList -> DeleteListDialog(ui, dialog.list, close,
             onDelete = { lists.deleteList(dialog.list); close(); onSaved("Usunięto listę", "„${dialog.list.name}”.") },
             onArchive = { lists.updateList(dialog.list.copy(archived = true)); close(); onSaved("Przeniesiono do archiwum", "Lista „${dialog.list.name}”.") },
@@ -162,7 +184,7 @@ internal fun ListDialogs(
             onSave = { values, remember ->
                 val item = dialog.item
                 close()
-                if (item == null) addOrAsk(ui, dialog.list, lists, values, remember, onDialog) else lists.edit(item, values, remember)
+                if (item == null) addOrAsk(ui, dialog.list, lists, values, remember, onDialog, onSaved) else lists.edit(item, values, remember)
             },
             onDelete = { item -> lists.delete(item); close(); onSaved("Usunięto", "„${item.values.name}”.") },
         )
@@ -233,11 +255,11 @@ private fun ListForm(ui: ListsUi, editing: ListInfo?, onDismiss: () -> Unit, onD
                 ) { style = style.copy(quantity = it) }
                 Text("Przycisk na dole listy", fontSize = 13.sp, color = Muted)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Zrobione do historii", style.finish == ListFinish.HISTORY) { style = style.copy(finish = ListFinish.HISTORY) }
+                    Chip("Wyczyść zrobione", style.finish == ListFinish.HISTORY) { style = style.copy(finish = ListFinish.HISTORY) }
                     Chip("Odznacz wszystko", style.finish == ListFinish.RESET) { style = style.copy(finish = ListFinish.RESET) }
                 }
                 Text(
-                    if (style.finish == ListFinish.HISTORY) "Zrobione trafiają do historii listy (widać, kto i kiedy). Lista jednorazowa."
+                    if (style.finish == ListFinish.HISTORY) "Zrobione znikają z listy, zostają w pamięci. Lista jednorazowa."
                     else "Wszystko wraca na listę jako nieodhaczone. Lista wielokrotnego użytku.",
                     fontSize = 12.sp, color = Muted,
                 )
@@ -313,7 +335,7 @@ private fun typeDescription(type: ListType) = when (type) {
 }
 
 private fun presetDescription(preset: ListPreset) = when (preset) {
-    ListPreset.SHOPPING -> "Do kupienia / w koszyku · ilość i jednostki · „Zakończ zakupy” przenosi koszyk do historii · zapamiętane jednostki i sumowanie duplikatów."
+    ListPreset.SHOPPING -> "Do kupienia / kupione · ilość i jednostki · kupione zostają na liście, „Wyczyść kupione” zdejmuje je · pamięć produktów i sumowanie duplikatów."
     ListPreset.PACKING -> "Do spakowania / spakowane · ilość · „Odznacz wszystko” — ta sama lista na następny wyjazd."
     ListPreset.CUSTOM -> "Sam nazywasz sekcje i wybierasz, jak lista działa. Np. „Miejsca do zobaczenia”, „Prezenty”, „Książki do przeczytania”."
 }
@@ -468,7 +490,7 @@ private fun DoneDialog(ui: ListsUi, list: ListInfo, lists: ListsController, onDi
     val keep = when {
         !shopping -> "Zostaw"
         list.look.finish == ListFinish.RESET -> "Odznacz wszystko na następny raz"
-        else -> "Zostaw i przenieś do historii"
+        else -> "Zostaw i wyczyść ${list.look.doneLabel}"
     }
     val answer = { ui.prefs.answerDone(list.id, newest) }
     LuxuryPopup(onDismiss = { answer(); onDismiss() }) {
@@ -478,7 +500,7 @@ private fun DoneDialog(ui: ListsUi, list: ListInfo, lists: ListsController, onDi
             "Odhaczono ostatnią pozycję. Możesz usunąć listę albo ją zostawić" + when {
                 !shopping -> "."
                 list.look.finish == ListFinish.RESET -> " — wszystko wróci jako nieodhaczone."
-                else -> " — " + list.look.doneLabel + " trafią wtedy do historii."
+                else -> " — " + list.look.doneLabel + " znikną z listy, ale zostaną w pamięci."
             },
             fontSize = 13.sp, color = Muted, lineHeight = 19.sp,
         )
@@ -491,6 +513,16 @@ private fun DoneDialog(ui: ListsUi, list: ListInfo, lists: ListsController, onDi
         }
         FramedButton("Archiwizuj", modifier = Modifier.fillMaxWidth()) { answer(); onArchive() }
         DangerButton("Usuń listę", { answer(); onDelete() })
+        if (shopping) {
+            Text(
+                "Nie pytaj więcej o tę listę", fontSize = 13.sp, color = Luxury.GoldText, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) {
+                    answer()
+                    ui.prefs.setNeverAskDone(list.id)
+                    onDismiss()
+                }.padding(10.dp),
+            )
+        }
     }
 }
 
@@ -687,6 +719,92 @@ private fun MenuRow(label: String, onClick: () -> Unit, color: Color = Luxury.Te
     }
 }
 
+/** Board 20: "Zamknij" — what to do with the list; archive and delete only for who manages it. */
+@Composable
+private fun CloseDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit, onFinish: () -> Unit, onArchive: () -> Unit, onCopy: () -> Unit, onDelete: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val items = ui.data.itemsOf(list.id)
+    val open = items.count { !it.checked }
+    val done = items.size - open
+    val things = list.type == ListType.SHOPPING
+    val manage = ui.manageable(list)
+    LuxuryPopup(onDismiss = onDismiss) {
+        Text("Zamknij listę", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(
+            list.name + if (things) " · $open ${list.look.openLabel} · $done ${list.look.doneLabel}" else " · $open otwarte",
+            fontSize = 12.sp, color = Muted,
+        )
+        Column {
+            if (things && done > 0 && ui.canCheck(list)) {
+                val reset = list.look.finish == ListFinish.RESET
+                CloseRow(
+                    AppIcons.Close,
+                    if (reset) "Odznacz wszystko" else "Wyczyść ${list.look.doneLabel}",
+                    if (reset) "wszystko wraca jako nieodhaczone, na następny raz" else "znikają z listy, zostają w pamięci",
+                    onClick = onFinish,
+                )
+                LuxuryDivider()
+            }
+            if (manage) {
+                CloseRow(AppIcons.Archive, if (list.archived) "Przywróć z archiwum" else "Archiwizuj",
+                    if (list.archived) "wraca na ekran list" else "znika z ekranu list; wraca z „Archiwum”", onClick = onArchive)
+                LuxuryDivider()
+            }
+            if (ui.canCreate) {
+                CloseRow(AppIcons.Copy, "Zrób kopię", "nowa lista z tymi samymi pozycjami, nic odhaczone", onClick = onCopy)
+                LuxuryDivider()
+            }
+            CloseRow(AppIcons.Share, "Wyślij jako tekst", "co zostało do zrobienia — SMS, WhatsApp, e-mail…") {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, list.name)
+                    putExtra(android.content.Intent.EXTRA_TEXT, listText(ui, list))
+                }
+                context.startActivity(android.content.Intent.createChooser(send, "Wyślij listę"))
+                onDismiss()
+            }
+            if (manage) {
+                LuxuryDivider()
+                CloseRow(AppIcons.Trash, "Usuń listę", "u wszystkich — z potwierdzeniem", color = MessageKind.ERROR.color, onClick = onDelete)
+            }
+        }
+        if (!manage) Text("Archiwizować i usuwać może twórca listy (${ui.name(list.createdBy)}) albo Admin.", fontSize = 11.sp, color = Faint)
+        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+    }
+}
+
+@Composable
+private fun CloseRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, text: String, color: Color = Luxury.Text, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = if (color == Luxury.Text) Luxury.GoldText else color, modifier = Modifier.size(22.dp))
+        Column(modifier = Modifier.weight(1f).padding(vertical = 6.dp)) {
+            Text(title, fontSize = 16.sp, color = color)
+            Text(text, fontSize = 12.sp, color = Muted)
+        }
+    }
+}
+
+/** "Wyślij jako tekst": what is still open, one line each ("• Mleko 3,2% — 1 l"). */
+internal fun listText(ui: ListsUi, list: ListInfo): String {
+    val open = sorted(ui, list, ui.data.itemsOf(list.id).filter { !it.checked }, ui.prefs.itemSort(list)).flatMap { it.items }
+    val lines = open.map { item ->
+        val extra = when (list.type) {
+            ListType.SHOPPING -> if (list.look.quantity) Lists.quantityText(item.values, ui.data.allUnits) else ""
+            ListType.TASKS -> listOfNotNull(
+                if (item.values.urgent) "PILNE" else item.values.dueDate?.let { dateWords(LocalDate.parse(it)) },
+                item.values.assigneeId?.let { ui.name(it) },
+            ).joinToString(", ")
+            ListType.DEADLINES -> if (item.values.urgent) "PILNE" else item.values.dueDate?.let { LocalDate.parse(it).let { d -> "${d.dayOfMonth}.${d.monthValue}.${d.year}" } }.orEmpty()
+        }
+        "• " + nameOf(item.values) + if (extra.isNotEmpty()) " — $extra" else ""
+    }
+    return list.name + "\n" + lines.ifEmpty { listOf("(nic do zrobienia)") }.joinToString("\n")
+}
+
 @Composable
 private fun DeleteListDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit, onDelete: () -> Unit, onArchive: () -> Unit) {
     val items = ui.data.itemsOf(list.id).size
@@ -698,7 +816,7 @@ private fun DeleteListDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit,
         }
         Text("Usunąć listę „${list.name}”?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
         Text(
-            "Lista zniknie u wszystkich ($people ${plural(people, "osoba", "osoby", "osób")}), razem z $items ${plural(items, "pozycją", "pozycjami", "pozycjami")} i historią." +
+            "Lista zniknie u wszystkich ($people ${plural(people, "osoba", "osoby", "osób")}), razem z $items ${plural(items, "pozycją", "pozycjami", "pozycjami")} (pamięć produktów zostaje)." +
                 if (!list.archived) " Jeśli chcesz ją tylko schować, wybierz „Archiwizuj”." else "",
             fontSize = 13.sp, color = Muted, lineHeight = 19.sp,
         )
@@ -710,7 +828,7 @@ private fun DeleteListDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit,
 
 /** The red button of what cannot be undone. */
 @Composable
-private fun DangerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
+internal fun DangerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
     OutlinedButton(
         onClick = onClick,
         border = BorderStroke(1.dp, Color(0xFFFF6B6B)),
@@ -995,7 +1113,7 @@ private fun QuantityEditor(ui: ListsUi, initial: ItemValues, onCancel: () -> Uni
 }
 
 @Composable
-private fun StepCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+internal fun StepCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier.size(52.dp).clip(CircleShape).border(1.dp, Luxury.GoldLink, CircleShape).background(Luxury.GoldBase.copy(alpha = 0.08f))
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick),

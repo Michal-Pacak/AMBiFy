@@ -9,6 +9,9 @@ object AppPaths {
     /** The page sent to a new person: a download button and how to install. */
     const val DOWNLOAD = "/pobierz"
 
+    /** The full list of changes for people (app/changelog.md); the update popup and Ustawienia link to it. */
+    const val CHANGELOG = "/zmiany"
+
     /**
      * Osobny kanał "kids" — build dla telefonów dzieci. Ten build aktualizuje się TYLKO z tego kanału, żeby nie
      * zassać zwykłego APK (ten sam applicationId) i nie zgubić zbierania zdarzeń.

@@ -120,6 +120,12 @@ fun ListsScreen(resetKey: Int = 0) {
     var dialog by remember { mutableStateOf<ListDialog?>(null) }
 
     LaunchedEffect(resetKey) { if (resetKey > 0) openId = null }
+    // A list tapped on the Dashboard (board 19).
+    val fromDashboard by ListsNavigation.open.collectAsState()
+    LaunchedEffect(fromDashboard) {
+        fromDashboard?.let { openId = it }
+        ListsNavigation.open.value = null
+    }
     BackHandler(enabled = openId != null) { openId = null }
     LaunchedEffect(repo) {
         ListsSyncWorker.schedulePeriodic(context)
@@ -164,7 +170,12 @@ fun ListsScreen(resetKey: Int = 0) {
         prefs = prefs,
     )
     val open = openId?.let { id -> view.lists.firstOrNull { it.id == id } }
-    LaunchedEffect(openId, open) { if (openId != null && open == null && state.syncedAt != null) openId = null }
+    // An open list that went away (deleted, access taken) closes. Checked against the lists of now, not of the
+    // composition that started this: an id just set (e.g. from a Dashboard widget) is not "gone".
+    LaunchedEffect(openId, open) {
+        val id = openId ?: return@LaunchedEffect
+        if (state.syncedAt != null && state.view.lists.none { it.id == id }) openId = null
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (open != null) {
@@ -268,6 +279,22 @@ internal class ListsController(private val repo: ListRepository, private val sco
     }
 
     fun check(item: ListItem, checked: Boolean) = run(ListChangeKind.CHECK_ITEM, item.listId, item.id) { copy(checked = checked) }
+
+    /** A done thing back on the list (board 20), with [values] if they changed: no second item. */
+    fun restore(item: ListItem, values: ItemValues = item.values) {
+        edit(item, values)
+        check(item, false)
+    }
+
+    /** "Usuń z pamięci": the product [values] of the kind of lists [listId] is (the items stay). */
+    fun forget(listId: String, values: ItemValues) = run(ListChangeKind.FORGET_PRODUCT, listId) { copy(values = values) }
+
+    /** "Zrób kopię": a new list like [list] with its things (none checked); returns the new list's id. */
+    fun copyList(list: ListInfo, name: String, items: List<ListItem>): String {
+        val id = createList(list.copy(name = name, archived = false))
+        items.forEach { addItem(id, it.values) }
+        return id
+    }
     fun delete(item: ListItem) = run(ListChangeKind.DELETE_ITEM, item.listId, item.id) { this }
     fun clearChecked(listId: String) = run(ListChangeKind.CLEAR_CHECKED, listId) { this }
     fun uncheckAll(listId: String) = run(ListChangeKind.UNCHECK_ALL, listId) { this }
@@ -294,6 +321,10 @@ internal sealed interface ListDialog {
     data object SortLists : ListDialog
     data class SortItems(val list: ListInfo) : ListDialog
     data class Menu(val list: ListInfo) : ListDialog
+    /** Board 20: "Zamknij" in a list: finish, archive, copy, send as text, delete. */
+    data class Close(val list: ListInfo) : ListDialog
+    /** Boards 21–23: things added before, picked and set in two steps. */
+    data class Memory(val list: ListInfo) : ListDialog
     data class DeleteList(val list: ListInfo) : ListDialog
     /** [item] null: a new one on [list]. */
     data class Item(val list: ListInfo, val item: ListItem?) : ListDialog
@@ -411,6 +442,12 @@ private fun ListRow(ui: ListsUi, list: ListInfo, onOpen: () -> Unit, onMenu: () 
 
 @Composable
 private fun Summary(ui: ListsUi, list: ListInfo, items: List<ListItem>) {
+    val (text, warning) = summaryOf(ui, list, items)
+    Text(text, fontSize = 12.sp, color = if (warning) MessageKind.WARNING.color else Muted)
+}
+
+/** "3 do kupienia · 5 kupione", "1 pilne · 2 otwarte", "najbliższy: 4.12"; true when something is urgent or late. */
+internal fun summaryOf(ui: ListsUi, list: ListInfo, items: List<ListItem>): Pair<String, Boolean> {
     val open = items.filter { !it.checked }
     val urgent = open.count { it.values.urgent }
     val late = open.count { isLate(it) }
@@ -429,7 +466,7 @@ private fun Summary(ui: ListsUi, list: ListInfo, items: List<ListItem>) {
             else (warn + listOfNotNull(next?.let { "najbliższy: ${it.dayOfMonth}.${it.monthValue}" })).joinToString(" · ")
         }
     }
-    Text(text, fontSize = 12.sp, color = if (warn.isNotEmpty()) MessageKind.WARNING.color else Muted)
+    return text to warn.isNotEmpty()
 }
 
 @Composable

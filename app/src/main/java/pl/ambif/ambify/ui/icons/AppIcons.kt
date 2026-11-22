@@ -263,6 +263,49 @@ object AppIcons {
         }
     }
 
+    /** A box with a lid ("Archiwizuj"). */
+    val Archive: ImageVector by lazy {
+        line("Archive") {
+            moveTo(3f, 4f); lineTo(21f, 4f); lineTo(21f, 9f); lineTo(3f, 9f); close()
+            moveTo(5f, 9f); lineTo(5f, 20f); lineTo(19f, 20f); lineTo(19f, 9f)
+            moveTo(10f, 13f); lineTo(14f, 13f)
+        }
+    }
+
+    /** Two sheets ("Zrób kopię"). */
+    val Copy: ImageVector by lazy {
+        line("Copy") {
+            moveTo(8f, 8f); lineTo(20f, 8f); lineTo(20f, 20f); lineTo(8f, 20f); close()
+            moveTo(16f, 8f); lineTo(16f, 4f); lineTo(4f, 4f); lineTo(4f, 16f); lineTo(8f, 16f)
+        }
+    }
+
+    /** An arrow out of a tray ("Wyślij jako tekst"). */
+    val Share: ImageVector by lazy {
+        line("Share") {
+            moveTo(4f, 12f); lineTo(4f, 20f); lineTo(20f, 20f); lineTo(20f, 12f)
+            moveTo(12f, 3f); lineTo(12f, 15f); moveTo(8f, 7f); lineTo(12f, 3f); lineTo(16f, 7f)
+        }
+    }
+
+    /** A bin ("Usuń"). */
+    val Trash: ImageVector by lazy {
+        line("Trash") {
+            moveTo(4f, 7f); lineTo(20f, 7f); moveTo(6f, 7f); lineTo(7f, 20f); lineTo(17f, 20f); lineTo(18f, 7f)
+            moveTo(9f, 7f); lineTo(9f, 4f); lineTo(15f, 4f); lineTo(15f, 7f)
+            moveTo(10f, 11f); lineTo(10f, 16f); moveTo(14f, 11f); lineTo(14f, 16f)
+        }
+    }
+
+    /** A clock with a turning arrow ("do historii"). */
+    val History: ImageVector by lazy {
+        line("History") {
+            moveTo(4f, 12f); arcTo(8f, 8f, 0f, true, false, 7f, 5.8f)
+            moveTo(4f, 4f); lineTo(4f, 8f); lineTo(8f, 8f)
+            moveTo(12f, 8f); lineTo(12f, 12f); lineTo(15f, 14f)
+        }
+    }
+
     private fun line(name: String, block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit): ImageVector =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
             path(

@@ -100,7 +100,7 @@ class ListRepository(
                 do {
                     val current = _state.value
                     val sent = current.pending.take(BATCH)
-                    val response = send(ListSyncRequest(current.base.rev, sent))
+                    val response = send(ListSyncRequest(current.base.since, sent))
                     val merge = current.merged(sent, response, clock())
                     save(merge.state)
                     val base = merge.state.base

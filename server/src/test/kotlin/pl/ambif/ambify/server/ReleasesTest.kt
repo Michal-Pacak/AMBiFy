@@ -11,8 +11,10 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import pl.ambif.ambify.server.releases.AppReleases
+import pl.ambif.ambify.server.releases.changelogPage
 import pl.ambif.ambify.server.releases.polishDate
 import pl.ambif.ambify.shared.AppPaths
 import pl.ambif.ambify.shared.AppRelease
@@ -111,5 +113,27 @@ class ReleasesTest {
     fun datesInPolish() {
         assertEquals("3 listopada 2026", polishDate("2026-11-03"))
         assertEquals("zle", polishDate("zle"))
+    }
+
+    @Test
+    fun changelogPageShowsVersionsSectionsAndNestedPoints() {
+        val page = changelogPage(
+            """
+            # Lista zmian AMBiFy
+            <!-- komentarz dla autora -->
+            ## 0.7.1 · 22 listopada 2026
+            ### Listy
+            - Pamięć <produktów>
+              - wiele naraz
+            - Zamknij
+            ## 0.7.0 · 18 listopada 2026
+            - Listy
+            """.trimIndent(),
+        )
+        assertTrue("0.7.1" in page && "22 listopada 2026" in page && "LISTY" in page)
+        assertTrue("<li>Pamięć &lt;produktów&gt;</li><ul><li>wiele naraz</li></ul><li>Zamknij</li>" in page)
+        assertTrue("komentarz" !in page)
+        assertEquals(2, Regex("<section class=\"card\">").findAll(page).count())
+        assertTrue("pojawi się" in changelogPage(null))
     }
 }

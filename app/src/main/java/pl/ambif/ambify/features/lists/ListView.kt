@@ -6,8 +6,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import java.time.LocalDate
 import pl.ambif.ambify.shared.Frequency
+import pl.ambif.ambify.shared.ItemValues
 import pl.ambif.ambify.shared.ListInfo
 import pl.ambif.ambify.shared.ListItem
+import pl.ambif.ambify.shared.ListMemory
 import pl.ambif.ambify.shared.ListType
 import pl.ambif.ambify.shared.Lists
 
@@ -58,6 +60,21 @@ internal class ListPrefs(context: Context) {
     fun doneAnswered(listId: String): Long = prefs.getLong("done_$listId", 0)
 
     fun answerDone(listId: String, addedAt: Long) { prefs.edit().putLong("done_$listId", addedAt).apply(); changed() }
+
+    /** "Nie pytaj więcej o tę listę" (0.7.1): a list used without end never asks "co z listą?". */
+    fun neverAskDone(listId: String): Boolean { tick; return prefs.getBoolean("never_done_$listId", false) }
+
+    fun setNeverAskDone(listId: String) { prefs.edit().putBoolean("never_done_$listId", true).apply(); changed() }
+
+    /** The done section ("Kupione · 5") folded or not, per list. */
+    fun doneOpen(listId: String): Boolean { tick; return prefs.getBoolean("done_open_$listId", true) }
+
+    fun setDoneOpen(listId: String, open: Boolean) { prefs.edit().putBoolean("done_open_$listId", open).apply(); changed() }
+
+    /** A kind of lists ("Listy rzeczy") opened in the widget "Aktywne listy" [widgetId]; folded at first. */
+    fun widgetKindOpen(widgetId: String, type: ListType): Boolean { tick; return prefs.getBoolean("widget_kind_${widgetId}_${type.name}", false) }
+
+    fun setWidgetKindOpen(widgetId: String, type: ListType, open: Boolean) { prefs.edit().putBoolean("widget_kind_${widgetId}_${type.name}", open).apply(); changed() }
 
     /** "To różne rzeczy — zostaw obie": no "Podwójnie?" for this pair any more. */
     fun notDuplicates(a: String, b: String): Boolean {
@@ -139,3 +156,34 @@ internal fun duplicateOf(prefs: ListPrefs, items: List<ListItem>, item: ListItem
 
 internal fun isLate(item: ListItem, today: LocalDate = LocalDate.now()): Boolean =
     !item.values.urgent && item.values.dueDate?.let { LocalDate.parse(it).isBefore(today) } == true
+
+/**
+ * [existing] (done, e.g. in "Kupione") back on the list with what was typed now: a new amount, date or person
+ * replaces the old one, what was not typed stays (board 20).
+ */
+internal fun restoredValues(existing: ItemValues, wanted: ItemValues): ItemValues {
+    var values = existing
+    if (wanted.quantity != null) values = values.copy(quantity = wanted.quantity, unit = wanted.unit, packSize = wanted.packSize)
+    if (wanted.dueDate != null || wanted.urgent) values = values.copy(dueDate = wanted.dueDate, urgent = wanted.urgent, recurrence = wanted.recurrence)
+    if (wanted.assigneeId != null) values = values.copy(assigneeId = wanted.assigneeId)
+    if (wanted.note.isNotBlank()) values = values.copy(note = wanted.note)
+    return values
+}
+
+/** "Najczęściej", "Ostatnio", "A–Ż" in "Z pamięci" (board 21). */
+internal enum class MemorySort(val label: String) { OFTEN("Najczęściej"), RECENT("Ostatnio"), ALPHA("A–Ż") }
+
+/** The memory as "Z pamięci" shows it: matching [query] (also without Polish letters), [onlyKeys] if given, sorted. */
+internal fun memoryShown(memory: List<ListMemory>, query: String, onlyKeys: Set<String>?, sort: MemorySort): List<ListMemory> {
+    val q = Lists.searchKey(query.trim())
+    return memory
+        .filter { onlyKeys == null || it.key in onlyKeys }
+        .filter { q.isEmpty() || Lists.searchKey("${it.values.name} ${it.values.variant}").contains(q) }
+        .sortedWith(
+            when (sort) {
+                MemorySort.OFTEN -> compareByDescending<ListMemory> { it.uses }.thenByDescending { it.lastUsedAt }
+                MemorySort.RECENT -> compareByDescending { it.lastUsedAt }
+                MemorySort.ALPHA -> compareBy(String.CASE_INSENSITIVE_ORDER) { "${it.values.name} ${it.values.variant}" }
+            },
+        )
+}

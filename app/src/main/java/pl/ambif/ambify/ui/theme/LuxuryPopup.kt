@@ -35,3 +35,46 @@ fun LuxuryPopup(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Un
         )
     }
 }
+
+/**
+ * The gold popup with [header] pinned at the top and [footer] (the buttons) at the bottom; only the middle
+ * [content] scrolls, so the buttons are always visible however long the list is.
+ */
+@Composable
+fun LuxuryPopup(
+    onDismiss: () -> Unit,
+    header: @Composable ColumnScope.() -> Unit,
+    footer: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(24.dp, LuxuryCardShape, ambientColor = Color.Black, spotColor = Color.Black)
+                .clip(LuxuryCardShape)
+                .background(Luxury.PopupBrush)
+                .border(1.dp, Luxury.PopupBorderBrush, LuxuryCardShape),
+        ) {
+            Column(
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = header,
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
+            )
+            LuxuryDivider()
+            Column(
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                content = footer,
+            )
+        }
+    }
+}

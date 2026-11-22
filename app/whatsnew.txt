@@ -1,8 +1,4 @@
-Listy: zakupy, zadania i terminy — działają też bez internetu
-Listy rzeczy: gotowe wzory Zakupy i Pakowanie albo własna lista z własnymi nazwami sekcji
-Historia listy: zakończone zakupy zostają pod listą — widać, kto i kiedy co odhaczył
-Po odhaczeniu wszystkiego aplikacja pyta, co zrobić z listą
-Rodzaj przy pozycji („Mleko 3,2%”) i podpowiedź, gdy coś już jest na liście
-Pilne zadania i terminy — bez daty, na górze listy
-Sortowanie list i pozycji, osobno na każdym ekranie
-Twórca listy ustala, kto ją widzi i co może: role i osoby
+Zmiany na liście zakupów
+Pamięć produktów
+Nowe widgety na pulpit
+Inne poprawki

@@ -36,7 +36,7 @@ class LessonsDayTest {
         val shown = LessonsDays.of(week, at(tuesday, "11:00"))!!
         assertEquals(tuesday, shown.date)
         assertEquals(2, shown.firstShown)
-        assertEquals("KONIEC LEKCJI DZIŚ", shown.footerLabel)
+        assertEquals("KONIEC DZIŚ", shown.footerLabel)
         assertEquals("13:30", shown.footerTime)
         assertEquals("DZIŚ", shown.dayTag)
     }
@@ -50,7 +50,7 @@ class LessonsDayTest {
     fun afterSchoolShowsTomorrowsStartWithoutTheCancelledFirstLesson() {
         val shown = LessonsDays.of(week, at(tuesday, "14:00"))!!
         assertEquals(wednesday, shown.date)
-        assertEquals("START JUTRO · ŚRODA", shown.footerLabel)
+        assertEquals("START JUTRO", shown.footerLabel)
         assertEquals("8:55", shown.footerTime)
         assertEquals("JUTRO", shown.dayTag)
     }
@@ -59,7 +59,7 @@ class LessonsDayTest {
     fun fridayAfterSchoolShowsMonday() {
         val shown = LessonsDays.of(week, at(friday, "10:00"))!!
         assertEquals(monday, shown.date)
-        assertEquals("START W PONIEDZIAŁEK 23.11", shown.footerLabel)
+        assertEquals("START PN 23.11", shown.footerLabel)
         assertEquals("8:55", shown.footerTime)
         assertEquals("PN 23.11", shown.dayTag)
     }

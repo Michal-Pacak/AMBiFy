@@ -85,6 +85,7 @@ private class Detail(
     val onDialog: (ListDialog) -> Unit,
     val onCheck: (ListItem, Boolean) -> Unit,
     val items: List<ListItem>,
+    val onInfo: (MessageKind, String, String) -> Unit,
 ) {
     val sort: ItemSort get() = ui.prefs.itemSort(list)
 }
@@ -102,8 +103,9 @@ internal fun ListDetail(
     val items = ui.data.itemsOf(list.id)
     val onCheck: (ListItem, Boolean) -> Unit = { item, checked ->
         lists.check(item, checked)
+        if (!checked && list.type == ListType.SHOPPING) onInfo(MessageKind.SUCCESS, "Wróciło na listę", item.values.name)
         val after = items.map { if (it.id == item.id) it.copy(checked = checked) else it }
-        if (checked && allDone(after)) {
+        if (checked && allDone(after) && !ui.prefs.neverAskDone(list.id)) {
             if (ui.manageable(list)) {
                 if (after.maxOf { it.addedAt } > ui.prefs.doneAnswered(list.id)) onDialog(ListDialog.Done(list))
             } else {
@@ -111,7 +113,7 @@ internal fun ListDetail(
             }
         }
     }
-    val detail = Detail(ui, list, lists, onDialog, onCheck, items)
+    val detail = Detail(ui, list, lists, onDialog, onCheck, items, onInfo)
     val level = ui.level(list)
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
@@ -124,6 +126,7 @@ internal fun ListDetail(
                 Text("${kindLabel(list)} · ${ui.whoSees(list)}" + if (list.archived) " · w archiwum" else "", fontSize = 13.sp, color = Muted, maxLines = 2)
             }
             IconButton(onClick = { onDialog(ListDialog.SortItems(list)) }) { Icon(AppIcons.Sort, contentDescription = "Sortuj", tint = Muted) }
+            CloseButton { onDialog(ListDialog.Close(list)) }
             if (ui.manageable(list)) {
                 IconButton(onClick = { onDialog(ListDialog.Menu(list)) }) { Icon(AppIcons.More, contentDescription = "Opcje listy", tint = Muted) }
             }
@@ -144,11 +147,53 @@ internal fun ListDetail(
 internal fun kindLabel(list: ListInfo) =
     if (list.type == ListType.SHOPPING) "Lista rzeczy · ${list.look.preset.label}" else list.type.label
 
-/** A new item, unless the same thing is on the list already: then "Jest już na liście" (board 14) decides. */
-internal fun addOrAsk(ui: ListsUi, list: ListInfo, lists: ListsController, values: ItemValues, remember: Boolean, onDialog: (ListDialog) -> Unit) {
-    val existing = ui.data.itemsOf(list.id).firstOrNull { !it.checked && Lists.sameThing(it.values, values) }
-    if (existing != null) onDialog(ListDialog.Duplicate(list, existing, values, remember))
-    else lists.addItem(list.id, values, remember)
+/**
+ * A new item, unless the same thing is on the list already: an open one → "Jest już na liście" (board 14) decides;
+ * a done one (e.g. in "Kupione") comes back with the new amount instead of a second item (board 20).
+ */
+internal fun addOrAsk(
+    ui: ListsUi, list: ListInfo, lists: ListsController, values: ItemValues, remember: Boolean,
+    onDialog: (ListDialog) -> Unit, onInfo: (String, String) -> Unit,
+) {
+    val items = ui.data.itemsOf(list.id)
+    val open = items.firstOrNull { !it.checked && Lists.sameThing(it.values, values) }
+    val done = items.firstOrNull { it.checked && Lists.sameThing(it.values, values) }
+    when {
+        open != null -> onDialog(ListDialog.Duplicate(list, open, values, remember))
+        done != null && ui.canCheck(list) && (ui.canEdit(list, done) || values.quantity == null) -> {
+            val back = restoredValues(done.values, values)
+            lists.restore(done, back)
+            val amount = if (list.type == ListType.SHOPPING && list.look.quantity) Lists.quantityText(back, ui.data.allUnits) else ""
+            onInfo("Wróciło na listę", nameOf(back) + if (amount.isNotEmpty()) " ($amount)" else "")
+        }
+        else -> lists.addItem(list.id, values, remember)
+    }
+}
+
+/** "Mleko 3,2%". */
+internal fun nameOf(values: ItemValues) = values.name + if (values.variant.isNotBlank()) " ${values.variant}" else ""
+
+/** "+ Dodaj" of tasks and deadlines: things added before first (board 23), a new one when there are none. */
+private fun addFromMemory(d: Detail) {
+    if (d.ui.data.memoryOf(Lists.scopeOf(d.list)).isEmpty()) d.onDialog(ListDialog.Item(d.list, null)) else d.onDialog(ListDialog.Memory(d.list))
+}
+
+/** Board 20: "Zamknij ⌄" in the title of a list. */
+@Composable
+private fun CloseButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .border(1.dp, Luxury.GoldLink, RoundedCornerShape(18.dp))
+            .clickable(onClickLabel = "Zamknij listę: co z nią zrobić", role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("Zamknij", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldText)
+        Icon(AppIcons.ExpandMore, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(14.dp))
+    }
 }
 
 // --- lists of things (shopping, packing, own kind) ---
@@ -159,13 +204,14 @@ private fun Things(d: Detail) {
     val ui = d.ui
     val look = list.look
     var draft by rememberSaveable(list.id) { mutableStateOf("") }
-    var doneOpen by rememberSaveable(list.id) { mutableStateOf(true) }
+    val doneOpen = ui.prefs.doneOpen(list.id)
     fun add() {
         val text = draft.trim()
-        if (text.isEmpty()) return
+        // "+" with nothing typed: things added before (board 21).
+        if (text.isEmpty()) { d.onDialog(ListDialog.Memory(list)); return }
         val values = if (look.quantity) Lists.quickAdd(text, ui.data.allUnits) { key -> ui.data.products.firstOrNull { it.product == key } }
         else ItemValues(name = text.replaceFirstChar { it.uppercase() })
-        addOrAsk(ui, list, d.lists, values, false, d.onDialog)
+        addOrAsk(ui, list, d.lists, values, false, d.onDialog) { title, info -> d.onInfo(MessageKind.SUCCESS, title, info) }
         draft = ""
     }
     if (ui.canAdd(list)) {
@@ -184,11 +230,11 @@ private fun Things(d: Detail) {
             Box(
                 modifier = Modifier.size(52.dp).clip(CircleShape).background(Luxury.GoldFill).clickable(onClickLabel = "Dodaj pozycję", role = Role.Button) { add() },
                 contentAlignment = Alignment.Center,
-            ) { Icon(AppIcons.Plus, contentDescription = "Dodaj pozycję", tint = Luxury.Surface) }
+            ) { Icon(AppIcons.Plus, contentDescription = if (draft.isBlank()) "Dodaj z pamięci" else "Dodaj pozycję", tint = Luxury.Surface) }
         }
     }
     val todo = d.items.filter { !it.checked }
-    val done = d.items.filter { it.checked }.sortedByDescending { it.checkedAt ?: 0 }
+    val done = d.items.filter { it.checked }
     LuxuryCard(contentPadding = CardPadding, spacing = 0.dp) {
         LuxurySectionTitle("${look.openLabel.cap()} · ${todo.size}")
         if (todo.isEmpty()) EmptyLine(if (d.items.isEmpty()) "Lista jest pusta. Dopisz coś powyżej." else "Wszystko odhaczone.")
@@ -206,10 +252,11 @@ private fun Things(d: Detail) {
     }
     if (done.isNotEmpty()) {
         LuxuryCard(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp), spacing = 0.dp) {
-            Toggle("${look.doneLabel.cap()} · ${done.size}", doneOpen) { doneOpen = !doneOpen }
+            Toggle("${look.doneLabel.cap()} · ${done.size}", doneOpen, d.sort.label.takeIf { d.sort != ItemSort.ADDED }) { ui.prefs.setDoneOpen(list.id, !doneOpen) }
             if (doneOpen) {
-                done.forEach { item ->
-                    LuxuryDivider()
+                LuxuryDivider()
+                // Sorted like the whole list ("Sortuj"); tapping the box puts a thing back (board 20).
+                Groups(d, done) { item ->
                     ItemRow(d, item, square = true) {
                         Text("${ui.name(item.checkedBy).ifEmpty { "?" }} · ${time(item.checkedAt)}", fontSize = 11.sp, color = Muted)
                     }
@@ -222,7 +269,6 @@ private fun Things(d: Detail) {
             }
         }
     }
-    History(d)
     if (ui.canAdd(list)) {
         Text(
             "Szczegóły pozycji (rodzaj, notatka) — stuknij jej nazwę",
@@ -241,61 +287,11 @@ private fun addPlaceholder(list: ListInfo) = when (list.look.preset) {
 internal fun finishLabel(list: ListInfo) = when {
     list.look.finish == ListFinish.RESET && list.look.preset == ListPreset.PACKING -> "Odznacz wszystko (nowy wyjazd)"
     list.look.finish == ListFinish.RESET -> "Odznacz wszystko"
-    list.look.preset == ListPreset.SHOPPING -> "Zakończ zakupy (koszyk do historii)"
-    else -> "Przenieś ${list.look.doneLabel} do historii"
-}
-
-/** Board 11: what "Zakończ" moved away, by each finishing; "Przywróć" puts a thing back on the list. */
-@Composable
-private fun History(d: Detail) {
-    val history = d.ui.data.historyOf(d.list.id)
-    if (history.isEmpty()) return
-    var open by rememberSaveable(d.list.id + "h") { mutableStateOf(false) }
-    var shown by rememberSaveable(d.list.id + "hg") { mutableStateOf(setOf<Long>()) }
-    val groups = history.groupBy { it.clearedAt ?: 0 }.entries.sortedByDescending { it.key }
-    LuxuryCard(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp), spacing = 0.dp) {
-        Toggle("Historia · ${history.size}", open) { open = !open }
-        if (open) {
-            groups.forEachIndexed { index, (at, items) ->
-                LuxuryDivider()
-                val by = items.firstNotNullOfOrNull { it.clearedBy }
-                val title = (if (d.list.look.preset == ListPreset.SHOPPING) "Zakupy zakończone " else "Do historii ") +
-                    day(at) + (by?.let { " · ${d.ui.name(it)}" } ?: "")
-                Text(title, fontSize = 13.sp, color = Luxury.GoldText, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
-                if (index == 0 || at in shown) {
-                    items.forEach { item -> HistoryRow(d, item) }
-                } else {
-                    Text(
-                        "${items.size} ${plural(items.size, "pozycja", "pozycje", "pozycji")} · pokaż",
-                        fontSize = 12.sp, color = Muted,
-                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { shown = shown + at }.padding(vertical = 6.dp),
-                    )
-                }
-            }
-            Text("Historia zostaje do usunięcia listy.", fontSize = 11.sp, color = Faint, modifier = Modifier.padding(top = 6.dp))
-        }
-    }
+    else -> "Wyczyść ${list.look.doneLabel}"
 }
 
 @Composable
-private fun HistoryRow(d: Detail, item: ListItem) {
-    Row(modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
-            val quantity = if (d.list.look.quantity) Lists.quantityText(item.values, d.ui.data.allUnits) else ""
-            Text(nameText(item.values, suffix = quantity.takeIf { it.isNotEmpty() }?.let { " · $it" }), fontSize = 15.sp)
-            Text("${d.ui.name(item.checkedBy).ifEmpty { "?" }} · ${time(item.checkedAt)}", fontSize = 11.sp, color = Muted)
-        }
-        if (d.ui.canCheck(d.list)) {
-            Text(
-                "Przywróć", fontSize = 13.sp, color = Luxury.GoldText,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Przywróć na listę: ${item.values.name}") { d.lists.check(item, false) }.padding(8.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun Toggle(title: String, open: Boolean, onClick: () -> Unit) {
+private fun Toggle(title: String, open: Boolean, note: String? = null, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(onClickLabel = if (open) "Zwiń" else "Rozwiń", onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
@@ -303,6 +299,10 @@ private fun Toggle(title: String, open: Boolean, onClick: () -> Unit) {
     ) {
         Icon(if (open) AppIcons.ExpandMore else AppIcons.Forward, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(14.dp))
         LuxurySectionTitle(title)
+        note?.let {
+            Box(modifier = Modifier.weight(1f))
+            Text(it, fontSize = 12.sp, color = Muted)
+        }
     }
 }
 
@@ -361,7 +361,7 @@ private fun Tasks(d: Detail) {
             }
         }
     }
-    if (ui.canAdd(d.list)) GoldButton("+  Dodaj zadanie") { d.onDialog(ListDialog.Item(d.list, null)) }
+    if (ui.canAdd(d.list)) GoldButton("+  Dodaj zadanie") { addFromMemory(d) }
 }
 
 @Composable
@@ -428,7 +428,7 @@ private fun Deadlines(d: Detail) {
             }
         }
     }
-    if (d.ui.canAdd(d.list)) GoldButton("+  Dodaj termin") { d.onDialog(ListDialog.Item(d.list, null)) }
+    if (d.ui.canAdd(d.list)) GoldButton("+  Dodaj termin") { addFromMemory(d) }
     Text("Termin powtarzalny po odhaczeniu wraca z następną datą", fontSize = 11.sp, color = Faint, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
 }
 
@@ -615,5 +615,3 @@ internal fun time(at: Long?): String {
     }
 }
 
-/** "15.11". */
-private fun day(at: Long): String = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).let { "${it.dayOfMonth}.${it.monthValue}" }

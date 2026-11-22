@@ -6,7 +6,8 @@
 #   publish-app.sh --kids          build dla telefonów dzieci → osobny kanał "kids" (/app/kids/..., /pobierz/kids)
 #   --min N                        apps older than versionCode N must update before they work again
 # Anything else goes to Gradle, e.g. -Pambify.versionCode=10 -Pambify.versionName=0.6.2 for a trial update.
-# "Co nowego" comes from app/whatsnew.txt, one point per line.
+# "Co nowego" comes from app/whatsnew.txt, one point per line (3–4 short points);
+# the full list of changes (page /zmiany) from app/changelog.md.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -62,6 +63,10 @@ release = {
 with open(os.path.join(target, "latest.json.tmp"), "w", encoding="utf-8") as f:
     json.dump(release, f, ensure_ascii=False, indent=2)
 os.replace(os.path.join(target, "latest.json.tmp"), os.path.join(target, "latest.json"))
+# The full list of changes (page /zmiany) goes with the app.
+changelog = os.path.join(os.path.dirname(notes_file), "changelog.md")
+if os.path.exists(changelog):
+    shutil.copyfile(changelog, os.path.join(target, "changelog.md"))
 # Keep the three newest APKs.
 apks = sorted((p for p in os.listdir(target) if p.startswith("ambify-") and p.endswith(".apk")),
               key=lambda p: os.path.getmtime(os.path.join(target, p)), reverse=True)

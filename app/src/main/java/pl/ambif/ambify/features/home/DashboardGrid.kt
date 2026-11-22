@@ -142,7 +142,7 @@ internal fun DashboardGrid(
         val coordinates = box ?: return
         val root = coordinates.localToRoot(pointer)
         val middle = coordinates.localToRoot(Offset(coordinates.size.width / 2f, 0f)).x
-        val half = WidgetType.of(held.type)?.half == true
+        val half = held.slot != WidgetSlot.FULL
         target = dropTarget(rowsOf(current.filter { it.id != held.id }), rowBounds, root, middle, half)
     }
 

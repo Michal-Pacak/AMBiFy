@@ -38,6 +38,10 @@ class AppReleases(private val dir: File) {
 
     fun kidsApk(name: String): File? = apkIn(kidsDir, name)
 
+    /** The full list of changes `publish-app.sh` copies next to the app (any channel; the newest file wins). */
+    fun changelog(): String? =
+        listOf(dir, kidsDir).map { it.resolve(CHANGELOG) }.filter { it.isFile }.maxByOrNull { it.lastModified() }?.readText()
+
     private fun latestIn(channel: File): AppRelease? {
         val file = channel.resolve(LATEST)
         if (!file.isFile) return null
@@ -51,6 +55,7 @@ class AppReleases(private val dir: File) {
     companion object {
         const val LATEST = "latest.json"
         const val KIDS_DIR = "kids"
+        const val CHANGELOG = "changelog.md"
         val APK_NAME = Regex("ambify-[0-9A-Za-z._-]+\\.apk")
     }
 }
@@ -60,6 +65,9 @@ fun Route.releaseRoutes(releases: AppReleases) {
     channelRoutes(AppPaths.LATEST, AppPaths.APK, AppPaths.DOWNLOAD, kids = false, releases::latest, releases::apk)
     // Kanał kids — build dla telefonów dzieci, osobny plik latest.json i APK.
     channelRoutes(AppPaths.KIDS_LATEST, AppPaths.KIDS_APK, AppPaths.KIDS_DOWNLOAD, kids = true, releases::kidsLatest, releases::kidsApk)
+    get(AppPaths.CHANGELOG) {
+        call.respondText(changelogPage(releases.changelog()), ContentType.Text.Html.withParameter("charset", "utf-8"))
+    }
 }
 
 private fun Route.channelRoutes(
@@ -164,6 +172,84 @@ $button
 </ol>
 </section>
 <p class="muted" style="text-align:center">Strona działa tylko w domowym Wi‑Fi. Kolejne wersje aplikacja pobierze już sama.</p>
+</main>
+</body>
+</html>
+"""
+}
+
+/**
+ * The page "Lista zmian" from app/changelog.md: "## 0.7.1 · data" = a version card, "### Listy" = a gold label,
+ * "- punkt" and "  - podpunkt" = points; the "# " title and HTML comments are left out.
+ */
+internal fun changelogPage(markdown: String?): String {
+    val body = StringBuilder()
+    var open = false
+    var depth = 0
+    fun closeLists(to: Int) {
+        while (depth > to) {
+            body.append("</ul>")
+            depth--
+        }
+    }
+    fun closeCard() {
+        closeLists(0)
+        if (open) body.append("</section>\n")
+        open = false
+    }
+    val text = (markdown ?: "").replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+    for (raw in text.lines()) {
+        val line = raw.trimEnd()
+        when {
+            line.isBlank() || line.startsWith("# ") -> Unit
+            line.startsWith("## ") -> {
+                closeCard()
+                val (version, date) = line.removePrefix("## ").split(" · ", limit = 2).let { it[0] to it.getOrNull(1) }
+                body.append("""<section class="card"><p class="version">${version.escaped()}</p>""")
+                date?.let { body.append("""<p class="muted">${it.escaped()}</p>""") }
+                open = true
+            }
+            line.startsWith("### ") -> {
+                closeLists(0)
+                body.append("""<p class="label">${line.removePrefix("### ").uppercase().escaped()}</p>""")
+            }
+            line.trimStart().startsWith("- ") -> {
+                val level = if (line.startsWith("  ")) 2 else 1
+                while (depth < level) {
+                    body.append("<ul>")
+                    depth++
+                }
+                closeLists(level)
+                body.append("<li>${line.trimStart().removePrefix("- ").escaped()}</li>")
+            }
+            else -> body.append("""<p class="muted">${line.escaped()}</p>""")
+        }
+    }
+    closeCard()
+    val content = body.toString().ifBlank { """<section class="card"><p class="muted">Lista zmian pojawi się przy najbliższej aktualizacji.</p></section>""" }
+    return """<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lista zmian AMBiFy</title>
+<style>
+body{margin:0;background:#121214;color:#F1ECE0;font-family:Roboto,system-ui,sans-serif}
+main{max-width:560px;margin:0 auto;padding:28px 16px 32px;display:flex;flex-direction:column;gap:18px}
+.logo{text-align:center;font-size:34px;font-weight:700;letter-spacing:4px;color:#E6C65C;margin:0}
+.sub{text-align:center;color:#A9A9B1;margin:6px 0 0;font-size:14px}
+.card{border:1px solid #8C7322;border-radius:20px;background:linear-gradient(180deg,#232327,#19191C);padding:20px;display:flex;flex-direction:column;gap:10px}
+.version{font-size:22px;font-weight:700;color:#F1ECE0;margin:0}
+.muted{color:#A9A9B1;font-size:13px;margin:0;line-height:1.5}
+.label{font-size:12px;font-weight:700;letter-spacing:1.6px;color:#E6C65C;margin:8px 0 0}
+ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.5;color:#E4DFD3}
+ul ul{margin-top:6px;gap:4px;font-size:14px;color:#C9C4B8}
+</style>
+</head>
+<body>
+<main>
+<div><p class="logo">AMBiFy</p><p class="sub">Lista zmian</p></div>
+$content
 </main>
 </body>
 </html>

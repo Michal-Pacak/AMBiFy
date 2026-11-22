@@ -38,7 +38,7 @@ enum class ListIcon { CART, SUITCASE, PIN, STAR, GIFT, LIST }
 data class ListStyle(
     val preset: ListPreset = ListPreset.SHOPPING,
     val openLabel: String = "do kupienia",
-    val doneLabel: String = "w koszyku",
+    val doneLabel: String = "kupione",
     val quantity: Boolean = true,
     val finish: ListFinish = ListFinish.HISTORY,
     val icon: ListIcon = ListIcon.CART,
@@ -90,7 +90,10 @@ data class ListInfo(
     val style: ListStyle? = null,
     val access: List<ListAccess> = emptyList(),
 ) {
-    val look: ListStyle get() = style ?: ListStyle.SHOPPING
+    /** Lists made before 0.7.1 kept "w koszyku": shown as "kupione" (the list stays the same, nothing is migrated). */
+    val look: ListStyle get() = (style ?: ListStyle.SHOPPING).let {
+        if (it.preset == ListPreset.SHOPPING && it.doneLabel == "w koszyku") it.copy(doneLabel = ListStyle.SHOPPING.doneLabel) else it
+    }
 }
 
 /** A reminder of an item (premium [Feature.LISTS_REMINDERS]) for one member, [daysBefore] its date at [time]. */
@@ -168,6 +171,8 @@ enum class ListChangeKind {
     CLEAR_CHECKED,
     /** "Odznacz wszystko": the same list for the next time (packing). */
     UNCHECK_ALL,
+    /** "Usuń z pamięci" (0.7.1): [ListChange.values] names the product, [ListChange.listId] the kind of lists. */
+    FORGET_PRODUCT,
 }
 
 /**
@@ -265,6 +270,28 @@ data class ListSyncResponse(
     val products: List<ProductUnit> = emptyList(),
     val listIds: List<String> = emptyList(),
     val variants: List<ProductVariant> = emptyList(),
+    /** The community's memory of things added before (0.7.1), newer than "since"; forgotten ones as [ListMemory.deleted]. */
+    val memory: List<ListMemory> = emptyList(),
+)
+
+/** Which lists share a memory: things by their kind (shopping is not mixed with packing), tasks, deadlines. */
+@Serializable
+enum class MemoryScope { SHOPPING, PACKING, CUSTOM, TASKS, DEADLINES }
+
+/**
+ * A thing added to a list before, remembered for the whole community ("Z pamięci", board 21): its last parameters
+ * ([values] without dates), how often ([uses], only for sorting, never shown) and when it was added last, by whom.
+ */
+@Serializable
+data class ListMemory(
+    val scope: MemoryScope,
+    val key: String,
+    val values: ItemValues,
+    val uses: Int = 1,
+    val lastUsedAt: Long = 0,
+    val lastBy: String? = null,
+    val deleted: Boolean = false,
+    val rev: Long = 0,
 )
 
 object Lists {
@@ -393,6 +420,29 @@ object Lists {
     }
 
     private fun round(value: Double) = Math.round(value * 1000) / 1000.0
+
+    fun scopeOf(list: ListInfo): MemoryScope = when (list.type) {
+        ListType.TASKS -> MemoryScope.TASKS
+        ListType.DEADLINES -> MemoryScope.DEADLINES
+        ListType.SHOPPING -> when (list.look.preset) {
+            ListPreset.SHOPPING -> MemoryScope.SHOPPING
+            ListPreset.PACKING -> MemoryScope.PACKING
+            ListPreset.CUSTOM -> MemoryScope.CUSTOM
+        }
+    }
+
+    /** The memory's key of a thing: name and kind ("mleko|3,2%"), like [sameThing]. */
+    fun memoryKey(values: ItemValues): String = productKey(values.name) + "|" + productKey(values.variant).replace(" ", "")
+
+    /** What the memory keeps of an item: no dates, reminders or "pilne" (they are chosen each time). */
+    fun memoryValues(values: ItemValues): ItemValues = values.copy(dueDate = null, urgent = false, reminders = emptyList())
+
+    /** For searching: lower case without Polish letters ("Żółty" → "zolty"). */
+    fun searchKey(text: String): String = buildString {
+        for (c in text.lowercase()) append(PLAIN[c] ?: c)
+    }
+
+    private val PLAIN = mapOf('ą' to 'a', 'ć' to 'c', 'ę' to 'e', 'ł' to 'l', 'ń' to 'n', 'ó' to 'o', 'ś' to 's', 'ź' to 'z', 'ż' to 'z')
 
     /** How a product is remembered: lower case, single spaces. */
     fun productKey(name: String): String = name.trim().lowercase().replace(Regex("\\s+"), " ")

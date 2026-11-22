@@ -44,6 +44,7 @@ import pl.ambif.ambify.shared.DashboardWidget
 import pl.ambif.ambify.shared.Feature
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.WidgetHeight
+import pl.ambif.ambify.shared.WidgetSlot
 import pl.ambif.ambify.shared.WidgetType
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
@@ -163,7 +164,7 @@ private fun WidgetRow(type: WidgetType, locked: Boolean, there: Boolean, onAdd: 
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             LuxurySectionTitle(type.label)
-            Text(if (type.half) "(pół szerokości)" else "(cała szerokość)", fontSize = 11.sp, color = Luxury.TextMuted)
+            Text(if (type.half) "(domyślnie pół szerokości)" else "(domyślnie cała szerokość)", fontSize = 11.sp, color = Luxury.TextMuted)
             if (locked) Text("🔒", fontSize = 14.sp)
         }
         Text(type.description, fontSize = 14.sp, color = if (locked) Luxury.Disabled else Luxury.Text)
@@ -227,7 +228,8 @@ internal fun LessonsSettings(
         mutableStateOf(widget.people.filter { id -> students.any { it.id == id } }.ifEmpty { students.map { it.id } })
     }
     var height by remember(widget.id) { mutableStateOf(widget.height) }
-    val draft = widget.copy(people = people, height = height)
+    var half by remember(widget.id) { mutableStateOf(widget.slot != WidgetSlot.FULL) }
+    val draft = widget.copy(people = people, height = height, slot = slotFor(widget, half))
 
     LuxuryPopup(onDismiss = onDismiss) {
         Column {
@@ -271,6 +273,7 @@ internal fun LessonsSettings(
             )
         }
 
+        WidthSetting(half) { half = it }
         LuxurySectionTitle("Wysokość", modifier = Modifier.padding(top = 6.dp))
         Row(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).border(1.dp, Outline, RoundedCornerShape(24.dp)).padding(3.dp),
@@ -334,4 +337,43 @@ internal fun LessonsSettings(
         }
         Spacer(Modifier.width(1.dp))
     }
+}
+
+/**
+ * The widget's place after "Szerokość": the whole row, or a half (it keeps its side; a full one becomes the left
+ * half of its row). A half widget made full leaves its row: the other half goes below it (Dashboards.normalized).
+ */
+internal fun slotFor(widget: DashboardWidget, half: Boolean): WidgetSlot = when {
+    !half -> WidgetSlot.FULL
+    widget.slot == WidgetSlot.FULL -> WidgetSlot.LEFT
+    else -> widget.slot
+}
+
+/** "Szerokość: Cała · Pół" in the settings of every widget (also when it is added). */
+@Composable
+internal fun WidthSetting(half: Boolean, onChange: (Boolean) -> Unit) {
+    LuxurySectionTitle("Szerokość", modifier = Modifier.padding(top = 6.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).border(1.dp, Outline, RoundedCornerShape(24.dp)).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        listOf(false to "Cała szerokość", true to "Pół szerokości").forEach { (value, label) ->
+            val on = value == half
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 42.dp)
+                    .clip(RoundedCornerShape(21.dp))
+                    .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier)
+                    .clickable(role = Role.RadioButton) { onChange(value) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.Surface else Luxury.TextMuted)
+            }
+        }
+    }
+    Text(
+        if (half) "Obok może stać drugi widget o połowie szerokości." else "Widget zajmuje cały wiersz; widget obok przejdzie pod niego.",
+        fontSize = 12.sp, color = Luxury.TextMuted,
+    )
 }

@@ -2,15 +2,18 @@ package pl.ambif.ambify.features.lists.data
 
 import kotlinx.serialization.Serializable
 import pl.ambif.ambify.shared.ChangeResult
+import pl.ambif.ambify.shared.ItemValues
 import pl.ambif.ambify.shared.ItemField
 import pl.ambif.ambify.shared.ListChange
 import pl.ambif.ambify.shared.ListChangeKind
 import pl.ambif.ambify.shared.ListConflict
 import pl.ambif.ambify.shared.ListInfo
 import pl.ambif.ambify.shared.ListItem
+import pl.ambif.ambify.shared.ListMemory
 import pl.ambif.ambify.shared.ListSyncResponse
 import pl.ambif.ambify.shared.ListUnit
 import pl.ambif.ambify.shared.Lists
+import pl.ambif.ambify.shared.MemoryScope
 import pl.ambif.ambify.shared.ProductUnit
 import pl.ambif.ambify.shared.ProductVariant
 
@@ -57,6 +60,9 @@ data class ListsState(
             products = (start.products.associateBy { it.product } + response.products.associateBy { it.product }).values.toList(),
             variants = (start.variants.associateBy { it.product to it.variant } + response.variants.associateBy { it.product to it.variant })
                 .values.sortedByDescending { it.rev },
+            memory = (start.memory.associateBy { it.scope to it.key } + response.memory.associateBy { it.scope to it.key })
+                .values.filter { !it.deleted },
+            version = ListsData.VERSION,
         )
         return Merge(
             state = ListsState(data, pending.filterNot { it.id in done }, now),
@@ -85,7 +91,19 @@ data class ListsData(
     val units: List<ListUnit> = emptyList(),
     val products: List<ProductUnit> = emptyList(),
     val variants: List<ProductVariant> = emptyList(),
+    /** The community's memory of things added before (board 21), without forgotten ones. */
+    val memory: List<ListMemory> = emptyList(),
+    /** Which app made this copy; an older one (e.g. 0.7.0 ignored the memory) asks the server for everything once. */
+    val version: Int = 0,
 ) {
+    companion object {
+        /** 1 = 0.7.1, with the memory. Raise it when the phone must take everything again after an update. */
+        const val VERSION = 1
+    }
+
+    /** What the next sync asks for: everything newer than the copy, or everything when the copy is from an older app. */
+    val since: Long get() = if (version < VERSION) 0 else rev
+
     /** Built-in units and the community's own. */
     val allUnits: List<ListUnit> get() = Lists.BUILT_IN_UNITS + units.filter { own -> Lists.BUILT_IN_UNITS.none { it.name == own.name } }
 
@@ -96,6 +114,8 @@ data class ListsData(
 
     /** Kinds of [name] used before in the community, newest first ("3,2%", "2%"). */
     fun variantsOf(name: String): List<String> = Lists.productKey(name).let { key -> variants.filter { it.product == key }.map { it.variant } }
+
+    fun memoryOf(scope: MemoryScope): List<ListMemory> = memory.filter { it.scope == scope }
 
     fun openConflicts(itemId: String): List<ListConflict> = conflicts.filter { it.itemId == itemId && !it.resolved }
 
@@ -121,11 +141,16 @@ data class ListsData(
             val values = change.values
             val itemId = change.itemId
             if (values == null || itemId == null || items.any { it.id == itemId }) this
-            else copy(items = items + ListItem(itemId, change.listId, values, addedAt = change.madeAt))
+            else copy(items = items + ListItem(itemId, change.listId, values, addedAt = change.madeAt)).remembered(change.listId, values, change.madeAt, added = true)
         }
         ListChangeKind.EDIT_ITEM -> mapItem(change.itemId) { item ->
             val values = change.values ?: return@mapItem item
             item.copy(values = change.fields.fold(item.values) { acc, field -> field.copy(values, acc) }, changedAt = change.madeAt)
+        }.let { data -> data.items.firstOrNull { it.id == change.itemId }?.let { data.remembered(it.listId, it.values, change.madeAt, added = false) } ?: data }
+        ListChangeKind.FORGET_PRODUCT -> {
+            val scope = lists.firstOrNull { it.id == change.listId }?.let { Lists.scopeOf(it) }
+            val key = change.values?.let { Lists.memoryKey(it) }
+            copy(memory = memory.filterNot { it.scope == scope && it.key == key })
         }
         ListChangeKind.CHECK_ITEM -> mapItem(change.itemId) {
             if (change.checked) it.copy(checked = true, checkedAt = change.madeAt)
@@ -140,9 +165,22 @@ data class ListsData(
         })
     }
 
+    /** The memory as the server will have it (also offline): added = counted once more. */
+    private fun remembered(listId: String, values: ItemValues, at: Long, added: Boolean): ListsData {
+        val list = lists.firstOrNull { it.id == listId } ?: return this
+        val scope = Lists.scopeOf(list)
+        val key = Lists.memoryKey(values)
+        val old = memory.firstOrNull { it.scope == scope && it.key == key }
+        if (old == null && !added) return this
+        val entry = (old ?: ListMemory(scope, key, values, uses = 0)).let {
+            it.copy(values = Lists.memoryValues(values), uses = it.uses + if (added) 1 else 0, lastUsedAt = if (added) at else it.lastUsedAt)
+        }
+        return copy(memory = memory.filterNot { it.scope == scope && it.key == key } + entry)
+    }
+
     private fun mapItem(id: String?, block: (ListItem) -> ListItem) = copy(items = items.map { if (it.id == id) block(it) else it })
 }
 
 /** The fields of an item that differ between [before] and [after] (what an edit sends). */
-fun changedFields(before: pl.ambif.ambify.shared.ItemValues, after: pl.ambif.ambify.shared.ItemValues): List<ItemField> =
+fun changedFields(before: ItemValues, after: ItemValues): List<ItemField> =
     ItemField.entries.filterNot { it.same(after, before) }

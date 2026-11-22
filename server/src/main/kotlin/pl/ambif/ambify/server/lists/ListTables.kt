@@ -2,7 +2,7 @@ package pl.ambif.ambify.server.lists
 
 import org.jetbrains.exposed.v1.core.Table
 
-// Mirrors of the tables created by V008__lists.sql and V009__lists_more.sql (the SQL file is the source of truth).
+// Mirrors of the tables created by V008__lists.sql, V009__lists_more.sql and V010__list_memory.sql (the SQL file is the source of truth).
 
 object ListRevs : Table("list_revs") {
     val organizationId = text("organization_id")
@@ -109,4 +109,17 @@ object ListVariants : Table("list_variants") {
     val usedAt = long("used_at")
     val rev = long("rev")
     override val primaryKey = PrimaryKey(organizationId, product, variant)
+}
+
+object ListMemoryTable : Table("list_memory") {
+    val organizationId = text("organization_id")
+    val scope = text("scope")
+    val productKey = text("product_key")
+    val values = text("item_values")
+    val useCount = integer("use_count")
+    val lastUsedAt = long("last_used_at")
+    val lastBy = text("last_by").nullable()
+    val deleted = bool("deleted")
+    val rev = long("rev")
+    override val primaryKey = PrimaryKey(organizationId, scope, productKey)
 }
