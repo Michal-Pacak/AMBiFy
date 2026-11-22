@@ -15,8 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +46,8 @@ fun PersonAvatar(name: String, avatar: Avatar?, size: Dp = 40.dp, modifier: Modi
         AvatarShape.STAR -> 0.25f
         else -> 0.36f
     }
+    // The shape has a fixed size, so the letters must not grow with the phone's font setting (they got cut off).
+    val letters = (size.value * fontScale / LocalDensity.current.fontScale).sp
     Box(
         modifier = modifier.size(size).clip(shape).background(Luxury.BorderBrush).clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
@@ -56,8 +61,14 @@ fun PersonAvatar(name: String, avatar: Avatar?, size: Dp = 40.dp, modifier: Modi
                 modifier = if (triangle) Modifier.padding(bottom = size * 0.12f) else Modifier,
                 color = Luxury.CardBottom,
                 fontWeight = FontWeight.Bold,
-                fontSize = (size.value * fontScale).sp,
+                fontSize = letters,
                 letterSpacing = 0.3.sp,
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(
+                    lineHeight = letters,
+                    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+                ),
             )
         }
     }

@@ -2,6 +2,17 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.4 · 22 listopada 2026
+
+### Listy
+- Przy dużej czcionce albo długiej nazwie ilość, osoba i znaczniki (zdjęcia, pliki, podlista) schodzą pod nazwę pozycji, zamiast ściskać ją do kilku liter. Przy zwykłej czcionce wszystko zostaje w jednym wierszu.
+- Nagłówek listy: przyciski w jednym rzędzie, a pod nimi pełna nazwa listy i opis, bez ucinania.
+- Pustą podlistę można zwinąć: przy otwartej podliście bez pozycji jest licznik „0/0 ⌃”.
+- Znacznik zdjęć pokazuje pełną liczbę zamiast kropki.
+
+### Wygląd
+- Inicjały w ikonach osób nie są już ucinane przy powiększonej czcionce w telefonie.
+
 ## 0.7.3 · 22 listopada 2026
 
 ### Listy

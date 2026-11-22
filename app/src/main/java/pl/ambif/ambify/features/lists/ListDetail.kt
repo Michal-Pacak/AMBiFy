@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,6 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.Instant
@@ -150,16 +153,20 @@ internal fun ListDetail(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = "Wróć", tint = Luxury.GoldText) }
-            Column(modifier = Modifier.weight(1f)) {
+        // The buttons in one row, the list's name and who sees it under them on the whole width (Michał, 22.11).
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = "Wróć", tint = Luxury.GoldText) }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { onDialog(ListDialog.SortItems(list)) }) { Icon(AppIcons.Sort, contentDescription = "Sortuj", tint = Muted) }
+                CloseButton { onDialog(ListDialog.Close(list)) }
+                if (ui.manageable(list)) {
+                    IconButton(onClick = { onDialog(ListDialog.Menu(list)) }) { Icon(AppIcons.More, contentDescription = "Opcje listy", tint = Muted) }
+                }
+            }
+            Column(modifier = Modifier.padding(start = 12.dp)) {
                 Text(list.name, fontSize = 22.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${kindLabel(list)} · ${ui.whoSees(list)}" + if (list.archived) " · w archiwum" else "", fontSize = 13.sp, color = Muted, maxLines = 2)
-            }
-            IconButton(onClick = { onDialog(ListDialog.SortItems(list)) }) { Icon(AppIcons.Sort, contentDescription = "Sortuj", tint = Muted) }
-            CloseButton { onDialog(ListDialog.Close(list)) }
-            if (ui.manageable(list)) {
-                IconButton(onClick = { onDialog(ListDialog.Menu(list)) }) { Icon(AppIcons.More, contentDescription = "Opcje listy", tint = Muted) }
             }
         }
         SyncBar(ui, onRetry = {})
@@ -556,48 +563,11 @@ private fun ItemRow(
             label = (if (item.checked) "Cofnij: " else if (list.type == ListType.SHOPPING) "Odhacz: " else "Zrobione: ") + item.values.name,
         ) { d.onCheck(item, !item.checked) }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).alpha(if (item.checked) 0.55f else 1f),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (!checkAtEnd) check()
-        Column(
-            modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
-                .clickable(onClickLabel = if (subs.isEmpty()) "Szczegóły" else if (subOpen) "Zwiń" else "Rozwiń") {
-                    if (subs.isEmpty()) d.onDialog(ListDialog.Item(list, item)) else ui.prefs.setSubOpen(item.id, !subOpen)
-                }
-                .padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                Text(nameText(item.values, item.checked), fontSize = 16.sp, modifier = if (longName) Modifier.fillMaxWidth() else Modifier)
-                if (conflict) MessageChip(MessageKind.ERROR, "Konflikt", icon = AppIcons.Warning) { d.onDialog(ListDialog.Conflict(list, item)) }
-            }
-            if (urgent || meta != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (urgent) MessageChip(MessageKind.WARNING, "PILNE")
-                    meta?.let { Text(it, fontSize = 12.sp, color = metaColor) }
-                }
-            }
-            access?.let {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(AppIcons.Lock, contentDescription = null, tint = Muted, modifier = Modifier.size(12.dp))
-                    Text("inny dostęp: $it", fontSize = 11.sp, color = Muted)
-                }
-            }
-            AttachmentsLine(ui, d.lists, item, onPhotos = { d.onDialog(ListDialog.Photos(list, item)) },
-                onFile = { d.onDialog(ListDialog.OpenFile(list, item, it)) }, onFiles = { d.onDialog(ListDialog.Item(list, item)) })
-            if (waiting) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(AppIcons.Clock, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(12.dp))
-                    Text("czeka na wysłanie", fontSize = 11.sp, color = Luxury.GoldText)
-                }
-            }
-        }
-        if (subs.isNotEmpty()) SubCounter(subs, subOpen, item.values.name) { ui.prefs.setSubOpen(item.id, !subOpen) }
-        trailing()
-        if (checkAtEnd) check()
+    val counter = @Composable {
+        // An open sub-list shows its counter also while empty ("0/0 ⌄", board 16), so it can be closed again.
+        if (subs.isNotEmpty() || (subOpen && item.parentId == null)) SubCounter(subs, subOpen, item.values.name) { ui.prefs.setSubOpen(item.id, !subOpen) }
+    }
+    val menuButton = @Composable {
         if (menu) {
             Box(
                 modifier = Modifier.size(width = 32.dp, height = 44.dp).clip(RoundedCornerShape(8.dp))
@@ -606,7 +576,82 @@ private fun ItemRow(
             ) { Icon(AppIcons.More, contentDescription = "Opcje: ${item.values.name}", tint = Muted, modifier = Modifier.size(18.dp)) }
         }
     }
+    val marks = @Composable {
+        AttachmentsLine(ui, d.lists, item, onPhotos = { d.onDialog(ListDialog.Photos(list, item)) },
+            onFile = { d.onDialog(ListDialog.OpenFile(list, item, it)) }, onFiles = { d.onDialog(ListDialog.Item(list, item)) })
+    }
+    @Composable
+    fun row(stacked: Boolean) {
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).alpha(if (item.checked) 0.55f else 1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (!checkAtEnd) check()
+            Column(
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                    .clickable(onClickLabel = if (subs.isEmpty()) "Szczegóły" else if (subOpen) "Zwiń" else "Rozwiń") {
+                        if (subs.isEmpty()) d.onDialog(ListDialog.Item(list, item)) else ui.prefs.setSubOpen(item.id, !subOpen)
+                    }
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                    Text(nameText(item.values, item.checked), fontSize = 16.sp, modifier = if (longName || stacked) Modifier.fillMaxWidth() else Modifier)
+                    if (conflict) MessageChip(MessageKind.ERROR, "Konflikt", icon = AppIcons.Warning) { d.onDialog(ListDialog.Conflict(list, item)) }
+                }
+                if (urgent || meta != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (urgent) MessageChip(MessageKind.WARNING, "PILNE")
+                        meta?.let { Text(it, fontSize = 12.sp, color = metaColor) }
+                    }
+                }
+                access?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(AppIcons.Lock, contentDescription = null, tint = Muted, modifier = Modifier.size(12.dp))
+                        Text("inny dostęp: $it", fontSize = 11.sp, color = Muted)
+                    }
+                }
+                if (stacked) {
+                    // Little room (a big font, a narrow screen): amount, person and marks under the name (Michał, 22.11).
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                        counter()
+                        trailing()
+                        marks()
+                    }
+                } else {
+                    marks()
+                }
+                if (waiting) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(AppIcons.Clock, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(12.dp))
+                        Text("czeka na wysłanie", fontSize = 11.sp, color = Luxury.GoldText)
+                    }
+                }
+            }
+            if (!stacked) {
+                counter()
+                trailing()
+            }
+            if (checkAtEnd) check()
+            menuButton()
+        }
+    }
+    // The name gets at least about 7 letters of width; else the things on the right go under it.
+    SubcomposeLayout(Modifier.fillMaxWidth()) { constraints ->
+        val side = subcompose("side") {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                check(); counter(); trailing(); menuButton()
+            }
+        }.map { it.measure(Constraints()) }.maxOfOrNull { it.width } ?: 0
+        val stacked = constraints.maxWidth - side - 10.dp.roundToPx() < MIN_NAME.roundToPx()
+        val placeables = subcompose(stacked) { row(stacked) }.map { it.measure(constraints.copy(minHeight = 0)) }
+        layout(constraints.maxWidth, placeables.maxOfOrNull { it.height } ?: 0) { placeables.forEach { it.place(0, 0) } }
+    }
 }
+
+/** The least width of an item's name before the amount and the person go under it (scales with the font). */
+private val MIN_NAME = 100.sp
 
 /** "1/3 ⌄" of an item with a sub-list (board 16): a tap opens or closes it in place. */
 @Composable

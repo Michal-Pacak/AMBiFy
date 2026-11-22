@@ -1,4 +1,4 @@
-Zdjęcia przy pozycjach
-Pliki: PDF i dokumenty
-Podlista na osobnym ekranie
-Inne poprawki
+Listy wygodne przy dużej czcionce
+Pełne nazwy list w nagłówku
+Pustą podlistę da się zwinąć
+Inicjały osób bez ucinania
