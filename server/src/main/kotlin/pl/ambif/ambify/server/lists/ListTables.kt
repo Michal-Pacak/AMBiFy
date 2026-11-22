@@ -124,3 +124,19 @@ object ListMemoryTable : Table("list_memory") {
     val rev = long("rev")
     override val primaryKey = PrimaryKey(organizationId, scope, productKey)
 }
+
+/** 0.7.3: a photo or a file of an item ([pl.ambif.ambify.shared.ItemFile]); the bytes are in [ListFileStore]. */
+object ListFilesTable : Table("list_files") {
+    val id = text("id")
+    val organizationId = text("organization_id")
+    val listId = text("list_id")
+    val itemId = text("item_id")
+    val name = text("name")
+    val mime = text("mime")
+    val size = long("size")
+    val photo = bool("photo")
+    val addedBy = text("added_by")
+    val addedAt = long("added_at")
+    val deleted = bool("deleted")
+    override val primaryKey = PrimaryKey(id)
+}

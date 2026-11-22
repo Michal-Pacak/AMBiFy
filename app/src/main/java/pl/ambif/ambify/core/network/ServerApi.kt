@@ -4,6 +4,7 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
+import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,6 +16,7 @@ import pl.ambif.ambify.shared.ApiError
 import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.ApiPaths
 import pl.ambif.ambify.shared.ConflictDecision
+import pl.ambif.ambify.shared.ItemFile
 import pl.ambif.ambify.shared.ListConflict
 import pl.ambif.ambify.shared.ListPaths
 import pl.ambif.ambify.shared.ListSyncRequest
@@ -200,6 +202,20 @@ class ServerApi(
     suspend fun listSync(request: ListSyncRequest): ListSyncResponse = post(ListPaths.SYNC, request)
     suspend fun resolveConflict(id: String, decision: ConflictDecision): ListConflict = post("${ListPaths.CONFLICTS}/$id", decision)
 
+    /** 0.7.3: sends [source] as photo or file [fileId] of item [itemId]; [onProgress] gets the bytes sent so far. */
+    suspend fun uploadListFile(itemId: String, fileId: String, name: String, mime: String, source: File, onProgress: (Long) -> Unit): ItemFile {
+        val headers = mapOf(ListPaths.FILE_ID to fileId, ListPaths.FILE_NAME to URLEncoder.encode(name, "UTF-8"))
+        val body = transfer("POST", ListPaths.itemFiles(itemId), headers, upload = source to mime, download = null, onProgress = onProgress)
+        return json.decodeFromString(body)
+    }
+
+    /** Saves photo or file [fileId] into [target]; [onProgress] gets the bytes so far. */
+    suspend fun downloadListFile(fileId: String, target: File, onProgress: (Long) -> Unit) {
+        transfer("GET", "${ListPaths.FILES}/$fileId", emptyMap(), upload = null, download = target, onProgress = onProgress)
+    }
+
+    suspend fun deleteListFile(fileId: String) = send("DELETE", "${ListPaths.FILES}/$fileId", null, auth = true)
+
     suspend fun sendMonitorEvents(batch: MonitorEventBatch) =
         send("POST", MonitorPaths.EVENTS, json.encodeToString(batch), auth = true)
 
@@ -265,6 +281,78 @@ class ServerApi(
     }
 
     private class Answer(val code: Int, val body: String)
+
+    /** A request with a file as the body ([upload]: the file and its type) or the answer saved to [download]. */
+    private suspend fun transfer(
+        method: String, path: String, headers: Map<String, String>, upload: Pair<File, String>?, download: File?, onProgress: (Long) -> Unit,
+    ): String {
+        val usedToken = tokens?.accessToken
+        val first = executeTransfer(method, path, headers, upload, download, usedToken, onProgress)
+        if (first.code != HttpURLConnection.HTTP_UNAUTHORIZED) return first.bodyOrThrow()
+        return when (renewTokens(usedToken)) {
+            Renewal.RENEWED -> executeTransfer(method, path, headers, upload, download, tokens?.accessToken, onProgress).bodyOrThrow()
+            Renewal.REJECTED -> {
+                tokens?.onSessionExpired()
+                first.bodyOrThrow()
+            }
+            Renewal.UNAVAILABLE -> throw ServerError("network", "Brak połączenia z serwerem AMBiFy.")
+        }
+    }
+
+    private suspend fun executeTransfer(
+        method: String, path: String, headers: Map<String, String>, upload: Pair<File, String>?, download: File?,
+        accessToken: String?, onProgress: (Long) -> Unit,
+    ): Answer = withContext(Dispatchers.IO) {
+        try {
+            val connection = URI(baseUrl + path).toURL().openConnection() as HttpURLConnection
+            connection.requestMethod = method
+            connection.connectTimeout = TIMEOUT_MS
+            connection.readTimeout = DOWNLOAD_TIMEOUT_MS
+            connection.setRequestProperty(ApiHeaders.APP_VERSION_CODE, BuildConfig.VERSION_CODE.toString())
+            connection.setRequestProperty(ApiHeaders.APP_VERSION_NAME, BuildConfig.VERSION_NAME)
+            accessToken?.let {
+                connection.setRequestProperty("Authorization", "Bearer $it")
+                community()?.let { id -> connection.setRequestProperty(ApiHeaders.COMMUNITY, id) }
+            }
+            headers.forEach { (key, value) -> connection.setRequestProperty(key, value) }
+            try {
+                if (upload != null) {
+                    val (source, mime) = upload
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", mime)
+                    connection.setFixedLengthStreamingMode(source.length())
+                    source.inputStream().use { input -> connection.outputStream.use { output -> copy(input, output, onProgress) } }
+                }
+                val code = connection.responseCode
+                if (download != null && code in 200..299) {
+                    val partial = File(download.parentFile, download.name + ".part")
+                    download.parentFile?.mkdirs()
+                    connection.inputStream.use { input -> partial.outputStream().use { output -> copy(input, output, onProgress) } }
+                    if (!partial.renameTo(download)) throw IOException("rename")
+                    Answer(code, "")
+                } else {
+                    val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                    Answer(code, stream?.bufferedReader()?.use { it.readText() } ?: "")
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (e: IOException) {
+            throw ServerError("network", "Brak połączenia z serwerem AMBiFy.")
+        }
+    }
+
+    private fun copy(input: java.io.InputStream, output: java.io.OutputStream, onProgress: (Long) -> Unit) {
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            output.write(buffer, 0, read)
+            total += read
+            onProgress(total)
+        }
+    }
 
     private fun Answer.bodyOrThrow(): String {
         if (code in 200..299) return body

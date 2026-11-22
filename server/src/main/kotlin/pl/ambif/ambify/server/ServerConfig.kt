@@ -11,6 +11,8 @@ data class ServerConfig(
     val releasesDir: String,
     /** Pliki logu zdarzeń telefonów dzieci (build kids); poza katalogiem programu, deploy.sh ich nie nadpisuje. */
     val monitorDir: String,
+    /** False on the TEST server: its test data has no daily copy, so the backup check would always warn. */
+    val backupCheck: Boolean = true,
 ) {
     companion object {
         fun fromEnv(env: Map<String, String> = System.getenv()) = ServerConfig(
@@ -21,6 +23,7 @@ data class ServerConfig(
             backupDir = env["AMBIFY_BACKUP_DIR"] ?: "/mnt/nas/Backup/serverek/ambify",
             releasesDir = env["AMBIFY_RELEASES"] ?: "/opt/ambify-server/releases",
             monitorDir = env["AMBIFY_MONITOR"] ?: "/opt/ambify-server/monitor",
+            backupCheck = env["AMBIFY_BACKUP_CHECK"] != "0",
         )
     }
 }

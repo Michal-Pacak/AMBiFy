@@ -11,6 +11,18 @@ object ListPaths {
     const val SYNC = "/lists/sync"
     /** POST …/{id} [ConflictDecision]: the list's creator (after 48 h the Owner/Admin) settles a conflict. */
     const val CONFLICTS = "/lists/conflicts"
+    /**
+     * 0.7.3, premium [Feature.LISTS_ATTACHMENTS]: POST /lists/items/{itemId}/files with the file as the body (its type in
+     * Content-Type, its id and name in [FILE_ID] and [FILE_NAME]) adds a photo or a file to an item; GET [FILES]/{id}
+     * gives it back, DELETE [FILES]/{id} removes it from the server.
+     */
+    const val ITEMS = "/lists/items"
+    const val FILES = "/lists/files"
+    const val FILE_ID = "X-Ambify-File-Id"
+    /** URL-encoded (UTF-8), so "Faktura łazienka.pdf" survives an HTTP header. */
+    const val FILE_NAME = "X-Ambify-File-Name"
+
+    fun itemFiles(itemId: String) = "$ITEMS/$itemId/files"
 }
 
 /** [hasQuantity]: items have an amount with a unit; [needsDate]: every item has a date and they are sorted by it. */
@@ -121,6 +133,21 @@ data class ItemValues(
     val links: List<ItemLink> = emptyList(),
 )
 
+/**
+ * A photo or a file of an item (0.7.3, premium [Feature.LISTS_ATTACHMENTS]), kept on the server: phones get only this
+ * (no thumbnails) and download the file when someone taps it. [photo]: sent by the app as a JPEG, opened full screen.
+ */
+@Serializable
+data class ItemFile(
+    val id: String,
+    val name: String,
+    val mime: String,
+    val size: Long,
+    val photo: Boolean,
+    val addedBy: String = "",
+    val addedAt: Long = 0,
+)
+
 /** A web address of an item; shown as its [title] or, without one, its domain ("allegro.pl"). */
 @Serializable
 data class ItemLink(val url: String, val title: String = "")
@@ -176,6 +203,8 @@ data class ListItem(
      * than on the list ([Lists.itemLevel]). Empty = as on the list.
      */
     val access: List<ListAccess> = emptyList(),
+    /** 0.7.3: photos and files on the server ([ItemFile]); changed only through [ListPaths.FILES], never in a change. */
+    val files: List<ItemFile> = emptyList(),
 )
 
 /** One change made on a phone, sent (also much later, after being offline) in [ListSyncRequest.changes]. */
@@ -327,6 +356,54 @@ object Lists {
     const val MAX_VARIANT = 40
     const val MAX_LINKS = 5
     const val MAX_URL = 2000
+    /** 0.7.3 (board 25): per item at most this many photos and this many other files, each up to [MAX_FILE_BYTES]. */
+    const val MAX_PHOTOS = 5
+    const val MAX_FILES = 5
+    const val MAX_FILE_BYTES = 10L * 1024 * 1024
+    /** All photos and files of one community together. */
+    const val COMMUNITY_FILE_BYTES = 1024L * 1024 * 1024
+    /** The longer side of a photo the app sends (JPEG, about 1–2 MB). */
+    const val PHOTO_SIDE = 3000
+    const val PHOTO_MIME = "image/jpeg"
+
+    /** Programs and archives are never taken (board 25); checked by the name's ending and by the type. */
+    private val BLOCKED_ENDINGS = setOf("apk", "aab", "xapk", "exe", "msi", "bat", "cmd", "com", "scr", "sh", "jar", "js", "vbs", "ps1",
+        "dll", "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "iso", "dmg")
+    private val BLOCKED_TYPES = setOf("application/vnd.android.package-archive", "application/zip", "application/x-zip-compressed",
+        "application/x-rar-compressed", "application/vnd.rar", "application/x-7z-compressed", "application/x-tar", "application/gzip",
+        "application/x-msdownload", "application/x-executable", "application/java-archive", "application/x-sh")
+
+    /** Null when the file may be added, else why not (Polish, for the error bar). */
+    fun fileRefusal(name: String, mime: String, size: Long): String? {
+        val ending = name.substringAfterLast('.', "").lowercase()
+        return when {
+            size > MAX_FILE_BYTES -> "„$name” ma ${sizeText(size)} — plik może mieć do ${sizeText(MAX_FILE_BYTES)}."
+            ending in BLOCKED_ENDINGS || mime.lowercase().substringBefore(';').trim() in BLOCKED_TYPES ->
+                "Programów (.apk, .exe) i archiwów (.zip, .rar) nie przyjmujemy."
+            size <= 0 -> "„$name” jest pusty."
+            else -> null
+        }
+    }
+
+    /** "240 KB", "1,6 MB". */
+    fun sizeText(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${(bytes + 1023) / 1024} KB"
+        else -> {
+            val tenths = (bytes * 10 + 512 * 1024) / (1024 * 1024)
+            if (tenths % 10 == 0L) "${tenths / 10} MB" else "${tenths / 10},${tenths % 10} MB"
+        }
+    }
+
+    /** "faktura.pdf" of a name typed or picked; no folders, no control characters, at most 120 characters. */
+    fun cleanFileName(name: String): String {
+        val base = name.substringAfterLast('/').substringAfterLast('\\').filter { it >= ' ' && it != '\u007F' }.trim()
+        val cut = if (base.length <= 120) base else {
+            val ending = base.substringAfterLast('.', "").take(10)
+            base.take(120 - ending.length - 1) + if (ending.isEmpty()) "" else ".$ending"
+        }
+        return cut.ifEmpty { "plik" }
+    }
     const val MAX_UNIT = 20
     /** After this long without the creator's decision the Owner/Admin may settle a conflict. */
     const val CONFLICT_ESCALATION_MS = 48L * 60 * 60 * 1000

@@ -45,6 +45,7 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.features.lists.data.ListFiles
 import pl.ambif.ambify.features.lists.data.ListRepository
 import pl.ambif.ambify.features.timetable.FramedButton
 import pl.ambif.ambify.features.timetable.GoldButton
@@ -98,8 +99,8 @@ private fun rememberListsUi(): Pair<ListsUi, ListsController>? {
     val status by repo.status.collectAsState()
     val people by repo.people.collectAsState()
     val prefs = remember { ListPrefs(context) }
-    val controller = remember(repo) { ListsController(repo, scope, me.id) }
-    LaunchedEffect(repo) { repo.sync() }
+    val controller = remember(repo) { ListsController(repo, scope, me.id, ListFiles.of(context, session.api, communityId)) }
+    LaunchedEffect(repo) { controller.syncAll() }
     val ui = ListsUi(
         me = me, data = state.view, members = people.members, features = people.features,
         waitingItems = state.pending.mapNotNull { it.itemId }.toSet(), waitingLists = emptySet(),

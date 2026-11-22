@@ -17,8 +17,8 @@ android {
         minSdk = 31
         targetSdk = 37
         // -Pambify.versionCode/-Pambify.versionName only for trying out updates on AMBiFy TEST (publish-app.sh).
-        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 22
-        versionName = project.findProperty("ambify.versionName") as String? ?: "0.7.2"
+        versionCode = (project.findProperty("ambify.versionCode") as String?)?.toInt() ?: 23
+        versionName = project.findProperty("ambify.versionName") as String? ?: "0.7.3"
 
         // Fixed server address (HTTPS, works at home and outside since v0.6.10); changed only by an app update.
         // -Pambify.serverUrl=… builds a separate test app ("AMBiFy TEST", own data) against a test

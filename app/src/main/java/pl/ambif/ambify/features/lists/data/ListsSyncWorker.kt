@@ -33,8 +33,15 @@ class ListsSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         var offline = false
         for (communityId in ListRepository.communities(applicationContext)) {
             val repo = ListRepository.of(applicationContext, api, communityId)
-            val events = repo.sync()
+            val events = repo.sync().toMutableList()
             if (repo.status.value is SyncStatus.Offline) offline = true
+            // 0.7.3: photos and files go once their items are on the server.
+            val files = ListFiles.of(applicationContext, api, communityId)
+            if (files.hasPending && !repo.hasPending && repo.status.value is SyncStatus.Synced) {
+                val sent = files.upload { title, text -> events += ListsEvent(ListsEvent.Kind.REFUSED, title, text) }
+                if (sent) repo.sync()
+            }
+            if (files.hasPending) offline = true
             val me = repo.people.value.me
             val lists = repo.state.value.view.lists
             events.forEach { event ->

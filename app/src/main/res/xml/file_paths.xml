@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.7.3: list photos and files shared with the camera app and with apps that open them (PDF viewers etc.). -->
+<paths>
+    <cache-path name="list_files" path="list-files/" />
+    <cache-path name="camera" path="camera/" />
+    <files-path name="list_uploads" path="list-uploads/" />
+</paths>

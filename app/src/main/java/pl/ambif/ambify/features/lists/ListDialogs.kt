@@ -195,6 +195,8 @@ internal fun ListDialogs(
             },
             onDelete = { item -> lists.delete(item); close(); onSaved("Usunięto", "„${item.values.name}”.") },
         )
+        is ListDialog.Photos -> PhotoViewer(ui, dialog.list, lists, dialog.item.id, dialog.start, close)
+        is ListDialog.OpenFile -> FileOpener(ui, lists, dialog.file, close)
         is ListDialog.ItemMenu -> ItemMenu(ui, dialog.list, dialog.item, close,
             onSubs = {
                 ui.prefs.setSubOpen(dialog.item.id, true)
@@ -1243,7 +1245,7 @@ private fun ItemDialog(
         }
         if (ui.links) {
             LinksEditor(values.links, editable) { values = values.copy(links = it) }
-            Locked("Zdjęcia i pliki", "aparat = zdjęcie, kartka = plik · premium, wkrótce")
+            FilesEditor(ui, list, lists, item)
         } else {
             Locked("Linki, zdjęcia i pliki", "ogniwo = link, aparat = zdjęcie, kartka = plik · w pakiecie premium")
         }

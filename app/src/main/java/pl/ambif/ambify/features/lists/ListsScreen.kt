@@ -51,6 +51,7 @@ import pl.ambif.ambify.core.network.ServerApi
 import pl.ambif.ambify.core.network.ServerError
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.features.lists.data.ListFiles
 import pl.ambif.ambify.features.lists.data.ListPeople
 import pl.ambif.ambify.features.lists.data.ListReminders
 import pl.ambif.ambify.features.lists.data.ListRepository
@@ -116,7 +117,8 @@ fun ListsScreen(resetKey: Int = 0) {
     val status by repo.status.collectAsState()
     val people by repo.people.collectAsState()
     val bubbles = remember { Bubbles() }
-    val lists = remember(repo) { ListsController(repo, scope, me.id) }
+    val files = remember(communityId) { ListFiles.of(context, api, communityId) }
+    val lists = remember(repo) { ListsController(repo, scope, me.id, files) }
     val prefs = remember { ListPrefs(context) }
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var dialog by remember { mutableStateOf<ListDialog?>(null) }
@@ -129,6 +131,11 @@ fun ListsScreen(resetKey: Int = 0) {
         ListsNavigation.open.value = null
     }
     BackHandler(enabled = openId != null) { openId = null }
+    // Board 16: a sub-list on its own screen; back goes to its list first (registered later, so it wins).
+    // Kept as "list/item", so it belongs only to the list it was opened on (also after turning the phone).
+    var subKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val subId = subKey?.takeIf { openId != null && it.startsWith("$openId/") }?.substringAfter('/')
+    BackHandler(enabled = subId != null) { subKey = null }
     LaunchedEffect(repo) {
         ListsSyncWorker.schedulePeriodic(context)
         repo.refreshPeople {
@@ -139,8 +146,8 @@ fun ListsScreen(resetKey: Int = 0) {
     // While the screen is open: at once, then every minute (every 15 s while something waits or the server is away).
     LaunchedEffect(repo) {
         while (true) {
-            repo.sync()
-            delay(if (repo.hasPending || repo.status.value !is SyncStatus.Synced) 15_000 else 60_000)
+            lists.syncAll()
+            delay(if (repo.hasPending || files.hasPending || repo.status.value !is SyncStatus.Synced) 15_000 else 60_000)
         }
     }
     LaunchedEffect(repo) {
@@ -157,7 +164,7 @@ fun ListsScreen(resetKey: Int = 0) {
     LaunchedEffect(view.items, people.features) {
         if (Feature.LISTS_REMINDERS in people.features) ListReminders.plan(context, view, me.id)
     }
-    DisposableEffect(repo) { onDispose { if (repo.hasPending) ListsSyncWorker.syncWhenOnline(context) } }
+    DisposableEffect(repo) { onDispose { if (repo.hasPending || files.hasPending) ListsSyncWorker.syncWhenOnline(context) } }
 
     val ui = ListsUi(
         me = me,
@@ -181,7 +188,8 @@ fun ListsScreen(resetKey: Int = 0) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (open != null) {
-            ListDetail(ui, open, lists, onBack = { openId = null }, onDialog = { dialog = it }, onInfo = { kind, title, text -> bubbles.show(kind, title, text) })
+            ListDetail(ui, open, lists, onBack = { openId = null }, onDialog = { dialog = it }, onInfo = { kind, title, text -> bubbles.show(kind, title, text) },
+                subOf = subId, onOpenSub = { id -> subKey = id?.let { "${open.id}/$it" } })
         } else {
             ListsOverview(ui, onOpen = { openId = it.id }, onDialog = { dialog = it }, onRetry = { scope.launch { repo.sync() } })
         }
@@ -258,6 +266,8 @@ internal data class ListsUi(
     /** Premium "Podlisty" (sub-items and "Inny dostęp do tego zadania") and "Linki". */
     val subItems: Boolean get() = Feature.LISTS_SUBITEMS in features
     val links: Boolean get() = Feature.LISTS_ATTACHMENTS in features
+    /** A photo or a file: the one who added it, or who manages the list (the server checks the same). */
+    fun canDeleteFile(list: ListInfo, file: pl.ambif.ambify.shared.ItemFile) = file.addedBy == me.id || manageable(list)
     /** "tylko Bartek", "Bartek, Filip": who sees an item with its own access, besides who always sees everything. */
     fun whoSeesItem(list: ListInfo, item: ListItem): String? {
         if (item.access.isEmpty()) return null
@@ -280,12 +290,62 @@ internal data class ListsUi(
 }
 
 /** The changes a person makes: shown at once, sent at once (or later, when the server is back). */
-internal class ListsController(private val repo: ListRepository, private val scope: CoroutineScope, private val me: String) {
+internal class ListsController(
+    private val repo: ListRepository,
+    private val scope: CoroutineScope,
+    private val me: String,
+    /** 0.7.3: photos and files of items (boards 25–26). */
+    val files: ListFiles,
+) {
     private fun run(kind: ListChangeKind, listId: String, itemId: String? = null, block: pl.ambif.ambify.shared.ListChange.() -> pl.ambif.ambify.shared.ListChange) {
         scope.launch {
             repo.change(kind, listId, itemId, block)
             repo.sync()
+            sendFiles()
         }
+    }
+
+    /** Waiting photos and files go once nothing waits in the lists (their items are on the server). */
+    private suspend fun sendFiles() {
+        if (!files.hasPending || repo.hasPending || repo.status.value !is SyncStatus.Synced) return
+        val sent = files.upload { title, text -> repo.tell(ListsEvent(ListsEvent.Kind.REFUSED, title, text)) }
+        if (sent) repo.sync()
+    }
+
+    /** "+ Zdjęcie" / "+ Plik": [uris] picked; [onRefused] gets why one was not taken (limit, size, type). */
+    fun addPhotos(context: android.content.Context, item: ListItem, uris: List<android.net.Uri>, onRefused: (String) -> Unit) {
+        scope.launch {
+            uris.forEach { uri -> files.addPhoto(context, uri, item)?.let { onRefused(it); return@forEach } }
+            repo.sync()
+            sendFiles()
+        }
+    }
+
+    fun addFile(context: android.content.Context, item: ListItem, uri: android.net.Uri, onRefused: (String) -> Unit) {
+        scope.launch {
+            files.addFile(context, uri, item)?.let(onRefused)
+            repo.sync()
+            sendFiles()
+        }
+    }
+
+    /** Removes a photo or a file from the server (needs a network), then syncs; [onError] gets why not. */
+    fun deleteFile(file: pl.ambif.ambify.shared.ItemFile, onDone: () -> Unit = {}, onError: (String) -> Unit) {
+        scope.launch {
+            try {
+                files.delete(file)
+                repo.sync()
+                onDone()
+            } catch (e: pl.ambif.ambify.core.network.ServerError) {
+                onError(if (e.code == "network") "Bez połączenia. Usuniesz, gdy wróci sieć." else e.message)
+            }
+        }
+    }
+
+    /** A sync, then the waiting photos and files (e.g. the screen opened with the network back). */
+    suspend fun syncAll() {
+        repo.sync()
+        sendFiles()
     }
 
     fun createList(list: ListInfo): String {
@@ -370,6 +430,10 @@ internal sealed interface ListDialog {
     data class CheckAll(val list: ListInfo, val item: ListItem) : ListDialog
     /** The last sub-item done: "Odhaczyć też ‘…’?". */
     data class CheckParent(val list: ListInfo, val item: ListItem) : ListDialog
+    /** Board 26: the item's photos full screen, from [start]. */
+    data class Photos(val list: ListInfo, val item: ListItem, val start: Int = 0) : ListDialog
+    /** Board 26: a file opened by an app of the phone. */
+    data class OpenFile(val list: ListInfo, val item: ListItem, val file: pl.ambif.ambify.shared.ItemFile) : ListDialog
 }
 
 /** Board 1: the lists of the community, by kind. */

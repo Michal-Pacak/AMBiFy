@@ -32,6 +32,7 @@ import pl.ambif.ambify.shared.ConflictVersion
 import pl.ambif.ambify.shared.Feature
 import pl.ambif.ambify.shared.Frequency
 import pl.ambif.ambify.shared.ItemField
+import pl.ambif.ambify.shared.ItemFile
 import pl.ambif.ambify.shared.ItemLink
 import pl.ambif.ambify.shared.ItemValues
 import pl.ambif.ambify.shared.ListChange
@@ -73,6 +74,8 @@ class ListService(
     private val database: Database,
     private val accounts: AccountService,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** 0.7.3: photos and files of items; in lists-files/ next to the database (copied to the NAS by ambify-backup). */
+    private val files: ListFileStore = ListFileStore(java.io.File("lists-files")),
 ) {
     private val log = LoggerFactory.getLogger(ListService::class.java)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -128,9 +131,13 @@ class ListService(
             // A list changed since (e.g. the person was just added to it) comes with all its items and conflicts.
             val whole = lists.filterNot { it.deleted }.map { it.id }.toSet()
             val infos = visible.associate { it[ListsTable.id] to toInfo(it) }
+            val filesByItem = ListFilesTable.selectAll()
+                .where { (ListFilesTable.organizationId eq organizationId) and (ListFilesTable.deleted eq false) }
+                .orderBy(ListFilesTable.addedAt)
+                .groupBy({ it[ListFilesTable.itemId] }, { toFile(it) })
             val all = ListItems.selectAll().where { ListItems.organizationId eq organizationId }
                 .filter { it[ListItems.listId] in visibleIds }
-                .map { toItem(it) }
+                .map { toItem(it).copy(files = filesByItem[it[ListItems.id]].orEmpty()) }
             val byId = all.associateBy { it.id }
             // An item with "Inny dostęp" (and its sub-items) the person may not see comes only as deleted, so the
             // phone forgets it.
@@ -232,6 +239,7 @@ class ListService(
                 manageable(membership, change.listId)
                 val rev = nextRev(organizationId)
                 ListsTable.update({ ListsTable.id eq change.listId }) { it[deleted] = true; it[ListsTable.rev] = rev }
+                dropFiles(ListFilesTable.listId eq change.listId)
             }
             ListChangeKind.ADD_ITEM -> {
                 val list = editable(membership, change.listId, AccessLevel.ADD)
@@ -315,10 +323,13 @@ class ListService(
                 val (_, item) = editableItem(membership, change, allowDeleted = true, need = null)
                 if (item[ListItems.deleted]) return ChangeResult(change.id, ok = true)
                 val rev = nextRev(organizationId)
+                val gone = ListItems.selectAll().where { (ListItems.id eq item[ListItems.id]) or (ListItems.parentId eq item[ListItems.id]) }
+                    .map { it[ListItems.id] }
                 ListItems.update({ (ListItems.id eq item[ListItems.id]) or (ListItems.parentId eq item[ListItems.id]) }) {
                     it[deleted] = true
                     it[ListItems.rev] = rev
                 }
+                dropFiles(ListFilesTable.itemId inList gone)
                 ListConflicts.update({ (ListConflicts.itemId eq item[ListItems.id]) and (ListConflicts.resolved eq false) }) {
                     it[resolved] = true
                     it[resolvedBy] = me
@@ -566,6 +577,138 @@ class ListService(
         }
         toConflict(ListConflicts.selectAll().where { ListConflicts.id eq conflictId }.single())
     }
+
+    // --- photos and files (0.7.3, boards 25–26) ---
+
+    /**
+     * Adds [upload] (already on the disk, at most [Lists.MAX_FILE_BYTES] + 1 bytes) to item [itemId] as file [fileId].
+     * The same [fileId] sent again (the phone did not hear the answer) gets the first answer back.
+     */
+    fun addFile(session: UserSession, itemId: String, fileId: String, name: String, mime: String, upload: java.io.File): ItemFile {
+        accounts.requireModule(session, ModuleId.LISTS)
+        try {
+            return transaction(database) {
+                val membership = accounts.membership(session)
+                val organizationId = membership.organizationId
+                val item = ListItems.selectAll().where { (ListItems.id eq itemId) and (ListItems.organizationId eq organizationId) }
+                    .singleOrNull() ?: throw notFound()
+                ListFilesTable.selectAll().where { ListFilesTable.id eq fileId }.singleOrNull()?.let { done ->
+                    if (done[ListFilesTable.itemId] != itemId || done[ListFilesTable.deleted]) throw invalid()
+                    return@transaction toFile(done)
+                }
+                if (fileId.isBlank() || fileId.length > 64 || !fileId.all { it.isLetterOrDigit() || it == '-' }) throw invalid()
+                requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Zdjęcia i pliki są w pakiecie premium.")
+                val list = editable(membership, item[ListItems.listId], AccessLevel.ADD)
+                if (item[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
+                requireItemLevel(membership, list, item, AccessLevel.ADD)
+                val cleanName = Lists.cleanFileName(name)
+                val size = upload.length()
+                val type = mime.substringBefore(';').trim().lowercase().ifEmpty { "application/octet-stream" }
+                Lists.fileRefusal(cleanName, type, size)?.let { throw ApiException(HttpStatusCode.BadRequest, "file_refused", it) }
+                val photo = type == Lists.PHOTO_MIME && isJpeg(upload)
+                val present = ListFilesTable.selectAll().where { (ListFilesTable.itemId eq itemId) and (ListFilesTable.deleted eq false) }
+                    .map { it[ListFilesTable.photo] }
+                if (photo && present.count { it } >= Lists.MAX_PHOTOS) {
+                    throw ApiException(HttpStatusCode.Conflict, "limit", "Pozycja ma już ${Lists.MAX_PHOTOS} zdjęć — to limit. Usuń któreś, żeby dodać nowe.")
+                }
+                if (!photo && present.count { !it } >= Lists.MAX_FILES) {
+                    throw ApiException(HttpStatusCode.Conflict, "limit", "Pozycja ma już ${Lists.MAX_FILES} plików — to limit. Usuń któryś, żeby dodać nowy.")
+                }
+                val used = ListFilesTable.selectAll()
+                    .where { (ListFilesTable.organizationId eq organizationId) and (ListFilesTable.deleted eq false) }
+                    .sumOf { it[ListFilesTable.size] }
+                if (used + size > Lists.COMMUNITY_FILE_BYTES) {
+                    throw ApiException(HttpStatusCode.Conflict, "full", "Miejsce na zdjęcia i pliki społeczności (${Lists.sizeText(Lists.COMMUNITY_FILE_BYTES)}) jest pełne. Usuń stare zdjęcia albo pliki.")
+                }
+                val now = clock()
+                files.keep(organizationId, fileId, upload)
+                ListFilesTable.insert {
+                    it[id] = fileId
+                    it[ListFilesTable.organizationId] = organizationId
+                    it[listId] = item[ListItems.listId]
+                    it[ListFilesTable.itemId] = itemId
+                    it[ListFilesTable.name] = cleanName
+                    it[ListFilesTable.mime] = if (photo) Lists.PHOTO_MIME else type
+                    it[ListFilesTable.size] = size
+                    it[ListFilesTable.photo] = photo
+                    it[addedBy] = membership.user[Users.id]
+                    it[addedAt] = now
+                    it[deleted] = false
+                }
+                touch(itemId, organizationId)
+                ItemFile(fileId, cleanName, if (photo) Lists.PHOTO_MIME else type, size, photo, membership.user[Users.id], now)
+            }
+        } finally {
+            upload.delete()
+        }
+    }
+
+    /** The file to send back, with its row; only to someone who sees the item. */
+    fun file(session: UserSession, fileId: String): Pair<ItemFile, java.io.File> = transaction(database) {
+        accounts.requireModule(session, ModuleId.LISTS)
+        val membership = accounts.membership(session)
+        val (row, _) = seenFile(membership, fileId)
+        val stored = files.path(membership.organizationId, fileId)
+        if (!stored.isFile) throw ApiException(HttpStatusCode.Gone, "deleted", "Tego pliku nie ma już na serwerze.")
+        toFile(row) to stored
+    }
+
+    /** Removes a photo or a file: the person who added it, or who manages the list (its creator, an Admin). */
+    fun deleteFile(session: UserSession, fileId: String) = transaction(database) {
+        accounts.requireModule(session, ModuleId.LISTS)
+        val membership = accounts.membership(session)
+        val (row, list) = seenFile(membership, fileId)
+        val me = membership.user[Users.id]
+        if (row[ListFilesTable.addedBy] != me && list[ListsTable.createdBy] != me &&
+            accounts.can(membership, Action.LISTS_DELETE_OTHERS) != Mode.ALLOWED
+        ) {
+            throw ApiException(HttpStatusCode.Forbidden, "forbidden", "Usunąć może ten, kto dodał, i twórca listy.")
+        }
+        dropFiles(ListFilesTable.id eq fileId)
+        touch(row[ListFilesTable.itemId], membership.organizationId)
+    }
+
+    private fun seenFile(membership: Membership, fileId: String): Pair<ResultRow, ResultRow> {
+        val row = ListFilesTable.selectAll()
+            .where { (ListFilesTable.id eq fileId) and (ListFilesTable.organizationId eq membership.organizationId) }
+            .singleOrNull() ?: throw notFound()
+        if (row[ListFilesTable.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już ten plik.")
+        val list = visibleList(membership, row[ListFilesTable.listId])
+        val item = ListItems.selectAll().where { ListItems.id eq row[ListFilesTable.itemId] }.singleOrNull() ?: throw notFound()
+        if (item[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
+        requireItemLevel(membership, list, item, AccessLevel.SEE)
+        return row to list
+    }
+
+    /** Marks the files deleted and removes their bytes (also from the server's disk; the NAS copy follows the next night). */
+    private fun dropFiles(where: org.jetbrains.exposed.v1.core.Op<Boolean>) {
+        val gone = ListFilesTable.selectAll().where { where and (ListFilesTable.deleted eq false) }
+            .map { it[ListFilesTable.organizationId] to it[ListFilesTable.id] }
+        if (gone.isEmpty()) return
+        ListFilesTable.update({ where }) { it[deleted] = true }
+        gone.forEach { (organizationId, id) -> files.delete(organizationId, id) }
+    }
+
+    /** A new rev for the item, so phones get its new list of files with the next sync. */
+    private fun touch(itemId: String, organizationId: String) {
+        val rev = nextRev(organizationId)
+        ListItems.update({ ListItems.id eq itemId }) { it[ListItems.rev] = rev }
+    }
+
+    private fun isJpeg(file: java.io.File): Boolean = file.inputStream().use { input ->
+        val head = ByteArray(3)
+        input.read(head) == 3 && head[0] == 0xFF.toByte() && head[1] == 0xD8.toByte() && head[2] == 0xFF.toByte()
+    }
+
+    private fun toFile(row: ResultRow) = ItemFile(
+        id = row[ListFilesTable.id],
+        name = row[ListFilesTable.name],
+        mime = row[ListFilesTable.mime],
+        size = row[ListFilesTable.size],
+        photo = row[ListFilesTable.photo],
+        addedBy = row[ListFilesTable.addedBy],
+        addedAt = row[ListFilesTable.addedAt],
+    )
 
     // --- rights ---
 

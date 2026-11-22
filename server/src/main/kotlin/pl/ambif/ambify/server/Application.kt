@@ -20,6 +20,7 @@ import pl.ambif.ambify.server.accounts.AccountService
 import pl.ambif.ambify.server.accounts.ApiException
 import pl.ambif.ambify.server.accounts.DemoSeed
 import pl.ambif.ambify.server.accounts.accountRoutes
+import pl.ambif.ambify.server.lists.ListFileStore
 import pl.ambif.ambify.server.lists.ListService
 import pl.ambif.ambify.server.lists.listRoutes
 import pl.ambif.ambify.server.timetable.DiarySchedule
@@ -59,6 +60,7 @@ fun main() {
             vault,
             AppReleases(File(config.releasesDir)),
             MonitorService(File(config.monitorDir)),
+            dataDir.resolve("lists-files"),
         )
     }.start(wait = true)
 }
@@ -70,10 +72,13 @@ fun Application.module(
     vault: Vault = Vault.random(),
     releases: AppReleases = AppReleases(File("releases")),
     monitor: MonitorService = MonitorService(File("monitor")),
+    /** 0.7.3: photos and files of list items; next to the database, so ambify-backup copies them with it. */
+    listFilesDir: File = File("lists-files"),
 ) {
     val accounts = AccountService(database, tokens)
     val timetable = TimetableService(database, accounts, vault)
-    val lists = ListService(database, accounts)
+    val listFiles = ListFileStore(listFilesDir)
+    val lists = ListService(database, accounts, files = listFiles)
     install(ContentNegotiation) {
         json()
     }
@@ -87,7 +92,7 @@ fun Application.module(
     routing {
         accountRoutes(accounts)
         timetableRoutes(timetable)
-        listRoutes(lists)
+        listRoutes(lists, listFiles)
         releaseRoutes(releases)
         monitorRoutes(monitor)
         // Light status for the app; any failing check turns it into "degraded".

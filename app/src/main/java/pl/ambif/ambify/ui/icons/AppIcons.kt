@@ -169,6 +169,37 @@ object AppIcons {
         }
     }
 
+    /** 0.7.3 (board 25): a photo — a camera, never a paperclip. */
+    val Camera: ImageVector by lazy {
+        line("Camera") {
+            moveTo(4f, 8f); lineTo(7f, 8f); lineTo(9f, 5f); lineTo(15f, 5f); lineTo(17f, 8f); lineTo(20f, 8f); lineTo(20f, 19f); lineTo(4f, 19f); close()
+            moveTo(15.5f, 13f); arcTo(3.5f, 3.5f, 0f, true, true, 8.5f, 13f); arcTo(3.5f, 3.5f, 0f, true, true, 15.5f, 13f)
+        }
+    }
+
+    /** "Wybierz z galerii": a picture with a mountain. */
+    val Gallery: ImageVector by lazy {
+        line("Gallery") {
+            moveTo(3f, 5f); lineTo(21f, 5f); lineTo(21f, 19f); lineTo(3f, 19f); close()
+            moveTo(10.8f, 10f); arcTo(1.8f, 1.8f, 0f, true, true, 7.2f, 10f); arcTo(1.8f, 1.8f, 0f, true, true, 10.8f, 10f)
+            moveTo(21f, 16f); lineTo(16f, 11f); lineTo(8f, 19f)
+        }
+    }
+
+    /** A file: a page with a folded corner. */
+    val Document: ImageVector by lazy {
+        line("Document") {
+            moveTo(6f, 3f); lineTo(14f, 3f); lineTo(19f, 8f); lineTo(19f, 21f); lineTo(6f, 21f); close()
+            moveTo(14f, 3f); lineTo(14f, 8f); lineTo(19f, 8f)
+            moveTo(9f, 13f); lineTo(16f, 13f); moveTo(9f, 17f); lineTo(16f, 17f)
+        }
+    }
+
+    /** Sending to the server: an arrow up over a line. */
+    val Upload: ImageVector by lazy {
+        line("Upload") { moveTo(12f, 16f); lineTo(12f, 4f); moveTo(7f, 9f); lineTo(12f, 4f); lineTo(17f, 9f); moveTo(5f, 20f); lineTo(19f, 20f) }
+    }
+
     /** Waiting: a clock. */
     val Clock: ImageVector by lazy { line("Clock") { circle(); moveTo(12f, 7f); lineTo(12f, 12f); lineTo(15f, 14f) } }
 

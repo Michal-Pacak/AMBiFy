@@ -6,6 +6,7 @@ Refuses to run when the NAS is not mounted, so copies never land on the system d
 """
 import datetime
 import pathlib
+import shutil
 import sqlite3
 import sys
 
@@ -37,7 +38,50 @@ def main() -> int:
     for old in sorted(target.glob("ambify-*.db"))[:-KEEP]:
         old.unlink()
     print(f"Backup written: {target / name}")
+    copied, removed = mirror_files(database.parent / "lists-files", target / "lists-files")
+    print(f"List photos and files: {copied} copied, {removed} moved to the deleted ones (kept {KEEP} days)")
     return 0
+
+
+def mirror_files(source: pathlib.Path, target: pathlib.Path) -> tuple[int, int]:
+    """Photos and files of lists (0.7.3): new ones are copied; one deleted in AMBiFy is moved to
+    lists-files-deleted/<date of deletion>/ and kept KEEP days, like the database copies, so a restored
+    database finds its photos."""
+    if not source.is_dir():
+        return 0, 0
+    copied = removed = 0
+    present = set()
+    for file in source.glob("*/*"):
+        if not file.is_file() or file.parent.name.startswith("."):
+            continue
+        relative = file.relative_to(source)
+        present.add(relative)
+        copy = target / relative
+        if not copy.exists() or copy.stat().st_size != file.stat().st_size:
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            partial = copy.with_name(copy.name + ".part")
+            shutil.copyfile(file, partial)
+            partial.replace(copy)
+            copied += 1
+    deleted = target.parent / (target.name + "-deleted")
+    today = datetime.date.today()
+    if target.is_dir():
+        for copy in target.glob("*/*"):
+            relative = copy.relative_to(target)
+            if copy.is_file() and relative not in present:
+                kept = deleted / today.isoformat() / relative
+                kept.parent.mkdir(parents=True, exist_ok=True)
+                copy.replace(kept)
+                removed += 1
+    if deleted.is_dir():
+        for day in deleted.iterdir():
+            try:
+                old = (today - datetime.date.fromisoformat(day.name)).days > KEEP
+            except ValueError:
+                continue
+            if day.is_dir() and old:
+                shutil.rmtree(day)
+    return copied, removed
 
 
 if __name__ == "__main__":

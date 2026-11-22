@@ -21,6 +21,7 @@ object Migrations {
         "V009__lists_more.sql",
         "V010__list_memory.sql",
         "V011__lists_subitems.sql",
+        "V012__list_files.sql",
     )
 
     /** First line of a file that rebuilds a table: it runs with foreign keys off, checked before commit. */

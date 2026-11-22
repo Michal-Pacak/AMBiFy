@@ -2,6 +2,21 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.3 · 22 listopada 2026
+
+### Listy
+- Zdjęcia przy pozycjach (premium „Linki, zdjęcia i pliki”):
+  - w oknie pozycji „+ Zdjęcie” → zrób zdjęcie aparatem albo wybierz kilka z galerii;
+  - wysyłamy je w dobrej jakości (do 3000 px, zwykle 1–2 MB), bez lokalizacji zapisanej przez aparat;
+  - na liście nie ma miniatur, tylko znacznik z aparatem i liczbą zdjęć; stuknięcie pobiera zdjęcie i pokazuje je na pełnym ekranie;
+  - przy kilku zdjęciach złote strzałki ‹ › (albo przesunięcie w bok) przełączają na poprzednie i następne; rozsuwasz palce (albo stukasz dwa razy), żeby powiększyć;
+  - raz obejrzane zdjęcie otwiera się od razu, także bez sieci.
+- Pliki przy pozycjach (premium): „+ Plik” dodaje PDF, dokument, arkusz albo tekst do 10 MB. Stuknięcie otwiera plik w aplikacji z telefonu; gdy telefon nie ma odpowiedniej, plik można zapisać w Pobranych.
+- Na jednej pozycji mieści się do 5 zdjęć i 5 plików. Programów (.apk, .exe) i archiwów (.zip, .rar) nie przyjmujemy.
+- Bez sieci zdjęcia i pliki czekają w telefonie („czeka na wysłanie”) i wysyłają się same, gdy wróci połączenie.
+- Usunąć zdjęcie lub plik może ten, kto je dodał, i twórca listy. Usunięcie pozycji albo całej listy usuwa jej zdjęcia i pliki także z serwera.
+- Podlista na osobnym ekranie: pod rozwiniętą podlistą „Otwórz na osobnym ekranie ›” — z nazwą listy na górze, polem dodawania i kolejnością jak na liście. Przydaje się przy długich podlistach.
+
 ## 0.7.2 · 22 listopada 2026
 
 ### Listy

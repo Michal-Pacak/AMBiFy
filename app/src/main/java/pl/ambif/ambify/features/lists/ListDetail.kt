@@ -96,6 +96,8 @@ private class Detail(
     val onCheck: (ListItem, Boolean) -> Unit,
     val items: List<ListItem>,
     val onInfo: (MessageKind, String, String) -> Unit,
+    /** Board 16: "Otwórz na osobnym ekranie ›" of a sub-list (null: back to the list). */
+    val onOpenSub: (String?) -> Unit = {},
 ) {
     val sort: ItemSort get() = ui.prefs.itemSort(list)
 }
@@ -109,6 +111,9 @@ internal fun ListDetail(
     onBack: () -> Unit,
     onDialog: (ListDialog) -> Unit,
     onInfo: (MessageKind, String, String) -> Unit,
+    /** Board 16: the item whose sub-list is open on its own screen, or null. */
+    subOf: String? = null,
+    onOpenSub: (String?) -> Unit = {},
 ) {
     val all = ui.data.itemsOf(list.id)
     // Sub-items are shown under their item (board 16); one whose item is gone is shown on its own.
@@ -134,7 +139,12 @@ internal fun ListDetail(
             }
         }
     }
-    val detail = Detail(ui, list, lists, onDialog, onCheck, items, onInfo)
+    val detail = Detail(ui, list, lists, onDialog, onCheck, items, onInfo, onOpenSub)
+    val parent = subOf?.let { id -> all.firstOrNull { it.id == id && it.parentId == null } }
+    if (subOf != null) {
+        if (parent == null) LaunchedEffect(subOf) { onOpenSub(null) } else SubScreen(detail, parent)
+        return
+    }
     val level = ui.level(list)
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
@@ -576,7 +586,8 @@ private fun ItemRow(
                     Text("inny dostęp: $it", fontSize = 11.sp, color = Muted)
                 }
             }
-            LinksLine(item)
+            AttachmentsLine(ui, d.lists, item, onPhotos = { d.onDialog(ListDialog.Photos(list, item)) },
+                onFile = { d.onDialog(ListDialog.OpenFile(list, item, it)) }, onFiles = { d.onDialog(ListDialog.Item(list, item)) })
             if (waiting) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(AppIcons.Clock, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(12.dp))
@@ -594,28 +605,6 @@ private fun ItemRow(
                 contentAlignment = Alignment.Center,
             ) { Icon(AppIcons.More, contentDescription = "Opcje: ${item.values.name}", tint = Muted, modifier = Modifier.size(18.dp)) }
         }
-    }
-}
-
-/** "allegro.pl" under the name (premium "Linki"); a tap opens the browser. */
-@Composable
-private fun LinksLine(item: ListItem) {
-    val links = item.values.links
-    if (links.isEmpty()) return
-    val uri = LocalUriHandler.current
-    val first = links.first()
-    Row(
-        modifier = Modifier.clip(RoundedCornerShape(6.dp))
-            .clickable(onClickLabel = "Otwórz link w przeglądarce", role = Role.Button) { runCatching { uri.openUri(first.url) } }
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Icon(AppIcons.Link, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(13.dp))
-        Text(
-            first.title.ifBlank { Lists.domain(first.url) } + if (links.size > 1) "  +${links.size - 1}" else "",
-            fontSize = 12.sp, color = Luxury.GoldText, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -662,6 +651,67 @@ private fun SubList(d: Detail, parent: ListItem) {
             ui.subItems -> SubAddField(d, parent)
             else -> Text("Nowe podzadania — w pakiecie premium „Podlisty”", fontSize = 12.sp, color = Faint, modifier = Modifier.padding(vertical = 8.dp))
         }
+        if (subs.isNotEmpty()) {
+            Text(
+                "Otwórz na osobnym ekranie ›", fontSize = 12.sp, color = Luxury.GoldText,
+                modifier = Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp))
+                    .clickable(onClickLabel = "Otwórz podlistę „${parent.values.name}” na osobnym ekranie", role = Role.Button) { d.onOpenSub(parent.id) }
+                    .padding(vertical = 10.dp, horizontal = 2.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Board 16, "Otwórz na osobnym ekranie": the same sub-list with the list's name above (back = to the list), a whole
+ * add field and the order of the list. Handy for long sub-lists; the last sub-item done asks about its item, as on the list.
+ */
+@Composable
+private fun SubScreen(d: Detail, parent: ListItem) {
+    val ui = d.ui
+    val list = d.list
+    val subs = ui.data.subItemsOf(parent.id)
+    val tasks = list.type == ListType.TASKS
+    val order = sorted(ui, list, subs.filter { !it.checked }, d.sort)
+    val done = subs.filter { it.checked }.sortedByDescending { it.checkedAt ?: 0 }
+    val other = ui.whoSeesItem(list, parent)
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { d.onOpenSub(null) }) { Icon(AppIcons.Back, contentDescription = "Wróć do listy ${list.name}", tint = Luxury.GoldText) }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("${list.name} ›", fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(parent.values.name, fontSize = 22.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    (if (tasks) "podlista" else "podpozycje") + " · ${done.size}/${subs.size}" + (other?.let { " · inny dostęp: $it" } ?: ""),
+                    fontSize = 12.sp, color = Muted, maxLines = 2,
+                )
+            }
+            IconButton(onClick = { d.onDialog(ListDialog.SortItems(list)) }) {
+                Icon(AppIcons.Sort, contentDescription = if (tasks) "Sortuj podzadania" else "Sortuj podpozycje", tint = Muted)
+            }
+        }
+        SyncBar(ui, onRetry = {})
+        when {
+            !ui.canAddTo(list, parent) -> MessageBar(MessageKind.INFO, "Tylko do odhaczania", "Nowe dodaje ktoś z dostępem „dodaje”. Dostęp ustala twórca listy.", icon = AppIcons.Lock)
+            ui.subItems -> SubAddField(d, parent)
+            else -> MessageBar(MessageKind.INFO, "Pakiet premium „Podlisty”", "Te podzadania zostają i można je odhaczać. Nowe dodasz z pakietem premium.", icon = AppIcons.Lock)
+        }
+        LuxuryCard(contentPadding = CardPadding, spacing = 0.dp) {
+            LuxurySectionTitle((if (tasks) "Podzadania" else "Podpozycje") + " · ${done.size}/${subs.size}")
+            if (subs.isEmpty()) EmptyLine(if (tasks) "Wpisz pierwsze podzadanie, np. „Kupić płyn”." else "Wpisz pierwszą podpozycję.")
+            order.forEach { group ->
+                group.title?.let { Text(it, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 8.dp)) }
+                group.items.forEach { sub -> SubRow(d, sub, square = list.type == ListType.SHOPPING) }
+            }
+            done.forEach { sub -> SubRow(d, sub, square = list.type == ListType.SHOPPING) }
+        }
+        Text(
+            "Gdy odhaczysz ostatnie ${if (tasks) "podzadanie" else "podpozycję"}, zapytamy, czy odhaczyć też „${parent.values.name}” na liście.",
+            fontSize = 12.sp, color = Muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -683,7 +733,8 @@ private fun SubRow(d: Detail, sub: ListItem, square: Boolean) {
                 .padding(vertical = 6.dp),
         ) {
             Text(nameText(sub.values, sub.checked), fontSize = 15.sp)
-            LinksLine(sub)
+            AttachmentsLine(ui, d.lists, sub, onPhotos = { d.onDialog(ListDialog.Photos(list, sub)) },
+                onFile = { d.onDialog(ListDialog.OpenFile(list, sub, it)) }, onFiles = { d.onDialog(ListDialog.Item(list, sub)) })
         }
         when {
             sub.checked -> Text("${ui.name(sub.checkedBy).ifEmpty { "?" }} · ${time(sub.checkedAt)}", fontSize = 11.sp, color = Muted)

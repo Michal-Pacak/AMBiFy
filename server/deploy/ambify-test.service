@@ -11,6 +11,7 @@ Environment=AMBIFY_BACKUP_DIR=%h/.local/share/ambify-test/backup
 Environment=AMBIFY_RELEASES=%h/.local/share/ambify-test/releases
 Environment=AMBIFY_MONITOR=%h/.local/share/ambify-test/monitor
 Environment=AMBIFY_DEMO=1
+Environment=AMBIFY_BACKUP_CHECK=0
 Environment=JAVA_OPTS=-Xmx192m
 ExecStart=%h/.local/opt/ambify-test/bin/server
 Restart=on-failure

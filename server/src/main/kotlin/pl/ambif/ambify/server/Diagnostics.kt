@@ -38,7 +38,10 @@ class Diagnostics(private val checks: List<DiagnosticCheck>) {
                 DiagnosticCheck { migrations(database) },
                 DiagnosticCheck { diskSpace(File(config.databasePath).absoluteFile.parentFile) },
                 DiagnosticCheck { nas(config.nasPath) },
-                DiagnosticCheck { backup(File(config.backupDir)) },
+                DiagnosticCheck {
+                    if (config.backupCheck) backup(File(config.backupDir))
+                    else DiagnosticResult("backup", "Kopia na NAS", CheckStatus.NOT_AVAILABLE, "serwer TEST — bez codziennej kopii")
+                },
                 // Modules planned in the roadmap; replaced by real checks when they are built.
                 DiagnosticCheck { DiagnosticResult("assistant", "Asystent AI", CheckStatus.NOT_AVAILABLE, "od Stage 1A") },
                 DiagnosticCheck { DiagnosticResult("timetable", "Plan lekcji", CheckStatus.NOT_AVAILABLE, "od Stage 4") },

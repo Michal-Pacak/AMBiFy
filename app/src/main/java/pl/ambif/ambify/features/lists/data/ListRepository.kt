@@ -134,6 +134,11 @@ class ListRepository(
         return told
     }
 
+    /** Something to tell the open screen (and the worker): e.g. a photo the server did not take. */
+    fun tell(event: ListsEvent) {
+        _events.tryEmit(event)
+    }
+
     /** Settling a conflict needs the server (the decision is final); then the lists are synced. */
     suspend fun resolve(api: ServerApi, conflictId: String, decision: ConflictDecision) {
         api.resolveConflict(conflictId, decision)
@@ -177,6 +182,7 @@ class ListRepository(
             open.clear()
             ListsSyncWorker.cancel(context)
             File(context.filesDir, DIR).deleteRecursively()
+            ListFiles.clear(context)
         }
     }
 }

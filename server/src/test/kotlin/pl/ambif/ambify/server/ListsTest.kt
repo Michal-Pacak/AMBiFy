@@ -47,19 +47,24 @@ class ListsTest {
         return UserSession(token.subject, token.getClaim(AccessTokens.SESSION_CLAIM).asString())
     }
 
-    private class World(val database: org.jetbrains.exposed.v1.jdbc.Database, val accounts: AccountService, val lists: ListService, val owner: UserSession, val user: UserSession, val third: UserSession)
+    private class World(
+        val database: org.jetbrains.exposed.v1.jdbc.Database, val accounts: AccountService, val lists: ListService,
+        val owner: UserSession, val user: UserSession, val third: UserSession, val store: pl.ambif.ambify.server.lists.ListFileStore,
+    )
 
     /** Owner Michał, Users Bartosz and Filip in one community. */
     private fun world(): World {
-        val database = Db.open(Files.createTempDirectory("ambify-lists").resolve("l.db").toString())
+        val dir = Files.createTempDirectory("ambify-lists")
+        val database = Db.open(dir.resolve("l.db").toString())
         val accounts = AccountService(database, tokens)
-        val lists = ListService(database, accounts) { now }
+        val store = pl.ambif.ambify.server.lists.ListFileStore(dir.resolve("lists-files").toFile())
+        val lists = ListService(database, accounts, { now }, store)
         val owner = accounts.session(accounts.setup(SetupRequest("Pacakowie", "Michał", "michal@example.com", "sekretne1", "S24")))
         fun join(name: String, email: String): UserSession {
             accounts.register(RegisterRequest(accounts.createInvitation(owner).code, name, email, "haslo1234", "X"))
             return accounts.session(accounts.login(LoginRequest(email, "haslo1234", "X")))
         }
-        return World(database, accounts, lists, owner, join("Bartosz", "bartosz@example.com"), join("Filip", "filip@example.com"))
+        return World(database, accounts, lists, owner, join("Bartosz", "bartosz@example.com"), join("Filip", "filip@example.com"), store)
     }
 
     private fun change(kind: ListChangeKind, listId: String, itemId: String? = null, madeAt: Long = now, block: ListChange.() -> ListChange = { this }) =
@@ -566,5 +571,72 @@ class ListsTest {
         assertEquals(AccessLevel.CHECK, Lists.itemLevel(list, top, "filip", "user", owner = false, roleMayEdit = true))
         assertEquals(AccessLevel.NONE, Lists.itemLevel(list, top, "bartosz", "user", owner = false, roleMayEdit = true))
         assertEquals(AccessLevel.EDIT_ALL, Lists.itemLevel(list, top, "michal", "owner", owner = false, roleMayEdit = true))
+    }
+
+    private fun World.upload(who: UserSession, itemId: String, fileId: String, name: String, mime: String, bytes: ByteArray) =
+        runCatching {
+            val file = store.incoming().apply { writeBytes(bytes) }
+            lists.addFile(who, itemId, fileId, name, mime, file)
+        }
+
+    private val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 1, 2, 3)
+
+    @Test
+    fun photosAndFilesArePremiumLimitedAndGoAwayWithTheirItem() {
+        val w = world()
+        w.shoppingList()
+        w.add(w.user, "i1", ItemValues("Płytki"))
+        assertTrue(w.upload(w.user, "i1", "f0", "a.jpg", "image/jpeg", jpeg).isFailure)
+        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_ATTACHMENTS", true)
+
+        val before = w.send(w.third).items.single().rev
+        val photo = w.upload(w.user, "i1", "f1", "IMG_1.jpg", "image/jpeg", jpeg).getOrThrow()
+        assertTrue(photo.photo)
+        // Sent again (no answer heard): the same file, not a second one.
+        assertEquals(photo, w.upload(w.user, "i1", "f1", "IMG_1.jpg", "image/jpeg", jpeg).getOrThrow())
+        val pdf = w.upload(w.user, "i1", "f2", "faktura łazienka.pdf", "application/pdf", "%PDF-1".toByteArray()).getOrThrow()
+        assertFalse(pdf.photo)
+        // Not a JPEG inside: kept as a file, never shown as a photo.
+        assertFalse(w.upload(w.user, "i1", "f3", "x.jpg", "image/jpeg", "nie zdjęcie".toByteArray()).getOrThrow().photo)
+        assertTrue(w.upload(w.user, "i1", "f4", "gra.apk", "application/octet-stream", "PK".toByteArray()).isFailure)
+        assertTrue(w.upload(w.user, "i1", "f5", "zdj.zip", "application/zip", "PK".toByteArray()).isFailure)
+
+        val synced = w.send(w.third, since = 0).items.single()
+        assertTrue(synced.rev > before)
+        assertEquals(listOf("f1", "f2", "f3"), synced.files.map { it.id })
+        assertEquals("faktura łazienka.pdf", synced.files[1].name)
+
+        // Five photos at most.
+        (6..9).forEach { assertTrue(w.upload(w.user, "i1", "p$it", "p.jpg", "image/jpeg", jpeg).isSuccess) }
+        assertTrue(w.upload(w.user, "i1", "p10", "p.jpg", "image/jpeg", jpeg).isFailure)
+
+        // Everyone who sees the item gets it; only the one who added it or the list's creator removes it.
+        assertEquals(jpeg.toList(), w.lists.file(w.third, "f1").second.readBytes().toList())
+        assertTrue(runCatching { w.lists.deleteFile(w.third, "f1") }.isFailure)
+        w.lists.deleteFile(w.owner, "f1")
+        assertTrue(runCatching { w.lists.file(w.third, "f1") }.isFailure)
+        assertEquals(listOf("f2", "f3", "p6", "p7", "p8", "p9"), w.send(w.third).items.single().files.map { it.id })
+
+        // Deleting the item removes its files from the server's disk.
+        val stored = w.lists.file(w.user, "f2").second
+        assertTrue(stored.isFile)
+        w.send(w.owner, change(ListChangeKind.DELETE_ITEM, "L1", "i1"))
+        assertFalse(stored.exists())
+        assertTrue(runCatching { w.lists.file(w.user, "f2") }.isFailure)
+    }
+
+    @Test
+    fun aFileOfAHiddenListIsNotGiven() {
+        val w = world()
+        val bartosz = w.accounts.me(w.user).id
+        w.shoppingList(everyone = false, members = listOf(bartosz))
+        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_ATTACHMENTS", true)
+        w.add(w.user, "i1", ItemValues("Kawa"))
+        w.upload(w.user, "i1", "f1", "a.jpg", "image/jpeg", jpeg).getOrThrow()
+        assertTrue(runCatching { w.lists.file(w.third, "f1") }.isFailure)
+        assertTrue(w.upload(w.third, "i1", "f2", "b.jpg", "image/jpeg", jpeg).isFailure)
+        assertEquals("„film.mp4” ma 48 MB — plik może mieć do 10 MB.", Lists.fileRefusal("film.mp4", "video/mp4", 48L * 1024 * 1024))
+        assertEquals("1,6 MB", Lists.sizeText(1_680_000))
+        assertEquals("240 KB", Lists.sizeText(240 * 1024))
     }
 }
