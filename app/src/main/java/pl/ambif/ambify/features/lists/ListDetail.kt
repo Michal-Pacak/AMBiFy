@@ -32,6 +32,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -100,11 +110,22 @@ internal fun ListDetail(
     onDialog: (ListDialog) -> Unit,
     onInfo: (MessageKind, String, String) -> Unit,
 ) {
-    val items = ui.data.itemsOf(list.id)
-    val onCheck: (ListItem, Boolean) -> Unit = { item, checked ->
+    val all = ui.data.itemsOf(list.id)
+    // Sub-items are shown under their item (board 16); one whose item is gone is shown on its own.
+    val items = all.filter { item -> item.parentId == null || all.none { it.id == item.parentId } }
+    val onCheck: (ListItem, Boolean) -> Unit = check@{ item, checked ->
+        if (checked && ui.data.subItemsOf(item.id).any { !it.checked }) {
+            onDialog(ListDialog.CheckAll(list, item))
+            return@check
+        }
         lists.check(item, checked)
         if (!checked && list.type == ListType.SHOPPING) onInfo(MessageKind.SUCCESS, "Wróciło na listę", item.values.name)
-        val after = items.map { if (it.id == item.id) it.copy(checked = checked) else it }
+        val after = all.map { if (it.id == item.id) it.copy(checked = checked) else it }
+        val parent = item.parentId?.let { id -> after.firstOrNull { it.id == id } }
+        if (checked && parent != null && !parent.checked && after.filter { it.parentId == parent.id }.all { it.checked } && ui.canCheck(list, parent)) {
+            onDialog(ListDialog.CheckParent(list, parent))
+            return@check
+        }
         if (checked && allDone(after) && !ui.prefs.neverAskDone(list.id)) {
             if (ui.manageable(list)) {
                 if (after.maxOf { it.addedAt } > ui.prefs.doneAnswered(list.id)) onDialog(ListDialog.Done(list))
@@ -155,7 +176,7 @@ internal fun addOrAsk(
     ui: ListsUi, list: ListInfo, lists: ListsController, values: ItemValues, remember: Boolean,
     onDialog: (ListDialog) -> Unit, onInfo: (String, String) -> Unit,
 ) {
-    val items = ui.data.itemsOf(list.id)
+    val items = ui.data.itemsOf(list.id).filter { it.parentId == null }
     val open = items.firstOrNull { !it.checked && Lists.sameThing(it.values, values) }
     val done = items.firstOrNull { it.checked && Lists.sameThing(it.values, values) }
     when {
@@ -358,6 +379,7 @@ private fun Tasks(d: Detail) {
             done.forEachIndexed { i, item ->
                 if (i > 0) LuxuryDivider()
                 ItemRow(d, item, square = false, meta = "zrobił(a): ${ui.name(item.checkedBy)} · ${time(item.checkedAt)}") {}
+                SubList(d, item)
             }
         }
     }
@@ -424,6 +446,7 @@ private fun Deadlines(d: Detail) {
                 done.forEachIndexed { i, item ->
                     if (i > 0) LuxuryDivider()
                     ItemRow(d, item, square = false, meta = "załatwił(a): ${d.ui.name(item.checkedBy)} · ${time(item.checkedAt)}") {}
+                    SubList(d, item)
                 }
             }
         }
@@ -478,6 +501,7 @@ private fun Groups(d: Detail, items: List<ListItem>, row: @Composable (ListItem)
         group.items.forEachIndexed { i, item ->
             if (i > 0) LuxuryDivider()
             row(item)
+            SubList(d, item)
         }
         first = false
     }
@@ -511,9 +535,14 @@ private fun ItemRow(
     val conflict = ui.data.openConflicts(item.id).isNotEmpty()
     val waiting = item.id in ui.waitingItems
     val longName = item.values.name.length + item.values.variant.length > 22
+    val subs = if (item.parentId == null) ui.data.subItemsOf(item.id) else emptyList()
+    val subOpen = ui.prefs.subOpen(item.id)
+    val access = ui.whoSeesItem(list, item)
+    // ⋮ (board 16): sub-items, details, own access — with premium "Podlisty", on items (not sub-items).
+    val menu = item.parentId == null && ui.subItems && (ui.canAddTo(list, item) || ui.manageable(list))
     val check = @Composable {
         CheckBox(
-            checked = item.checked, square = square, enabled = !item.pending && ui.canCheck(list),
+            checked = item.checked, square = square, enabled = !item.pending && ui.canCheck(list, item),
             label = (if (item.checked) "Cofnij: " else if (list.type == ListType.SHOPPING) "Odhacz: " else "Zrobione: ") + item.values.name,
         ) { d.onCheck(item, !item.checked) }
     }
@@ -524,7 +553,11 @@ private fun ItemRow(
     ) {
         if (!checkAtEnd) check()
         Column(
-            modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Szczegóły") { d.onDialog(ListDialog.Item(list, item)) }.padding(vertical = 8.dp),
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                .clickable(onClickLabel = if (subs.isEmpty()) "Szczegóły" else if (subOpen) "Zwiń" else "Rozwiń") {
+                    if (subs.isEmpty()) d.onDialog(ListDialog.Item(list, item)) else ui.prefs.setSubOpen(item.id, !subOpen)
+                }
+                .padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
@@ -537,6 +570,13 @@ private fun ItemRow(
                     meta?.let { Text(it, fontSize = 12.sp, color = metaColor) }
                 }
             }
+            access?.let {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(AppIcons.Lock, contentDescription = null, tint = Muted, modifier = Modifier.size(12.dp))
+                    Text("inny dostęp: $it", fontSize = 11.sp, color = Muted)
+                }
+            }
+            LinksLine(item)
             if (waiting) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(AppIcons.Clock, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(12.dp))
@@ -544,8 +584,154 @@ private fun ItemRow(
                 }
             }
         }
+        if (subs.isNotEmpty()) SubCounter(subs, subOpen, item.values.name) { ui.prefs.setSubOpen(item.id, !subOpen) }
         trailing()
         if (checkAtEnd) check()
+        if (menu) {
+            Box(
+                modifier = Modifier.size(width = 32.dp, height = 44.dp).clip(RoundedCornerShape(8.dp))
+                    .clickable(onClickLabel = "Opcje: ${item.values.name}", role = Role.Button) { d.onDialog(ListDialog.ItemMenu(list, item)) },
+                contentAlignment = Alignment.Center,
+            ) { Icon(AppIcons.More, contentDescription = "Opcje: ${item.values.name}", tint = Muted, modifier = Modifier.size(18.dp)) }
+        }
+    }
+}
+
+/** "allegro.pl" under the name (premium "Linki"); a tap opens the browser. */
+@Composable
+private fun LinksLine(item: ListItem) {
+    val links = item.values.links
+    if (links.isEmpty()) return
+    val uri = LocalUriHandler.current
+    val first = links.first()
+    Row(
+        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+            .clickable(onClickLabel = "Otwórz link w przeglądarce", role = Role.Button) { runCatching { uri.openUri(first.url) } }
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(AppIcons.Link, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(13.dp))
+        Text(
+            first.title.ifBlank { Lists.domain(first.url) } + if (links.size > 1) "  +${links.size - 1}" else "",
+            fontSize = 12.sp, color = Luxury.GoldText, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** "1/3 ⌄" of an item with a sub-list (board 16): a tap opens or closes it in place. */
+@Composable
+private fun SubCounter(subs: List<ListItem>, open: Boolean, name: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(16.dp)).background(Luxury.GoldBase.copy(alpha = 0.12f))
+            .clickable(onClickLabel = (if (open) "Zwiń: " else "Rozwiń: ") + name, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text("${subs.count { it.checked }}/${subs.size}", fontSize = 12.sp, color = Luxury.GoldText, fontWeight = FontWeight.Medium)
+        Icon(AppIcons.ExpandMore, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(14.dp).rotate(if (open) 180f else 0f))
+    }
+}
+
+/**
+ * The sub-list of [parent] open in place (boards 16 and 18): the sub-items with a gold line on the left and the
+ * field "+ Dodaj podzadanie". New ones need premium "Podlisty"; the ones there stay visible and can be checked.
+ */
+@Composable
+private fun SubList(d: Detail, parent: ListItem) {
+    val ui = d.ui
+    val list = d.list
+    if (parent.parentId != null || !ui.prefs.subOpen(parent.id)) return
+    val subs = ui.data.subItemsOf(parent.id)
+    val tasks = list.type == ListType.TASKS
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, bottom = 8.dp)
+            .drawBehind { drawLine(Luxury.GoldBase.copy(alpha = 0.6f), Offset(0f, 0f), Offset(0f, size.height), strokeWidth = 2.dp.toPx()) }
+            .padding(start = 8.dp),
+    ) {
+        subs.forEach { sub -> SubRow(d, sub, square = list.type == ListType.SHOPPING) }
+        if (subs.isEmpty()) {
+            Text(
+                if (tasks) "Wpisz pierwsze podzadanie, np. „Kupić płyn”, „Okna w salonie”." else "Wpisz pierwszą podpozycję.",
+                fontSize = 12.sp, color = Muted, modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
+        when {
+            !ui.canAddTo(list, parent) -> Unit
+            ui.subItems -> SubAddField(d, parent)
+            else -> Text("Nowe podzadania — w pakiecie premium „Podlisty”", fontSize = 12.sp, color = Faint, modifier = Modifier.padding(vertical = 8.dp))
+        }
+    }
+}
+
+@Composable
+private fun SubRow(d: Detail, sub: ListItem, square: Boolean) {
+    val ui = d.ui
+    val list = d.list
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).alpha(if (sub.checked) 0.55f else 1f),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        CheckBox(
+            checked = sub.checked, square = square, enabled = !sub.pending && ui.canCheck(list, sub),
+            label = (if (sub.checked) "Cofnij: " else "Odhacz: ") + sub.values.name,
+        ) { d.onCheck(sub, !sub.checked) }
+        Column(
+            modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Szczegóły") { d.onDialog(ListDialog.Item(list, sub)) }
+                .padding(vertical = 6.dp),
+        ) {
+            Text(nameText(sub.values, sub.checked), fontSize = 15.sp)
+            LinksLine(sub)
+        }
+        when {
+            sub.checked -> Text("${ui.name(sub.checkedBy).ifEmpty { "?" }} · ${time(sub.checkedAt)}", fontSize = 11.sp, color = Muted)
+            list.type == ListType.SHOPPING && list.look.quantity && sub.values.quantity != null ->
+                QuantityChip(Lists.quantityText(sub.values, ui.data.allUnits), enabled = ui.canEdit(list, sub)) { d.onDialog(ListDialog.Quantity(list, sub)) }
+            else -> ui.member(sub.values.assigneeId)?.let { PersonAvatar(it.name, it.avatar, size = 22.dp) }
+        }
+    }
+}
+
+/** "+ Dodaj podzadanie" / "+ Dodaj do „Stare Miasto”" under a sub-list; a new one gets the keyboard. */
+@Composable
+private fun SubAddField(d: Detail, parent: ListItem) {
+    val ui = d.ui
+    val list = d.list
+    var draft by rememberSaveable(parent.id) { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    val hint = if (list.type == ListType.TASKS) "+ Dodaj podzadanie" else "+ Dodaj do „${parent.values.name.take(24)}”"
+    fun add() {
+        val text = draft.trim()
+        if (text.isEmpty()) return
+        val values = if (list.type == ListType.SHOPPING && list.look.quantity) {
+            Lists.quickAdd(text, ui.data.allUnits) { key -> ui.data.products.firstOrNull { it.product == key } }
+        } else ItemValues(name = text.replaceFirstChar { it.uppercase() })
+        d.lists.addItem(list.id, values, parentId = parent.id)
+        draft = ""
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+        OutlinedTextField(
+            value = draft, onValueChange = { draft = it },
+            placeholder = { Text(hint, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp) },
+            singleLine = true, shape = RoundedCornerShape(20.dp),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { add() }),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Luxury.GoldBase, unfocusedBorderColor = Outline),
+            modifier = Modifier.weight(1f).focusRequester(focus).semantics { contentDescription = "Dodaj do: ${parent.values.name}" },
+        )
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(Luxury.GoldFill)
+                .clickable(onClickLabel = "Dodaj do: ${parent.values.name}", role = Role.Button) { add() },
+            contentAlignment = Alignment.Center,
+        ) { Icon(AppIcons.Plus, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(20.dp)) }
+    }
+    LaunchedEffect(ui.prefs.focusSub) {
+        if (ui.prefs.focusSub == parent.id) {
+            runCatching { focus.requestFocus() }
+            ui.prefs.focusSub = null
+        }
     }
 }
 

@@ -1,5 +1,12 @@
 package pl.ambif.ambify.features.lists
 
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalUriHandler
+import pl.ambif.ambify.shared.ItemLink
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -180,7 +187,7 @@ internal fun ListDialogs(
             onDelete = { lists.deleteList(dialog.list); close(); onSaved("Usunięto listę", "„${dialog.list.name}”.") },
             onArchive = { lists.updateList(dialog.list.copy(archived = true)); close(); onSaved("Przeniesiono do archiwum", "Lista „${dialog.list.name}”.") },
         )
-        is ListDialog.Item -> ItemDialog(ui, dialog.list, dialog.item, close,
+        is ListDialog.Item -> ItemDialog(ui, dialog.list, lists, dialog.item, close,
             onSave = { values, remember ->
                 val item = dialog.item
                 close()
@@ -188,9 +195,52 @@ internal fun ListDialogs(
             },
             onDelete = { item -> lists.delete(item); close(); onSaved("Usunięto", "„${item.values.name}”.") },
         )
+        is ListDialog.ItemMenu -> ItemMenu(ui, dialog.list, dialog.item, close,
+            onSubs = {
+                ui.prefs.setSubOpen(dialog.item.id, true)
+                ui.prefs.focusSub = dialog.item.id
+                close()
+            },
+            onDetails = { onDialog(ListDialog.Item(dialog.list, dialog.item)) },
+            onAccess = { onDialog(ListDialog.ItemAccess(dialog.list, dialog.item)) },
+        )
+        is ListDialog.ItemAccess -> AccessEditor(ui, dialog.list, isNew = false, item = dialog.item, onDismiss = close) { access ->
+            lists.itemAccess(dialog.item, access)
+            close()
+            onSaved("Zapisano dostęp", "„${dialog.item.values.name}” — " + if (access.isEmpty()) "jak na liście." else "razem z podlistą.")
+        }
+        is ListDialog.CheckAll -> {
+            val open = ui.data.subItemsOf(dialog.item.id).filter { !it.checked && ui.canCheck(dialog.list, it) }
+            val tasks = dialog.list.type == ListType.TASKS
+            LuxuryPopup(onDismiss = close) {
+                Text("„${dialog.item.values.name}” ma ${if (tasks) "otwarte podzadania" else "nieodhaczone podpozycje"}", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Zostało: " + open.take(3).joinToString(", ") { it.values.name } + if (open.size > 3) " i ${open.size - 3} więcej." else ".",
+                    fontSize = 13.sp, color = Muted,
+                )
+                GoldButton(if (tasks) "Odhacz wszystko (${open.size + 1})" else "Odhacz razem z podpozycjami") {
+                    open.forEach { lists.check(it, true) }
+                    lists.check(dialog.item, true)
+                    close()
+                }
+                FramedButton(if (tasks) "Tylko to zadanie" else "Tylko „${dialog.item.values.name.take(20)}”", modifier = Modifier.fillMaxWidth()) {
+                    lists.check(dialog.item, true)
+                    close()
+                }
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = close)
+            }
+        }
+        is ListDialog.CheckParent -> LuxuryPopup(onDismiss = close) {
+            Text("Wszystko z podlisty zrobione", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Odhaczyć też „${dialog.item.values.name}”?", fontSize = 14.sp, color = Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FramedButton("Nie", gold = false, modifier = Modifier.weight(1f), onClick = close)
+                Box(modifier = Modifier.weight(1f)) { GoldButton("Odhacz") { lists.check(dialog.item, true); close() } }
+            }
+        }
         is ListDialog.Quantity -> LuxuryPopup(onDismiss = close) {
             Header(dialog.item.values.name, dialog.list.name)
-            QuantityEditor(ui, dialog.item.values, onCancel = close) { values, remember ->
+            QuantityEditor(ui, dialog.list, lists, dialog.item.values, onCancel = close) { values, remember ->
                 lists.edit(dialog.item, values, remember)
                 close()
             }
@@ -353,12 +403,20 @@ private fun namePlaceholder(type: ListType, preset: ListPreset) = when (type) {
 // --- board 15: who sees the list and what they may do ---
 
 @Composable
-private fun AccessEditor(ui: ListsUi, list: ListInfo, isNew: Boolean, onDismiss: () -> Unit, onSave: (List<ListAccess>) -> Unit) {
+private fun AccessEditor(
+    ui: ListsUi,
+    list: ListInfo,
+    isNew: Boolean,
+    item: ListItem? = null,
+    onDismiss: () -> Unit,
+    onSave: (List<ListAccess>) -> Unit,
+) {
     val roles = ui.roles.filterNot { it.owner }
     val creator = list.createdBy.ifEmpty { ui.me.id }
     var access by remember {
         mutableStateOf(
             when {
+                item != null && item.access.isNotEmpty() -> item.access
                 list.access.isNotEmpty() -> list.access
                 list.everyone || isNew -> roles.map { ListAccess(roleId = it.id, level = AccessLevel.EDIT_ALL) }
                 else -> roles.map { ListAccess(roleId = it.id, level = AccessLevel.NONE) } +
@@ -373,8 +431,16 @@ private fun AccessEditor(ui: ListsUi, list: ListInfo, isNew: Boolean, onDismiss:
     }
     LuxuryPopup(onDismiss = onDismiss) {
         Column {
-            Text("Dostęp do listy", fontSize = 20.sp, fontWeight = FontWeight.Medium)
-            Text("${list.name} · ustala twórca listy", fontSize = 12.sp, color = Muted)
+            if (item == null) {
+                Text("Dostęp do listy", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("${list.name} · ustala twórca listy", fontSize = 12.sp, color = Muted)
+            } else {
+                Text(if (list.type == ListType.TASKS) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("${item.values.name} · razem z podlistą", fontSize = 12.sp, color = Muted)
+            }
+        }
+        if (item != null) {
+            MessageBar(MessageKind.INFO, "Tylko zawęża dostęp z listy", "Nikt nie dostanie tu więcej niż na liście „${list.name}”. Kto nie widzi, temu zniknie razem z podlistą.")
         }
         Text("Poziomy (każdy zawiera poprzedni): widzi → odhacza → dodaje → edytuje i usuwa cudze", fontSize = 12.sp, color = Muted, lineHeight = 17.sp)
         if (roles.isEmpty()) {
@@ -430,9 +496,16 @@ private fun AccessEditor(ui: ListsUi, list: ListInfo, isNew: Boolean, onDismiss:
             "Lista może tylko zawęzić to, na co pozwala tabela uprawnień społeczności (np. „Zadania dla innych” dalej wymaga zatwierdzenia).",
             fontSize = 11.sp, color = Faint, lineHeight = 15.sp,
         )
+        if (item != null && item.access.isNotEmpty()) {
+            FramedButton("Jak na liście (usuń inny dostęp)", gold = false, modifier = Modifier.fillMaxWidth()) { onSave(emptyList()) }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FramedButton(if (isNew) "Wstecz" else "Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
-            Box(modifier = Modifier.weight(1f)) { GoldButton(if (isNew) "Utwórz" else "Zapisz dostęp") { onSave(if (roles.isEmpty()) emptyList() else access) } }
+            Box(modifier = Modifier.weight(1f)) {
+                GoldButton(if (isNew) "Utwórz" else "Zapisz dostęp") {
+                    if (item != null && roles.isEmpty()) onDismiss() else onSave(if (roles.isEmpty()) emptyList() else access)
+                }
+            }
         }
     }
 }
@@ -694,6 +767,179 @@ private fun Locked(title: String, text: String) {
     }
 }
 
+// --- board 16: ⋮ of an item ---
+
+@Composable
+private fun ItemMenu(ui: ListsUi, list: ListInfo, item: ListItem, onDismiss: () -> Unit, onSubs: () -> Unit, onDetails: () -> Unit, onAccess: () -> Unit) {
+    val tasks = list.type == ListType.TASKS
+    val subs = ui.data.subItemsOf(item.id)
+    LuxuryPopup(onDismiss = onDismiss) {
+        Text(item.values.name, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 2)
+        if (ui.canAddTo(list, item)) {
+            Row(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onSubs), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        when {
+                            subs.isNotEmpty() -> if (tasks) "Dodaj kolejne podzadanie" else "Dodaj kolejną podpozycję"
+                            tasks -> "Dodaj podzadania"
+                            else -> "Dodaj podpozycje"
+                        },
+                        fontSize = 16.sp,
+                    )
+                    Text("rozwinie się pod ${if (tasks) "zadaniem" else "pozycją"}, z polem do wpisania", fontSize = 12.sp, color = Muted)
+                }
+                LuxuryOpenMark(size = 32.dp)
+            }
+            LuxuryDivider()
+        }
+        MenuRow("Szczegóły", onDetails)
+        if (ui.manageable(list)) {
+            LuxuryDivider()
+            MenuRow(if (tasks) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", onAccess)
+        }
+        FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+    }
+}
+
+// --- premium "Linki" (board 13): ogniwo = link, opens the browser ---
+
+@Composable
+private fun LinksEditor(links: List<ItemLink>, editable: Boolean, onChange: (List<ItemLink>) -> Unit) {
+    val uri = LocalUriHandler.current
+    var adding by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
+    var tried by remember { mutableStateOf(false) }
+    LuxurySectionTitle("Linki · ${links.size}/${Lists.MAX_LINKS}")
+    links.forEach { link ->
+        Row(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                    .clickable(onClickLabel = "Otwórz w przeglądarce", role = Role.Button) { runCatching { uri.openUri(link.url) } }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(AppIcons.Link, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(20.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(link.title.ifBlank { Lists.domain(link.url) }, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${Lists.domain(link.url)} · link — otwiera przeglądarkę", fontSize = 11.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (editable) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClickLabel = "Usuń link: ${Lists.domain(link.url)}") { onChange(links - link) },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(AppIcons.Close, contentDescription = "Usuń link: ${Lists.domain(link.url)}", tint = Muted, modifier = Modifier.size(16.dp)) }
+            }
+        }
+    }
+    if (!editable) return
+    if (adding) {
+        val bad = tried && !Lists.isLink(url.trim())
+        OutlinedTextField(
+            value = url, onValueChange = { url = it.trim() }, singleLine = true, isError = bad,
+            label = { Text("Adres (wklej)") }, placeholder = { Text("https://…") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (bad) FieldError("Wklej adres zaczynający się od http:// lub https://.")
+        OutlinedTextField(
+            value = title, onValueChange = { title = it.take(60) }, singleLine = true,
+            label = { Text("Podpis (opcjonalnie)") }, placeholder = { Text("np. Instrukcja producenta") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f)) { adding = false; url = ""; title = ""; tried = false }
+            Box(modifier = Modifier.weight(1f)) {
+                GoldButton("Dodaj link") {
+                    tried = true
+                    val clean = url.trim()
+                    if (Lists.isLink(clean)) {
+                        if (links.none { it.url == clean }) onChange(links + ItemLink(clean, title.trim()))
+                        adding = false; url = ""; title = ""; tried = false
+                    }
+                }
+            }
+        }
+    } else if (links.size < Lists.MAX_LINKS) {
+        FramedButton("+ Link", modifier = Modifier.fillMaxWidth()) { adding = true }
+    } else {
+        Text("Najwyżej ${Lists.MAX_LINKS} linków przy jednej pozycji.", fontSize = 12.sp, color = Muted)
+    }
+}
+
+// --- board 24: forms of a unit of the community (1 / 2–4 / 5+) ---
+
+/**
+ * A new unit ([editing] without a name) or "Popraw odmianę" of one the community has. The forms are guessed by the
+ * ending of its name as it is typed; a corrected field gets a gold frame and stays as typed.
+ */
+@Composable
+private fun UnitFormsDialog(list: ListInfo, itemName: String, editing: ListUnit, onDismiss: () -> Unit, onSave: (ListUnit) -> Unit) {
+    val isNew = editing.name.isEmpty()
+    var word by remember { mutableStateOf(editing.name) }
+    var fixed by remember { mutableStateOf<Map<Int, String>>(if (isNew || editing.forms.isEmpty()) emptyMap() else editing.forms.withIndex().associate { it.index to it.value }) }
+    var tried by remember { mutableStateOf(false) }
+    val guessed = Lists.guessForms(word)
+    val forms = (0..2).map { fixed[it] ?: guessed[it] }
+    val sample = itemName.ifBlank { "Ogórki kiszone" }
+    LuxuryPopup(onDismiss = onDismiss) {
+        Column {
+            Text(if (isNew) "Nowa jednostka" else "Odmiana: „${editing.name}”", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text(if (isNew) "${list.name} · własna jednostka" else "Przytrzymany chip jednostki → „Popraw odmianę”", fontSize = 12.sp, color = Muted)
+        }
+        if (isNew) {
+            LuxurySectionTitle("Nazwa (jak dla 1 sztuki)")
+            OutlinedTextField(
+                value = word, onValueChange = { word = it.take(Lists.MAX_UNIT); fixed = emptyMap() }, singleLine = true,
+                isError = tried && word.isBlank(), placeholder = { Text("np. wiaderko") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        LuxurySectionTitle("Odmiana przy liczbach")
+        listOf("1", "2–4", "5+").forEachIndexed { i, label ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(label, fontSize = 15.sp, color = Muted, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+                OutlinedTextField(
+                    value = forms[i], onValueChange = { fixed = fixed + (i to it.take(Lists.MAX_UNIT)) }, singleLine = true,
+                    isError = tried && forms[i].isBlank(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Luxury.GoldBase,
+                        unfocusedBorderColor = if (i in fixed) Luxury.GoldLink else Outline,
+                    ),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Forma przy liczbie $label" },
+                )
+            }
+        }
+        MessageBar(
+            MessageKind.INFO, "Zgadujemy po końcówce słowa",
+            if (isNew) "Gdy coś brzmi źle (np. „woreki”), po prostu popraw." else "Jednostki dopisane przed tą wersją dostały formy zgadnięte automatycznie. Popraw, jeśli coś brzmi źle.",
+        )
+        LuxurySectionTitle("Tak będzie na liście")
+        listOf(1, 3, 8).forEachIndexed { i, n ->
+            Row {
+                Text(sample, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("$n ${forms[i]}", fontSize = 15.sp, color = Luxury.GoldText)
+            }
+        }
+        Text("Odmiana jest wspólna dla całej społeczności — poprawiasz ją raz.", fontSize = 12.sp, color = Faint)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+            Box(modifier = Modifier.weight(1f)) {
+                GoldButton("Zapisz") {
+                    tried = true
+                    val name = word.trim()
+                    val clean = forms.map { it.trim() }
+                    if (name.isNotEmpty() && clean.all { it.isNotEmpty() }) {
+                        onSave(ListUnit(name, clean, editing.step.takeIf { !isNew } ?: 1.0, editing.packUnit))
+                    }
+                }
+            }
+        }
+    }
+}
+
 // --- list options and deleting (Komunikaty canvas, board 6) ---
 
 @Composable
@@ -847,6 +1093,7 @@ private enum class ItemPage { MAIN, QUANTITY, WHO, REMINDER }
 private fun ItemDialog(
     ui: ListsUi,
     list: ListInfo,
+    lists: ListsController,
     item: ListItem?,
     onDismiss: () -> Unit,
     onSave: (ItemValues, Boolean) -> Unit,
@@ -858,10 +1105,11 @@ private fun ItemDialog(
     var tried by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var skipLink by remember { mutableStateOf<String?>(null) }
     val editable = item == null || ui.canEdit(list, item)
     val title = when (list.type) {
-        ListType.SHOPPING -> if (item == null) "Nowa pozycja" else "Pozycja"
-        ListType.TASKS -> if (item == null) "Nowe zadanie" else "Zadanie"
+        ListType.SHOPPING -> if (item == null) "Nowa pozycja" else if (item.parentId != null) "Podpozycja" else "Pozycja"
+        ListType.TASKS -> if (item == null) "Nowe zadanie" else if (item.parentId != null) "Podzadanie" else "Zadanie"
         ListType.DEADLINES -> if (item == null) "Nowy termin" else "Termin"
     }
     val nameError = tried && values.name.isBlank()
@@ -873,7 +1121,7 @@ private fun ItemDialog(
         when (page) {
             ItemPage.QUANTITY -> {
                 Header(values.name.ifBlank { "Ilość" }, list.name)
-                QuantityEditor(ui, values, onCancel = { page = ItemPage.MAIN }) { changed, keep ->
+                QuantityEditor(ui, list, lists, values, onCancel = { page = ItemPage.MAIN }) { changed, keep ->
                     values = changed
                     keepUnit = keepUnit || keep
                     page = ItemPage.MAIN
@@ -965,6 +1213,21 @@ private fun ItemDialog(
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
+            // A web address pasted into the note: "Dodać jako link?" (premium "Linki").
+            val pasted = Lists.linkIn(values.note)?.takeIf { url ->
+                ui.links && editable && url != skipLink && values.links.none { it.url == url } && values.links.size < Lists.MAX_LINKS
+            }
+            if (pasted != null) {
+                MessageBar(MessageKind.INFO, "W notatce jest link", "Dodać „${Lists.domain(pasted)}” jako link? Otworzy się jednym stuknięciem.", icon = AppIcons.Link)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
+                    FramedButton("Zostaw w notatce", gold = false, modifier = Modifier.weight(1f)) { skipLink = pasted }
+                    Box(modifier = Modifier.weight(1f)) {
+                        GoldButton("Dodaj jako link") {
+                            values = values.copy(note = values.note.replace(pasted, "").replace(Regex("[ \\t]{2,}"), " ").trim(), links = values.links + ItemLink(pasted))
+                        }
+                    }
+                }
+            }
         }
         if (pendingNote) MessageBar(MessageKind.INFO, "Czeka na zatwierdzenie", "Zadanie dla ${ui.member(values.assigneeId)?.name ?: "tej osoby"} pojawi się, gdy zatwierdzi je Admin lub Owner.")
 
@@ -978,7 +1241,12 @@ private fun ItemDialog(
                 Locked("Przypomnienie", "powiadomienie lub budzik dla wybranych osób — w pakiecie premium")
             }
         }
-        Locked("Linki, zdjęcia i pliki", "ogniwo = link, aparat = zdjęcie, kartka = plik · premium, wkrótce")
+        if (ui.links) {
+            LinksEditor(values.links, editable) { values = values.copy(links = it) }
+            Locked("Zdjęcia i pliki", "aparat = zdjęcie, kartka = plik · premium, wkrótce")
+        } else {
+            Locked("Linki, zdjęcia i pliki", "ogniwo = link, aparat = zdjęcie, kartka = plik · w pakiecie premium")
+        }
         if (list.type == ListType.DEADLINES) Locked("Dodaj do kalendarza", "premium · wkrótce, razem z modułem Kalendarz")
         if (list.type == ListType.TASKS) Locked("Przenieś do Misji", "zadanie za punkty — wkrótce, razem z modułem Misje")
         if (list.type == ListType.SHOPPING && list.look.preset == ListPreset.SHOPPING) Locked("Zakupy z planu posiłków", "wkrótce, razem z modułem Posiłki")
@@ -1044,13 +1312,13 @@ private fun FieldRow(label: String, value: String, avatar: pl.ambif.ambify.share
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuantityEditor(ui: ListsUi, initial: ItemValues, onCancel: () -> Unit, onSave: (ItemValues, Boolean) -> Unit) {
+private fun QuantityEditor(ui: ListsUi, list: ListInfo, lists: ListsController, initial: ItemValues, onCancel: () -> Unit, onSave: (ItemValues, Boolean) -> Unit) {
     val units = ui.data.allUnits
     val remembered = ui.data.product(initial.name)
     var unit by remember { mutableStateOf(initial.unit ?: remembered?.unit ?: "szt.") }
     var quantity by remember { mutableStateOf(initial.quantity ?: 1.0) }
     var pack by remember { mutableStateOf(initial.packSize ?: remembered?.takeIf { it.unit == unit }?.packSize ?: "") }
-    var own by remember { mutableStateOf<String?>(null) }
+    var forms by remember { mutableStateOf<ListUnit?>(null) }
     var keep by remember { mutableStateOf(remembered == null || remembered.unit != (initial.unit ?: remembered.unit)) }
     val current = units.firstOrNull { it.name == unit } ?: ListUnit(unit)
     val step = current.step
@@ -1067,21 +1335,30 @@ private fun QuantityEditor(ui: ListsUi, initial: ItemValues, onCancel: () -> Uni
     LuxurySectionTitle("Jednostka")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         units.forEach { option ->
-            Chip(option.name, option.name == unit) {
+            val own = Lists.BUILT_IN_UNITS.none { it.name == option.name }
+            Chip(
+                option.name, option.name == unit,
+                onLongClickLabel = if (own) "Popraw odmianę" else null,
+                onLongClick = if (own) ({ forms = option }) else null,
+            ) {
                 unit = option.name
                 if (option.step < 1 && quantity < option.step) quantity = 1.0
                 if (option.name == "dag" && quantity < 10) quantity = 30.0
                 pack = ui.data.product(initial.name)?.takeIf { it.unit == option.name }?.packSize ?: ""
             }
         }
-        Chip("+ własna", own != null) { own = own ?: "" }
+        Chip("+ własna", false) { forms = ListUnit("", emptyList()) }
     }
-    own?.let { typed ->
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(value = typed, onValueChange = { own = it.take(20) }, singleLine = true, label = { Text("Własna jednostka, np. kostka") }, modifier = Modifier.weight(1f))
-            FramedButton("Dodaj") { if (typed.isNotBlank()) { unit = typed.trim(); own = null } }
+    if (units.any { u -> Lists.BUILT_IN_UNITS.none { it.name == u.name } }) {
+        Text("Przytrzymaj własną jednostkę, żeby poprawić jej odmianę.", fontSize = 11.sp, color = Faint)
+    }
+    forms?.let { editing ->
+        UnitFormsDialog(list, initial.name, editing, onDismiss = { forms = null }) { saved ->
+            lists.saveUnit(list.id, saved)
+            unit = saved.name
+            pack = ""
+            forms = null
         }
-        Text("Nowa jednostka będzie dostępna w całej społeczności.", fontSize = 11.sp, color = Muted)
     }
     current.packUnit?.let { packUnit ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1265,6 +1542,7 @@ private fun fieldValue(ui: ListsUi, field: ItemField, values: ItemValues): Strin
     ItemField.NOTE -> values.note
     ItemField.REMINDERS -> if (values.reminders.isEmpty()) "" else reminderWords(ui, values.reminders)
     ItemField.VARIANT -> values.variant
+    ItemField.LINKS -> values.links.joinToString { Lists.domain(it.url) }
 }
 
 /** "Wprowadź inne": what the creator typed (or nothing) as the field's new value. */
@@ -1281,5 +1559,6 @@ private fun otherValues(field: ItemField, typed: String, current: ItemValues, ui
         ItemField.ASSIGNEE -> current.copy(assigneeId = null)
         ItemField.REMINDERS -> current.copy(reminders = emptyList())
         ItemField.VARIANT -> current.copy(variant = text)
+        ItemField.LINKS -> current.copy(links = emptyList())
     }
 }

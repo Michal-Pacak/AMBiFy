@@ -2,6 +2,24 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.2 · 22 listopada 2026
+
+### Listy
+- Podlisty (premium):
+  - przy zadaniu lub pozycji ⋮ → „Dodaj podzadania” — podlista rozwija się w miejscu, z polem do wpisania;
+  - licznik „1/3” przy zadaniu; stuknięcie zwija i rozwija podlistę (aplikacja to pamięta);
+  - po odhaczeniu ostatniego podzadania pytamy, czy odhaczyć też zadanie; odhaczenie zadania z otwartymi podzadaniami pyta, czy odhaczyć wszystko;
+  - usunięcie zadania usuwa jego podzadania, a „Wyczyść kupione” zabiera pozycję razem z podpozycjami;
+  - działa też na pakowaniu i listach własnych.
+- Inny dostęp do jednego zadania (premium): twórca listy może ustawić, że np. tylko Bartek widzi i odhacza „Wymień żarówkę” razem z podlistą.
+- Linki przy pozycjach (premium): do 5 adresów, na liście widać domenę (np. „allegro.pl”), stuknięcie otwiera przeglądarkę. Link wklejony w notatkę można jednym stuknięciem zamienić na link.
+- Odmiana własnych jednostek: przy „+ własna” aplikacja zgaduje formy (1 wiaderko, 3 wiaderka, 8 wiaderek), a Ty poprawiasz, co brzmi źle. Odmiana jest wspólna dla całej społeczności. Przytrzymanie własnej jednostki pozwala poprawić odmianę; starsze jednostki dostały formy zgadnięte automatycznie.
+- Szybkie dopisywanie rozumie odmienione własne jednostki, np. „ogórki 2 wiaderka”.
+
+### Pulpit
+- Termin po czasie pokazuje w każdym widgecie, ile dni minęło, np. „−8 dni”.
+- Widget wybranej listy pokazuje pozycje bez podpozycji.
+
 ## 0.7.1 · 22 listopada 2026
 
 ### Listy

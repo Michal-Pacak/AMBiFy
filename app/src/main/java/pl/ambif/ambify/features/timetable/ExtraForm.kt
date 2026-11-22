@@ -3,6 +3,7 @@ package pl.ambif.ambify.features.timetable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -349,13 +350,23 @@ internal fun PersonChip(name: String, avatar: pl.ambif.ambify.shared.Avatar?, on
 }
 
 @Composable
-internal fun Chip(label: String, on: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Chip(
+    label: String,
+    on: Boolean,
+    enabled: Boolean = true,
+    onLongClickLabel: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .height(34.dp)
             .clip(RoundedCornerShape(17.dp))
             .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.dp, Color(0xFF3A3A40), RoundedCornerShape(17.dp)))
-            .clickable(enabled = enabled, onClick = onClick)
+            .then(
+                if (onLongClick == null) Modifier.clickable(enabled = enabled, onClick = onClick)
+                else Modifier.combinedClickable(enabled = enabled, onLongClickLabel = onLongClickLabel, onLongClick = onLongClick, onClick = onClick),
+            )
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

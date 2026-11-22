@@ -1,4 +1,4 @@
-Zmiany na liście zakupów
-Pamięć produktów
-Nowe widgety na pulpit
+Podlisty w zadaniach i listach
+Linki przy pozycjach
+Odmiana własnych jednostek
 Inne poprawki

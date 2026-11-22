@@ -11,6 +11,8 @@ import pl.ambif.ambify.shared.ListChangeKind
 import pl.ambif.ambify.shared.ListInfo
 import pl.ambif.ambify.shared.ListItem
 import pl.ambif.ambify.shared.ListType
+import pl.ambif.ambify.shared.ListUnit
+import pl.ambif.ambify.shared.Lists
 
 class ListsStateTest {
     private val data = ListsData(
@@ -88,5 +90,33 @@ class ListsStateTest {
         ).state.base
         assertEquals(52L, merged.since)
         assertEquals(1, merged.memory.size)
+    }
+
+    // --- 0.7.2 ---
+
+    @Test
+    fun subItemsGoWithTheirItemAlsoOffline() {
+        val sub = { id: String, parent: String, name: String, checked: Boolean ->
+            ListChange(id, ListChangeKind.ADD_ITEM, "L", id, madeAt = 50, values = ItemValues(name), parentId = parent)
+                .let { data.applied(it) }
+        }
+        var d = sub("s1", "a", "Masło extra", false)
+        d = d.applied(ListChange("s2", ListChangeKind.ADD_ITEM, "L", "s2", madeAt = 51, values = ItemValues("Szczoteczka"), parentId = "b"))
+        assertEquals(listOf("s1"), d.subItemsOf("a").map { it.id })
+        // "a" is done: it goes to the history with its sub-item; "b" is open, its sub-item stays.
+        val cleared = d.applied(change(ListChangeKind.CLEAR_CHECKED))
+        assertEquals(setOf("a", "s1"), cleared.historyOf("L").map { it.id }.toSet())
+        assertEquals(listOf("s2"), cleared.subItemsOf("b").map { it.id })
+        // Deleting "b" deletes its sub-item.
+        assertEquals(emptyList<String>(), cleared.applied(change(ListChangeKind.DELETE_ITEM, "b")).itemsOf("L").map { it.id })
+    }
+
+    @Test
+    fun aCorrectedUnitIsUsedAtOnce() {
+        val unit = ListUnit("wiaderko", emptyList())
+        val guessed = data.copy(units = listOf(unit))
+        assertEquals("3 wiaderka", Lists.quantityText(ItemValues("Ogórki", 3.0, "wiaderko"), guessed.allUnits))
+        val fixed = guessed.applied(ListChange("u", ListChangeKind.SAVE_UNIT, "L", madeAt = 1, unit = ListUnit("wiaderko", listOf("wiaderko", "wiadra", "wiader"))))
+        assertEquals("8 wiader", Lists.quantityText(ItemValues("Ogórki", 8.0, "wiaderko"), fixed.allUnits))
     }
 }

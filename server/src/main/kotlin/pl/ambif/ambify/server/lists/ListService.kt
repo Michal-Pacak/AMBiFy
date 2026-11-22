@@ -9,6 +9,9 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -29,6 +32,7 @@ import pl.ambif.ambify.shared.ConflictVersion
 import pl.ambif.ambify.shared.Feature
 import pl.ambif.ambify.shared.Frequency
 import pl.ambif.ambify.shared.ItemField
+import pl.ambif.ambify.shared.ItemLink
 import pl.ambif.ambify.shared.ItemValues
 import pl.ambif.ambify.shared.ListChange
 import pl.ambif.ambify.shared.ListChangeKind
@@ -112,6 +116,7 @@ class ListService(
             val membership = accounts.membership(session)
             val organizationId = membership.organizationId
             val rev = currentRev(organizationId)
+            val roleMayEdit = accounts.can(membership, Action.LISTS_EDIT_ITEMS) == Mode.ALLOWED
             // A phone that knows a newer rev than the server (the database was restored) gets everything again.
             val since = if (request.since > rev) 0 else request.since
             val visible = ListsTable.selectAll().where { (ListsTable.organizationId eq organizationId) and (ListsTable.deleted eq false) }
@@ -122,9 +127,20 @@ class ListService(
                 .map { toInfo(it) }
             // A list changed since (e.g. the person was just added to it) comes with all its items and conflicts.
             val whole = lists.filterNot { it.deleted }.map { it.id }.toSet()
-            val items = ListItems.selectAll().where { ListItems.organizationId eq organizationId }
-                .filter { it[ListItems.listId] in visibleIds && (it[ListItems.rev] > since || it[ListItems.listId] in whole) }
+            val infos = visible.associate { it[ListsTable.id] to toInfo(it) }
+            val all = ListItems.selectAll().where { ListItems.organizationId eq organizationId }
+                .filter { it[ListItems.listId] in visibleIds }
                 .map { toItem(it) }
+            val byId = all.associateBy { it.id }
+            // An item with "Inny dostęp" (and its sub-items) the person may not see comes only as deleted, so the
+            // phone forgets it.
+            val items = all.filter { it.rev > since || it.listId in whole }.map { item ->
+                val top = item.parentId?.let { byId[it] } ?: item
+                val seen = top.access.isEmpty() || Lists.itemLevel(
+                    infos.getValue(item.listId), top, membership.user[Users.id], membership.role.id, membership.role.owner, roleMayEdit,
+                ).atLeast(AccessLevel.SEE)
+                if (seen) item else ListItem(item.id, item.listId, ItemValues(), deleted = true, rev = item.rev)
+            }
             val conflicts = ListConflicts.selectAll().where { ListConflicts.organizationId eq organizationId }
                 .filter { it[ListConflicts.listId] in visibleIds && (it[ListConflicts.rev] > since || it[ListConflicts.listId] in whole) }
                 .map { toConflict(it) }
@@ -223,6 +239,18 @@ class ListService(
                 val itemId = change.itemId ?: throw invalid()
                 if (ListItems.selectAll().where { ListItems.id eq itemId }.any()) throw invalid()
                 val values = validValues(membership, type, change.values ?: throw invalid())
+                if (values.links.isNotEmpty()) requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
+                val parentId = change.parentId
+                if (parentId != null) {
+                    requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Podlisty są w pakiecie premium.")
+                    val parent = ListItems.selectAll().where { (ListItems.id eq parentId) and (ListItems.listId eq change.listId) }
+                        .singleOrNull() ?: throw notFound()
+                    if (parent[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
+                    if (parent[ListItems.parentId] != null) {
+                        throw ApiException(HttpStatusCode.BadRequest, "nested", "Podlista nie może mieć własnej podlisty.")
+                    }
+                    requireItemLevel(membership, list, parent, AccessLevel.ADD)
+                }
                 val forOther = values.assigneeId != null && values.assigneeId != me
                 val mode = if (forOther) accounts.can(membership, Action.LISTS_TASKS_OTHERS) else Mode.ALLOWED
                 if (mode == Mode.DENIED) throw ApiException(HttpStatusCode.Forbidden, "forbidden", "Twoja rola nie może dawać zadań innym osobom.")
@@ -241,6 +269,7 @@ class ListService(
                     it[pending] = mode == Mode.APPROVAL
                     it[deleted] = false
                     it[ListItems.rev] = rev
+                    it[ListItems.parentId] = parentId
                 }
                 if (type == ListType.SHOPPING) {
                     rememberUnit(organizationId, values, change.rememberUnit, rev)
@@ -286,7 +315,10 @@ class ListService(
                 val (_, item) = editableItem(membership, change, allowDeleted = true, need = null)
                 if (item[ListItems.deleted]) return ChangeResult(change.id, ok = true)
                 val rev = nextRev(organizationId)
-                ListItems.update({ ListItems.id eq item[ListItems.id] }) { it[deleted] = true; it[ListItems.rev] = rev }
+                ListItems.update({ (ListItems.id eq item[ListItems.id]) or (ListItems.parentId eq item[ListItems.id]) }) {
+                    it[deleted] = true
+                    it[ListItems.rev] = rev
+                }
                 ListConflicts.update({ (ListConflicts.itemId eq item[ListItems.id]) and (ListConflicts.resolved eq false) }) {
                     it[resolved] = true
                     it[resolvedBy] = me
@@ -298,8 +330,14 @@ class ListService(
             ListChangeKind.CLEAR_CHECKED -> {
                 editable(membership, change.listId, AccessLevel.CHECK)
                 val rev = nextRev(organizationId)
+                // Done items go to the history with their sub-items; a done sub-item of an open item stays under it.
+                val done = ListItems.selectAll().where {
+                    (ListItems.listId eq change.listId) and (ListItems.checked eq true) and (ListItems.cleared eq false) and
+                        (ListItems.deleted eq false) and ListItems.parentId.isNull()
+                }.map { it[ListItems.id] }
                 ListItems.update({
-                    (ListItems.listId eq change.listId) and (ListItems.checked eq true) and (ListItems.cleared eq false) and (ListItems.deleted eq false)
+                    (ListItems.listId eq change.listId) and (ListItems.cleared eq false) and (ListItems.deleted eq false) and
+                        ((ListItems.id inList done) or (ListItems.parentId inList done))
                 }) {
                     it[cleared] = true
                     it[clearedAt] = change.madeAt
@@ -318,6 +356,48 @@ class ListService(
                     it[deleted] = true
                     it[ListMemoryTable.rev] = rev
                 }
+            }
+            ListChangeKind.SAVE_UNIT -> {
+                editable(membership, change.listId, AccessLevel.ADD)
+                val unit = change.unit ?: throw invalid()
+                val name = unit.name.trim()
+                if (name.isEmpty() || name.length > Lists.MAX_UNIT) throw ApiException(HttpStatusCode.BadRequest, "invalid_unit", "Nazwa jednostki: od 1 do ${Lists.MAX_UNIT} znaków.")
+                if (Lists.BUILT_IN_UNITS.any { it.name == name }) throw ApiException(HttpStatusCode.BadRequest, "built_in", "Wbudowanych jednostek nie można zmieniać.")
+                val forms = unit.forms.map { it.trim() }
+                if (forms.size != 3 || forms.any { it.isEmpty() || it.length > Lists.MAX_UNIT }) {
+                    throw ApiException(HttpStatusCode.BadRequest, "invalid_forms", "Wpisz wszystkie trzy formy (1, 2–4, 5+).")
+                }
+                val rev = nextRev(organizationId)
+                val found = ListUnits.update({ (ListUnits.organizationId eq organizationId) and (ListUnits.name eq name) }) {
+                    it[ListUnits.forms] = json.encodeToString(forms)
+                    it[ListUnits.rev] = rev
+                }
+                if (found == 0) ListUnits.insert {
+                    it[ListUnits.organizationId] = organizationId
+                    it[ListUnits.name] = name
+                    it[ListUnits.forms] = json.encodeToString(forms)
+                    it[step] = 1.0
+                    it[packUnit] = null
+                    it[ListUnits.rev] = rev
+                }
+            }
+            ListChangeKind.ITEM_ACCESS -> {
+                manageable(membership, change.listId)
+                val item = ListItems.selectAll().where { (ListItems.id eq (change.itemId ?: "")) and (ListItems.listId eq change.listId) }
+                    .singleOrNull() ?: throw notFound()
+                if (item[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
+                if (item[ListItems.parentId] != null) {
+                    throw ApiException(HttpStatusCode.BadRequest, "sub_item", "Inny dostęp ustawia się dla całej pozycji z podlistą.")
+                }
+                val access = validAccess(membership, change.access)
+                if (access.isNotEmpty()) requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Inny dostęp do zadania jest w pakiecie premium.")
+                val rev = nextRev(organizationId)
+                ListItems.update({ ListItems.id eq item[ListItems.id] }) {
+                    it[ListItems.access] = json.encodeToString(access)
+                    it[ListItems.rev] = rev
+                }
+                // The sub-items go to the phones again: they are seen (or not) with their item.
+                ListItems.update({ ListItems.parentId eq item[ListItems.id] }) { it[ListItems.rev] = rev }
             }
             ListChangeKind.UNCHECK_ALL -> {
                 editable(membership, change.listId, AccessLevel.CHECK)
@@ -349,6 +429,9 @@ class ListService(
         var wanted = validValues(membership, type, change.values ?: throw invalid())
         val fields = change.fields.distinct()
         if (fields.isEmpty()) return ChangeResult(change.id, ok = true)
+        if (ItemField.LINKS in fields && wanted.links.any { it !in current.links }) {
+            requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
+        }
 
         var queued: ChangeResult? = null
         if (ItemField.ASSIGNEE in fields && wanted.assigneeId != null && wanted.assigneeId != me && wanted.assigneeId != current.assigneeId) {
@@ -379,6 +462,7 @@ class ListService(
             val last = revs[field.name]
             val conflict = open[field]
             when {
+                field == ItemField.LINKS -> shown = field.copy(wanted, shown)
                 conflict != null -> {
                     val versions = json.decodeFromString<List<ConflictVersion>>(conflict[ListConflicts.versions])
                         .filterNot { it.userId == me } + mine
@@ -520,7 +604,24 @@ class ListService(
             throw ApiException(HttpStatusCode.Forbidden, "forbidden", "Cudze pozycje na tej liście zmienia tylko ktoś z dostępem „edytuje i usuwa”.")
         }
         if (item[ListItems.deleted] && !allowDeleted) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
+        requireItemLevel(membership, list, item, need ?: AccessLevel.ADD)
         return list to item
+    }
+
+    /** "Inny dostęp do tego zadania" of the item (or of the item a sub-item belongs to) narrows the list's access. */
+    private fun requireItemLevel(membership: Membership, list: ResultRow, item: ResultRow, need: AccessLevel) {
+        val top = item[ListItems.parentId]?.let { id -> ListItems.selectAll().where { ListItems.id eq id }.singleOrNull() } ?: item
+        val level = Lists.itemLevel(
+            toInfo(list), toItem(top), membership.user[Users.id], membership.role.id, membership.role.owner,
+            roleMayEdit = accounts.can(membership, Action.LISTS_EDIT_ITEMS) == Mode.ALLOWED,
+        )
+        if (!level.atLeast(need)) {
+            throw ApiException(HttpStatusCode.Forbidden, "forbidden", "Przy tym zadaniu możesz: ${level.label}. Dostęp ustala twórca listy.")
+        }
+    }
+
+    private fun requireFeature(organizationId: String, feature: Feature, message: String) {
+        if (feature !in accounts.communityFeatures(organizationId)) throw ApiException(HttpStatusCode.Forbidden, "premium", message)
     }
 
     /** The list's creator, or someone whose role may delete others' lists, may rename, share, archive and delete it. */
@@ -564,6 +665,10 @@ class ListService(
         val unit = values.unit?.trim()?.takeIf { it.isNotEmpty() && type.hasQuantity }
         if (unit != null && unit.length > 20) throw ApiException(HttpStatusCode.BadRequest, "invalid_unit", "Nazwa jednostki jest za długa.")
         val packSize = values.packSize?.trim()?.takeIf { it.isNotEmpty() && unit != null }?.take(10)
+        val links = values.links.map { ItemLink(it.url.trim(), it.title.trim().take(60)) }.distinctBy { it.url }
+        if (links.size > Lists.MAX_LINKS || links.any { !Lists.isLink(it.url) }) {
+            throw ApiException(HttpStatusCode.BadRequest, "invalid_link", "Linki: do ${Lists.MAX_LINKS} adresów zaczynających się od http:// lub https://.")
+        }
         if (values.reminders.isNotEmpty()) {
             if (Feature.LISTS_REMINDERS !in accounts.communityFeatures(membership.organizationId)) {
                 throw ApiException(HttpStatusCode.Forbidden, "premium", "Przypomnienia są w pakiecie premium.")
@@ -584,6 +689,7 @@ class ListService(
             assigneeId = assignee,
             note = values.note.trim(),
             reminders = values.reminders,
+            links = links,
         )
     }
 
@@ -595,6 +701,7 @@ class ListService(
         ItemField.NOTE -> values.note
         ItemField.REMINDERS -> if (values.reminders.isEmpty()) "" else "${values.reminders.size}"
         ItemField.VARIANT -> values.variant
+        ItemField.LINKS -> values.links.joinToString { Lists.domain(it.url) }
     }
 
     private fun units(organizationId: String): List<ListUnit> = Lists.BUILT_IN_UNITS +
@@ -610,7 +717,7 @@ class ListService(
             ListUnits.insert {
                 it[ListUnits.organizationId] = organizationId
                 it[name] = unit
-                it[forms] = json.encodeToString(listOf(unit, unit, unit))
+                it[forms] = json.encodeToString(emptyList<String>())
                 it[step] = 1.0
                 it[packUnit] = null
                 it[ListUnits.rev] = rev
@@ -821,6 +928,8 @@ class ListService(
         lastDoneAt = row[ListItems.lastDoneAt],
         deleted = row[ListItems.deleted],
         rev = row[ListItems.rev],
+        parentId = row[ListItems.parentId],
+        access = runCatching { json.decodeFromString<List<ListAccess>>(row[ListItems.access]) }.getOrDefault(emptyList()),
     )
 
     private fun toMemory(row: ResultRow) = ListMemory(

@@ -72,6 +72,14 @@ internal class ListPrefs(context: Context) {
     fun setDoneOpen(listId: String, open: Boolean) { prefs.edit().putBoolean("done_open_$listId", open).apply(); changed() }
 
     /** A kind of lists ("Listy rzeczy") opened in the widget "Aktywne listy" [widgetId]; folded at first. */
+    /** Board 16: a sub-list open under its item (kept after the app is closed). */
+    fun subOpen(itemId: String): Boolean { tick; return prefs.getBoolean("sub_open_$itemId", false) }
+
+    fun setSubOpen(itemId: String, open: Boolean) { prefs.edit().putBoolean("sub_open_$itemId", open).apply(); changed() }
+
+    /** The sub-list just made with "Dodaj podzadania": its field gets the keyboard (not kept). */
+    var focusSub by androidx.compose.runtime.mutableStateOf<String?>(null)
+
     fun widgetKindOpen(widgetId: String, type: ListType): Boolean { tick; return prefs.getBoolean("widget_kind_${widgetId}_${type.name}", false) }
 
     fun setWidgetKindOpen(widgetId: String, type: ListType, open: Boolean) { prefs.edit().putBoolean("widget_kind_${widgetId}_${type.name}", open).apply(); changed() }

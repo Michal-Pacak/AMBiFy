@@ -73,6 +73,8 @@ import pl.ambif.ambify.shared.ListInfo
 import pl.ambif.ambify.shared.ListItem
 import pl.ambif.ambify.shared.ListType
 import pl.ambif.ambify.shared.Lists
+import pl.ambif.ambify.shared.ListAccess
+import pl.ambif.ambify.shared.ListUnit
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Member
 import pl.ambif.ambify.shared.Role
@@ -241,9 +243,34 @@ internal data class ListsUi(
         Lists.level(list, me.id, me.role?.id, me.role?.owner == true, me.can(Action.LISTS_EDIT_ITEMS))
     fun canAdd(list: ListInfo) = level(list).atLeast(AccessLevel.ADD)
     fun canCheck(list: ListInfo) = level(list).atLeast(AccessLevel.CHECK)
+    /** The item a sub-item belongs to, or the item itself: its "Inny dostęp" counts for both. */
+    fun topOf(item: ListItem): ListItem = item.parentId?.let { data.item(it) } ?: item
+    /** On the list, narrowed by "Inny dostęp do tego zadania" (0.7.2). */
+    fun itemLevel(list: ListInfo, item: ListItem): AccessLevel =
+        Lists.itemLevel(list, topOf(item), me.id, me.role?.id, me.role?.owner == true, me.can(Action.LISTS_EDIT_ITEMS))
+    fun canCheck(list: ListInfo, item: ListItem) = itemLevel(list, item).atLeast(AccessLevel.CHECK)
+    /** Adding sub-items to [item]. */
+    fun canAddTo(list: ListInfo, item: ListItem) = itemLevel(list, item).atLeast(AccessLevel.ADD)
     /** Own items with "dodaje", everyone's with "edytuje i usuwa". */
-    fun canEdit(list: ListInfo, item: ListItem) =
-        level(list).atLeast(AccessLevel.EDIT_ALL) || (item.addedBy == me.id && level(list).atLeast(AccessLevel.ADD))
+    fun canEdit(list: ListInfo, item: ListItem) = itemLevel(list, item).let { level ->
+        level.atLeast(AccessLevel.EDIT_ALL) || (item.addedBy == me.id && level.atLeast(AccessLevel.ADD))
+    }
+    /** Premium "Podlisty" (sub-items and "Inny dostęp do tego zadania") and "Linki". */
+    val subItems: Boolean get() = Feature.LISTS_SUBITEMS in features
+    val links: Boolean get() = Feature.LISTS_ATTACHMENTS in features
+    /** "tylko Bartek", "Bartek, Filip": who sees an item with its own access, besides who always sees everything. */
+    fun whoSeesItem(list: ListInfo, item: ListItem): String? {
+        if (item.access.isEmpty()) return null
+        val people = members.filter { m ->
+            m.id != list.createdBy && !m.role.owner &&
+                Lists.itemLevel(list, item, m.id, m.role.id, m.role.owner, roleMayEdit = true).atLeast(AccessLevel.SEE)
+        }
+        return when (people.size) {
+            0 -> "tylko twórca listy"
+            1 -> "tylko " + people.single().let { if (it.id == me.id) "Ty" else it.name }
+            else -> people.joinToString(", ") { if (it.id == me.id) "Ty" else it.name }
+        }
+    }
     fun people(list: ListInfo): List<Member> = members.filter { levelOf(list, it).atLeast(AccessLevel.SEE) }
     fun whoSees(list: ListInfo): String {
         val people = people(list)
@@ -269,8 +296,14 @@ internal class ListsController(private val repo: ListRepository, private val sco
 
     fun updateList(list: ListInfo) = run(ListChangeKind.UPDATE_LIST, list.id) { copy(list = list) }
     fun deleteList(list: ListInfo) = run(ListChangeKind.DELETE_LIST, list.id) { this }
-    fun addItem(listId: String, values: ItemValues, remember: Boolean = false) =
-        run(ListChangeKind.ADD_ITEM, listId, UUID.randomUUID().toString()) { copy(values = values, rememberUnit = remember) }
+    fun addItem(listId: String, values: ItemValues, remember: Boolean = false, parentId: String? = null) =
+        run(ListChangeKind.ADD_ITEM, listId, UUID.randomUUID().toString()) { copy(values = values, rememberUnit = remember, parentId = parentId) }
+
+    /** A unit of the community with its forms, new or corrected (board 24); [listId]: the list it was done on. */
+    fun saveUnit(listId: String, unit: ListUnit) = run(ListChangeKind.SAVE_UNIT, listId) { copy(unit = unit) }
+
+    /** "Inny dostęp do tego zadania"; empty = as on the list. */
+    fun itemAccess(item: ListItem, access: List<ListAccess>) = run(ListChangeKind.ITEM_ACCESS, item.listId, item.id) { copy(access = access) }
 
     fun edit(item: ListItem, values: ItemValues, remember: Boolean = false) {
         val fields = changedFields(item.values, values)
@@ -330,6 +363,13 @@ internal sealed interface ListDialog {
     data class Item(val list: ListInfo, val item: ListItem?) : ListDialog
     data class Quantity(val list: ListInfo, val item: ListItem) : ListDialog
     data class Conflict(val list: ListInfo, val item: ListItem) : ListDialog
+    /** Board 16: ⋮ of an item — sub-items, details, its own access. */
+    data class ItemMenu(val list: ListInfo, val item: ListItem) : ListDialog
+    data class ItemAccess(val list: ListInfo, val item: ListItem) : ListDialog
+    /** Checking an item whose sub-items are not all done. */
+    data class CheckAll(val list: ListInfo, val item: ListItem) : ListDialog
+    /** The last sub-item done: "Odhaczyć też ‘…’?". */
+    data class CheckParent(val list: ListInfo, val item: ListItem) : ListDialog
 }
 
 /** Board 1: the lists of the community, by kind. */

@@ -97,8 +97,11 @@ data class ListsData(
     val version: Int = 0,
 ) {
     companion object {
-        /** 1 = 0.7.1, with the memory. Raise it when the phone must take everything again after an update. */
-        const val VERSION = 1
+        /**
+         * 1 = 0.7.1, with the memory; 2 = 0.7.2, sub-items, access of items and guessed forms of units. Raise it when
+         * the phone must take everything again after an update.
+         */
+        const val VERSION = 2
     }
 
     /** What the next sync asks for: everything newer than the copy, or everything when the copy is from an older app. */
@@ -108,6 +111,11 @@ data class ListsData(
     val allUnits: List<ListUnit> get() = Lists.BUILT_IN_UNITS + units.filter { own -> Lists.BUILT_IN_UNITS.none { it.name == own.name } }
 
     fun itemsOf(listId: String): List<ListItem> = items.filter { it.listId == listId && !it.cleared }
+
+    /** The sub-items of [itemId] (premium "Podlisty"), in the order they were added. */
+    fun subItemsOf(itemId: String): List<ListItem> = items.filter { it.parentId == itemId && !it.cleared }
+
+    fun item(id: String?): ListItem? = items.firstOrNull { it.id == id }
 
     /** Done things moved to the history ("Zakończ zakupy"), newest first; they stay until the list is deleted. */
     fun historyOf(listId: String): List<ListItem> = items.filter { it.listId == listId && it.cleared }.sortedByDescending { it.clearedAt ?: 0 }
@@ -141,7 +149,8 @@ data class ListsData(
             val values = change.values
             val itemId = change.itemId
             if (values == null || itemId == null || items.any { it.id == itemId }) this
-            else copy(items = items + ListItem(itemId, change.listId, values, addedAt = change.madeAt)).remembered(change.listId, values, change.madeAt, added = true)
+            else copy(items = items + ListItem(itemId, change.listId, values, addedAt = change.madeAt, parentId = change.parentId))
+                .remembered(change.listId, values, change.madeAt, added = true)
         }
         ListChangeKind.EDIT_ITEM -> mapItem(change.itemId) { item ->
             val values = change.values ?: return@mapItem item
@@ -156,10 +165,16 @@ data class ListsData(
             if (change.checked) it.copy(checked = true, checkedAt = change.madeAt)
             else it.copy(checked = false, checkedAt = null, checkedBy = null, cleared = false, clearedAt = null, clearedBy = null)
         }
-        ListChangeKind.DELETE_ITEM -> copy(items = items.filterNot { it.id == change.itemId })
-        ListChangeKind.CLEAR_CHECKED -> copy(items = items.map {
-            if (it.listId == change.listId && it.checked && !it.cleared) it.copy(cleared = true, clearedAt = change.madeAt) else it
-        })
+        ListChangeKind.DELETE_ITEM -> copy(items = items.filterNot { it.id == change.itemId || (it.parentId != null && it.parentId == change.itemId) })
+        ListChangeKind.CLEAR_CHECKED -> {
+            // Like the server: done items with their sub-items; a done sub-item of an open item stays under it.
+            val done = items.filter { it.listId == change.listId && it.checked && !it.cleared && it.parentId == null }.map { it.id }.toSet()
+            copy(items = items.map { if (it.id in done || it.parentId in done) it.copy(cleared = true, clearedAt = change.madeAt) else it })
+        }
+        ListChangeKind.SAVE_UNIT -> change.unit?.let { unit ->
+            copy(units = units.filterNot { it.name == unit.name } + unit)
+        } ?: this
+        ListChangeKind.ITEM_ACCESS -> mapItem(change.itemId) { it.copy(access = change.access) }
         ListChangeKind.UNCHECK_ALL -> copy(items = items.map {
             if (it.listId == change.listId && it.checked && !it.cleared) it.copy(checked = false, checkedAt = null, checkedBy = null) else it
         })

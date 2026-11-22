@@ -117,12 +117,20 @@ data class ItemValues(
     val variant: String = "",
     /** "PILNE": at the top of the list, instead of a date. */
     val urgent: Boolean = false,
+    /** Premium [Feature.LISTS_ATTACHMENTS] (0.7.2): up to [Lists.MAX_LINKS] web addresses, opened in the browser. */
+    val links: List<ItemLink> = emptyList(),
 )
+
+/** A web address of an item; shown as its [title] or, without one, its domain ("allegro.pl"). */
+@Serializable
+data class ItemLink(val url: String, val title: String = "")
 
 /** The parts of an item that are changed (and may be in conflict) separately; checking off never conflicts. */
 @Serializable
 enum class ItemField(val label: String) {
-    NAME("nazwa"), QUANTITY("ilość"), DATE("termin"), ASSIGNEE("osoba"), NOTE("notatka"), REMINDERS("przypomnienia"), VARIANT("rodzaj");
+    NAME("nazwa"), QUANTITY("ilość"), DATE("termin"), ASSIGNEE("osoba"), NOTE("notatka"), REMINDERS("przypomnienia"), VARIANT("rodzaj"),
+    /** 0.7.2; never a conflict (the newest list of links wins), so phones before 0.7.2 never get it in one. */
+    LINKS("linki");
 
     fun copy(from: ItemValues, to: ItemValues): ItemValues = when (this) {
         NAME -> to.copy(name = from.name)
@@ -132,6 +140,7 @@ enum class ItemField(val label: String) {
         NOTE -> to.copy(note = from.note)
         REMINDERS -> to.copy(reminders = from.reminders)
         VARIANT -> to.copy(variant = from.variant)
+        LINKS -> to.copy(links = from.links)
     }
 
     fun same(a: ItemValues, b: ItemValues): Boolean = copy(a, b) == b
@@ -160,6 +169,13 @@ data class ListItem(
     val lastDoneAt: Long? = null,
     val deleted: Boolean = false,
     val rev: Long = 0,
+    /** A sub-item (premium [Feature.LISTS_SUBITEMS], 0.7.2) of this item; only one level: a sub-item has none. */
+    val parentId: String? = null,
+    /**
+     * "Inny dostęp do tego zadania" of an item with sub-items: who may do what on it and its sub-items, never more
+     * than on the list ([Lists.itemLevel]). Empty = as on the list.
+     */
+    val access: List<ListAccess> = emptyList(),
 )
 
 /** One change made on a phone, sent (also much later, after being offline) in [ListSyncRequest.changes]. */
@@ -173,6 +189,10 @@ enum class ListChangeKind {
     UNCHECK_ALL,
     /** "Usuń z pamięci" (0.7.1): [ListChange.values] names the product, [ListChange.listId] the kind of lists. */
     FORGET_PRODUCT,
+    /** 0.7.2: a community's own unit with its forms ([ListChange.unit]), new or corrected ("Popraw odmianę"). */
+    SAVE_UNIT,
+    /** 0.7.2: "Inny dostęp do tego zadania" ([ListChange.access]; empty = as on the list). */
+    ITEM_ACCESS,
 }
 
 /**
@@ -194,13 +214,20 @@ data class ListChange(
     val checked: Boolean = false,
     /** Remember the item's unit (and pack size) for this product in the whole community. */
     val rememberUnit: Boolean = false,
+    /** [ListChangeKind.ADD_ITEM]: a sub-item of this item. */
+    val parentId: String? = null,
+    val access: List<ListAccess> = emptyList(),
+    val unit: ListUnit? = null,
 )
 
 /** The server's answer to one change; a refused change is dropped by the phone with [message] shown. */
 @Serializable
 data class ChangeResult(val id: String, val ok: Boolean, val message: String? = null, val queued: Boolean = false)
 
-/** A community's own unit; [forms]: one / two-four / five (e.g. "siatka", "siatki", "siatek"). */
+/**
+ * A community's own unit; [forms]: one / two-four / five (e.g. "siatka", "siatki", "siatek"). Empty = never set by
+ * anyone, guessed from the name ([Lists.formsOf]).
+ */
 @Serializable
 data class ListUnit(
     val name: String,
@@ -298,6 +325,9 @@ object Lists {
     const val MAX_NAME = 200
     const val MAX_NOTE = 2000
     const val MAX_VARIANT = 40
+    const val MAX_LINKS = 5
+    const val MAX_URL = 2000
+    const val MAX_UNIT = 20
     /** After this long without the creator's decision the Owner/Admin may settle a conflict. */
     const val CONFLICT_ESCALATION_MS = 48L * 60 * 60 * 1000
 
@@ -328,7 +358,7 @@ object Lists {
 
     /** Polish plural: 1 siatka, 2–4 siatki (not 12–14), 5+ siatek; fractions take the "2–4" form (0,5 siatki). */
     fun form(unit: ListUnit, quantity: Double): String {
-        val forms = unit.forms.ifEmpty { listOf(unit.name) }
+        val forms = formsOf(unit)
         fun at(i: Int) = forms.getOrElse(i) { forms.last() }
         if (quantity != Math.floor(quantity)) return at(1)
         val n = quantity.toLong()
@@ -367,7 +397,7 @@ object Lists {
 
     private fun unitOf(word: String, units: List<ListUnit>): ListUnit? {
         val w = word.lowercase().trimEnd('.')
-        return units.firstOrNull { unit -> (unit.forms + unit.name).any { it.lowercase().trimEnd('.') == w } }
+        return units.firstOrNull { unit -> (formsOf(unit) + unit.name).any { it.lowercase().trimEnd('.') == w } }
             ?: units.firstOrNull { it.name == "opak." && w in setOf("op", "opak") }
     }
 
@@ -386,6 +416,58 @@ object Lists {
                 ?: AccessLevel.NONE
         }
         return if (!roleMayEdit && level.atLeast(AccessLevel.CHECK)) AccessLevel.SEE else level
+    }
+
+    /** The unit's forms for 1 / 2–4 / 5+: as saved, or guessed from its name when nobody set them. */
+    fun formsOf(unit: ListUnit): List<String> = unit.forms.ifEmpty { guessForms(unit.name) }
+
+    /**
+     * Forms of a new unit guessed by its ending (board 24): wiaderko → wiaderka, wiaderek; puszka → puszki, puszek;
+     * worek → worki, worków. Short forms ("ml", "op.") stay the same. The person corrects what sounds wrong.
+     */
+    fun guessForms(word: String): List<String> {
+        val t = word.trim()
+        if (t.isEmpty()) return listOf("", "", "")
+        if (t.endsWith(".") || t.none { it.lowercaseChar() in "aąeęioóuy" }) return listOf(t, t, t)
+        fun cut(n: Int) = t.dropLast(n)
+        return when {
+            t.endsWith("ko") -> listOf(t, cut(1) + "a", cut(2) + "ek")
+            t.endsWith("ka") -> listOf(t, cut(1) + "i", cut(2) + "ek")
+            t.endsWith("ga") -> listOf(t, cut(1) + "i", cut(1))
+            t.endsWith("ja") -> listOf(t, cut(1) + "e", cut(1) + "i")
+            t.endsWith("a") -> listOf(t, cut(1) + "y", cut(1))
+            t.endsWith("o") -> listOf(t, cut(1) + "a", cut(1))
+            t.endsWith("ek") -> listOf(t, cut(2) + "ki", cut(2) + "ków")
+            t.endsWith("k") || t.endsWith("g") -> listOf(t, t + "i", t + "ów")
+            listOf("sz", "cz", "rz", "ż", "c", "l", "j").any { t.endsWith(it) } -> listOf(t, t + "e", t + "y")
+            else -> listOf(t, t + "y", t + "ów")
+        }
+    }
+
+    /** "allegro.pl" of "https://www.allegro.pl/oferta/…". */
+    fun domain(url: String): String =
+        url.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfter('@').removePrefix("www.")
+
+    /** A link that can be opened: http or https with a host. */
+    fun isLink(text: String): Boolean {
+        val t = text.trim()
+        return (t.startsWith("http://", ignoreCase = true) || t.startsWith("https://", ignoreCase = true)) &&
+            domain(t).contains('.') && t.length <= MAX_URL && t.none { it.isWhitespace() }
+    }
+
+    /** The first web address in [text] (a note), if any. */
+    fun linkIn(text: String): String? = Regex("""https?://\S+""", RegexOption.IGNORE_CASE).find(text)?.value?.trimEnd('.', ',', ')', ';')?.takeIf { isLink(it) }
+
+    /**
+     * What a person may do on an item: as on the list, narrowed by "Inny dostęp do tego zadania" of [top] (the item
+     * itself, or the item a sub-item belongs to). The list's creator and the Owner keep everything.
+     */
+    fun itemLevel(list: ListInfo, top: ListItem?, userId: String, roleId: String?, owner: Boolean, roleMayEdit: Boolean): AccessLevel {
+        val onList = level(list, userId, roleId, owner, roleMayEdit)
+        val access = top?.access.orEmpty()
+        if (access.isEmpty() || list.createdBy == userId || owner) return onList
+        val own = level(list.copy(access = access, createdBy = ""), userId, roleId, owner = false, roleMayEdit = roleMayEdit)
+        return if (own.ordinal < onList.ordinal) own else onList
     }
 
     /** "Mleko 3,2%" and "mleko  3,2 %" are the same thing on a list (a duplicate). */
@@ -434,8 +516,8 @@ object Lists {
     /** The memory's key of a thing: name and kind ("mleko|3,2%"), like [sameThing]. */
     fun memoryKey(values: ItemValues): String = productKey(values.name) + "|" + productKey(values.variant).replace(" ", "")
 
-    /** What the memory keeps of an item: no dates, reminders or "pilne" (they are chosen each time). */
-    fun memoryValues(values: ItemValues): ItemValues = values.copy(dueDate = null, urgent = false, reminders = emptyList())
+    /** What the memory keeps of an item: no dates, reminders, "pilne" or links (they are chosen each time). */
+    fun memoryValues(values: ItemValues): ItemValues = values.copy(dueDate = null, urgent = false, reminders = emptyList(), links = emptyList())
 
     /** For searching: lower case without Polish letters ("Żółty" → "zolty"). */
     fun searchKey(text: String): String = buildString {

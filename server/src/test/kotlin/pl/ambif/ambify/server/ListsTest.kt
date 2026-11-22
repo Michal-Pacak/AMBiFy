@@ -15,6 +15,7 @@ import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.ConflictDecision
 import pl.ambif.ambify.shared.Frequency
 import pl.ambif.ambify.shared.ItemField
+import pl.ambif.ambify.shared.ItemLink
 import pl.ambif.ambify.shared.ItemValues
 import pl.ambif.ambify.shared.ListChange
 import pl.ambif.ambify.shared.ListChangeKind
@@ -25,6 +26,7 @@ import pl.ambif.ambify.shared.ListReminder
 import pl.ambif.ambify.shared.ListSyncRequest
 import pl.ambif.ambify.shared.ListSyncResponse
 import pl.ambif.ambify.shared.ListType
+import pl.ambif.ambify.shared.ListUnit
 import pl.ambif.ambify.shared.Lists
 import pl.ambif.ambify.shared.LoginRequest
 import pl.ambif.ambify.shared.Mode
@@ -427,5 +429,142 @@ class ListsTest {
     fun searchingIgnoresPolishLetters() {
         assertEquals("ser zolty", Lists.searchKey("Ser Żółty"))
         assertEquals("kupione", ListInfo("x", ListType.SHOPPING, "x", style = ListStyle.SHOPPING.copy(doneLabel = "w koszyku")).look.doneLabel)
+    }
+
+    // --- 0.7.2: forms of units, sub-lists, links ---
+
+    @Test
+    fun formsOfAUnitAreGuessedAndCorrectedForTheWholeCommunity() {
+        assertEquals(listOf("wiaderko", "wiaderka", "wiaderek"), Lists.guessForms("wiaderko"))
+        assertEquals(listOf("puszka", "puszki", "puszek"), Lists.guessForms("puszka"))
+        assertEquals(listOf("słoik", "słoiki", "słoików"), Lists.guessForms("słoik"))
+        assertEquals(listOf("worek", "worki", "worków"), Lists.guessForms("worek"))
+        assertEquals(listOf("ml", "ml", "ml"), Lists.guessForms("ml"))
+        val w = world()
+        w.shoppingList()
+        // A unit nobody set forms for: guessed (also by phones of before 0.7.2, which only show the name).
+        w.add(w.owner, "i1", ItemValues("Ogórki", 3.0, "wiaderko"))
+        val units = w.send(w.user).units
+        assertEquals(emptyList(), units.single().forms)
+        assertEquals("8 wiaderek", Lists.quantityText(ItemValues("Ogórki", 8.0, "wiaderko"), Lists.BUILT_IN_UNITS + units))
+        // Bartosz corrects a guess once; Filip gets it.
+        val save = change(ListChangeKind.SAVE_UNIT, "L1") { copy(unit = ListUnit("tubka", listOf("tubka", "tubki", "tubek"))) }
+        assertTrue(w.send(w.user, save).results.single().ok)
+        val tubka = w.send(w.third).units.single { it.name == "tubka" }
+        assertEquals("5 tubek", Lists.quantityText(ItemValues("Pasta", 5.0, "tubka"), listOf(tubka)))
+        assertEquals("tubka", Lists.quickAdd("pasta 3 tubki", Lists.BUILT_IN_UNITS + tubka).unit)
+        assertEquals("wiaderko", Lists.quickAdd("ogórki 2 wiaderka", Lists.BUILT_IN_UNITS + units).unit)
+        // Built-in units and empty forms are refused.
+        assertFalse(w.send(w.user, change(ListChangeKind.SAVE_UNIT, "L1") { copy(unit = ListUnit("kg", listOf("a", "b", "c"))) }).results.single().ok)
+        assertFalse(w.send(w.user, change(ListChangeKind.SAVE_UNIT, "L1") { copy(unit = ListUnit("tubka", listOf("tubka", "", "tubek"))) }).results.single().ok)
+    }
+
+    @Test
+    fun unitsFromBeforeTheUpdateGetTheirFormsGuessed() {
+        val path = Files.createTempDirectory("ambify-units").resolve("u.db").toString()
+        val database = org.jetbrains.exposed.v1.jdbc.Database.connect("jdbc:sqlite:$path?foreign_keys=on", "org.sqlite.JDBC")
+        Migrations.apply(database, Migrations.FILES.filterNot { it.startsWith("V011") })
+        java.sql.DriverManager.getConnection("jdbc:sqlite:$path").use { db ->
+            db.createStatement().use {
+                it.execute("INSERT INTO organizations (id, name, created_at) VALUES ('org', 'Pacakowie', 1)")
+                it.execute("""INSERT INTO list_units VALUES ('org', 'karton', '["karton","karton","karton"]', 1.0, NULL, 1)""")
+                it.execute("""INSERT INTO list_units VALUES ('org', 'słój', '["słój","słoje","słoi"]', 1.0, NULL, 2)""")
+            }
+        }
+        Migrations.apply(database)
+        java.sql.DriverManager.getConnection("jdbc:sqlite:$path").use { db ->
+            db.createStatement().use {
+                val rows = it.executeQuery("SELECT name, forms FROM list_units ORDER BY rev")
+                val forms = buildList { while (rows.next()) add(rows.getString(1) to rows.getString(2)) }
+                assertEquals(listOf("karton" to "[]", "słój" to """["słój","słoje","słoi"]"""), forms)
+            }
+        }
+    }
+
+    @Test
+    fun subItemsArePremiumOneLevelAndGoWithTheirItem() {
+        val w = world()
+        w.shoppingList()
+        w.add(w.owner, "p", ItemValues("Kosmetyczka"))
+        fun sub(id: String, parent: String, name: String) =
+            w.send(w.owner, change(ListChangeKind.ADD_ITEM, "L1", id) { copy(values = ItemValues(name), parentId = parent) }).results.single()
+        assertFalse(sub("s1", "p", "Szczoteczka").ok)
+        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_SUBITEMS", true)
+        assertTrue(sub("s1", "p", "Szczoteczka").ok)
+        assertTrue(sub("s2", "p", "Pasta").ok)
+        assertFalse(sub("s3", "s1", "Nasadka").ok, "no sub-list in a sub-list")
+        assertEquals("p", w.send(w.user).items.single { it.id == "s1" }.parentId)
+
+        // The item done: it goes to the history with its sub-items; a done sub-item of an open item stays.
+        w.add(w.owner, "q", ItemValues("Apteczka"))
+        sub("q1", "q", "Plastry")
+        w.send(w.owner, change(ListChangeKind.CHECK_ITEM, "L1", "q1") { copy(checked = true) })
+        w.send(w.owner, change(ListChangeKind.CHECK_ITEM, "L1", "p") { copy(checked = true) })
+        w.send(w.owner, change(ListChangeKind.CLEAR_CHECKED, "L1"))
+        assertEquals(setOf("p", "s1", "s2"), w.send(w.owner).items.filter { it.cleared }.map { it.id }.toSet())
+
+        // Deleting the item deletes its sub-items for everyone.
+        w.send(w.owner, change(ListChangeKind.DELETE_ITEM, "L1", "q"))
+        assertEquals(setOf("q", "q1"), w.send(w.user).items.filter { it.deleted }.map { it.id }.toSet())
+    }
+
+    @Test
+    fun anItemWithItsOwnAccessIsSeenOnlyByItsPeople() {
+        val w = world()
+        w.send(w.owner, change(ListChangeKind.CREATE_LIST, "T") { copy(list = ListInfo("T", ListType.TASKS, "Dom — porządki")) })
+        w.add(w.owner, "bulb", ItemValues("Wymień żarówkę"), listId = "T")
+        w.add(w.owner, "vac", ItemValues("Odkurzyć"), listId = "T")
+        val onlyFilip = change(ListChangeKind.ITEM_ACCESS, "T", "bulb") { copy(access = listOf(ListAccess(userId = w.third.userId, level = AccessLevel.CHECK))) }
+        assertFalse(w.send(w.owner, onlyFilip).results.single().ok, "premium")
+        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_SUBITEMS", true)
+        assertFalse(w.send(w.user, change(ListChangeKind.ITEM_ACCESS, "T", "bulb") { copy(access = emptyList()) }).results.single().ok, "only the creator")
+        val before = w.send(w.user)
+        assertTrue(w.send(w.owner, onlyFilip.copy(id = "again")).results.single().ok)
+        w.send(w.owner, change(ListChangeKind.ADD_ITEM, "T", "bulb1") { copy(values = ItemValues("Kup żarówkę E27"), parentId = "bulb") })
+
+        // Bartosz: the item and its sub-item go away from his phone, the rest of the list stays; he cannot check it.
+        val bartosz = w.send(w.user, since = before.rev)
+        assertEquals(setOf("bulb", "bulb1"), bartosz.items.filter { it.deleted }.map { it.id }.toSet())
+        assertFalse(w.send(w.user, change(ListChangeKind.CHECK_ITEM, "T", "bulb") { copy(checked = true) }).results.single().ok)
+        assertTrue(w.send(w.user, change(ListChangeKind.CHECK_ITEM, "T", "vac") { copy(checked = true) }).results.single().ok)
+        // Filip sees and checks it, cannot add to it ("odhacza").
+        assertEquals(listOf("bulb", "bulb1"), w.send(w.third).items.filter { it.id.startsWith("bulb") && !it.deleted }.map { it.id })
+        assertTrue(w.send(w.third, change(ListChangeKind.CHECK_ITEM, "T", "bulb1") { copy(checked = true) }).results.single().ok)
+        assertFalse(w.send(w.third, change(ListChangeKind.ADD_ITEM, "T", "bulb2") { copy(values = ItemValues("Drabina"), parentId = "bulb") }).results.single().ok)
+        // Back to the list's access: Bartosz gets it again.
+        val hidden = w.send(w.user)
+        w.send(w.owner, change(ListChangeKind.ITEM_ACCESS, "T", "bulb") { copy(access = emptyList()) })
+        assertEquals(setOf("bulb", "bulb1"), w.send(w.user, since = hidden.rev).items.filterNot { it.deleted }.map { it.id }.toSet())
+    }
+
+    @Test
+    fun linksArePremiumCheckedAndNeverAConflict() {
+        val w = world()
+        w.shoppingList()
+        val link = ItemLink("https://www.allegro.pl/oferta/123")
+        assertFalse(w.add(w.owner, "i1", ItemValues("Odkurzacz", links = listOf(link))).ok)
+        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_ATTACHMENTS", true)
+        assertTrue(w.add(w.owner, "i1", ItemValues("Odkurzacz", links = listOf(link))).ok)
+        assertFalse(w.add(w.owner, "i2", ItemValues("X", links = listOf(ItemLink("javascript:alert(1)")))).ok)
+        assertFalse(w.add(w.owner, "i3", ItemValues("X", links = (1..6).map { ItemLink("https://a.pl/$it") })).ok)
+        assertEquals("allegro.pl", Lists.domain(link.url))
+        assertEquals("https://a.pl/x", Lists.linkIn("zobacz https://a.pl/x."))
+
+        // Two people change the links at once: the later one wins, no conflict.
+        val rev = w.send(w.owner).items.single().rev
+        w.edit(w.owner, "i1", ItemValues("Odkurzacz", links = listOf(link, ItemLink("https://ceneo.pl/1"))), rev, now, ItemField.LINKS)
+        w.edit(w.user, "i1", ItemValues("Odkurzacz", links = emptyList()), rev, now + 1, ItemField.LINKS)
+        val state = w.send(w.owner)
+        assertEquals(emptyList(), state.items.single().values.links)
+        assertEquals(emptyList(), state.conflicts)
+    }
+
+    @Test
+    fun aSubItemNeedsTheAccessOfItsItem() {
+        val list = ListInfo("T", ListType.TASKS, "Dom", createdBy = "michal", access = listOf(ListAccess(roleId = "user", level = AccessLevel.EDIT_ALL)))
+        val top = pl.ambif.ambify.shared.ListItem("bulb", "T", ItemValues("Żarówka"), access = listOf(ListAccess(userId = "filip", level = AccessLevel.CHECK)))
+        assertEquals(AccessLevel.CHECK, Lists.itemLevel(list, top, "filip", "user", owner = false, roleMayEdit = true))
+        assertEquals(AccessLevel.NONE, Lists.itemLevel(list, top, "bartosz", "user", owner = false, roleMayEdit = true))
+        assertEquals(AccessLevel.EDIT_ALL, Lists.itemLevel(list, top, "michal", "owner", owner = false, roleMayEdit = true))
     }
 }

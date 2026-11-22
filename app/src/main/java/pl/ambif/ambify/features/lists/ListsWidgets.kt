@@ -226,7 +226,8 @@ private fun OneList(ui: ListsUi, lists: ListsController, widget: DashboardWidget
         }
         return
     }
-    val items = ui.data.itemsOf(list.id)
+    // Sub-items stay in the list itself (board 16); the widget shows the items.
+    val items = ui.data.itemsOf(list.id).filter { it.parentId == null }
     val now = System.currentTimeMillis()
     val open = items.filter { !it.checked }.let { if (list.type == ListType.SHOPPING) it.sortedBy { i -> i.addedAt } else it.sortedWith(dateOrder()) }
     val recent = items.filter { it.checked && (it.checkedAt ?: 0) > now - RECENT_MS }.sortedByDescending { it.checkedAt }
@@ -309,7 +310,7 @@ private fun NextDeadlines(ui: ListsUi, widget: DashboardWidget, interactive: Boo
             WidgetRow(item, square = false, canCheck = false, interactive = interactive, half = half, onCheck = {}) {
                 when {
                     item.values.urgent -> Pill("PILNE")
-                    late -> Text("−${ChronoUnit.DAYS.between(LocalDate.parse(item.values.dueDate), today)} dni", fontSize = WidgetText.Small, color = MessageKind.ERROR.color)
+                    late -> Text(shortDate(LocalDate.parse(item.values.dueDate), today), fontSize = WidgetText.Small, color = MessageKind.ERROR.color)
                     else -> item.values.dueDate?.let { Text(shortDate(LocalDate.parse(it)), fontSize = WidgetText.Small, color = Luxury.GoldText) }
                 }
             }
@@ -382,10 +383,11 @@ private fun ActiveListRow(list: ListInfo, open: Pair<Int, Boolean>, interactive:
     }
 }
 
-/** "dziś", "jutro", "sob." (this week), "12.11". */
+/** "dziś", "jutro", "sob." (this week), "12.11"; after the date "−8 dni" in every widget (like "Najbliższe terminy"). */
 private fun shortDate(date: LocalDate, today: LocalDate = LocalDate.now()): String {
     val days = ChronoUnit.DAYS.between(today, date)
     return when {
+        days < 0 -> "−${-days} dni"
         days == 0L -> "dziś"
         days == 1L -> "jutro"
         days in 2..6 -> listOf("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")[date.dayOfWeek.value - 1]

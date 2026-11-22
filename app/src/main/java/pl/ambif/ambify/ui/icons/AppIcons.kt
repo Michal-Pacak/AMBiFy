@@ -159,6 +159,16 @@ object AppIcons {
         }
     }
 
+    /** A web link (Lists, 0.7.2): two chain links — never a paper clip (that would mean a file). */
+    val Link: ImageVector by lazy {
+        line("Link") {
+            moveTo(10f, 13f); arcTo(5f, 5f, 0f, false, false, 17.54f, 13.54f); lineTo(20.54f, 10.54f)
+            arcTo(5f, 5f, 0f, false, false, 13.47f, 3.47f); lineTo(11.75f, 5.18f)
+            moveTo(14f, 11f); arcTo(5f, 5f, 0f, false, false, 6.46f, 10.46f); lineTo(3.46f, 13.46f)
+            arcTo(5f, 5f, 0f, false, false, 10.53f, 20.53f); lineTo(12.24f, 18.82f)
+        }
+    }
+
     /** Waiting: a clock. */
     val Clock: ImageVector by lazy { line("Clock") { circle(); moveTo(12f, 7f); lineTo(12f, 12f); lineTo(15f, 14f) } }
 
