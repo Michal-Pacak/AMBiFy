@@ -73,11 +73,27 @@ internal fun WidgetPicker(
 ) {
     val modules = enabled.filter { WidgetType.of(it).isNotEmpty() }
     var open by remember { mutableStateOf<ModuleId?>(null) }
+    var general by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         ScreenTitle("Widgety", "wybierz moduł", onBack)
+        // Widgets of no module (the weather), always offered.
+        LuxuryCard(contentPadding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp)
+                    .clickable(role = Role.Button, onClickLabel = "Widgety ogólne") { general = true }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Ogólne", fontSize = 16.sp, color = Luxury.Text)
+                    Text(WidgetType.general.joinToString(", ") { it.label }, fontSize = 12.sp, color = Luxury.TextMuted)
+                }
+                LuxuryOpenMark(size = 36.dp)
+            }
+        }
         if (modules.isEmpty()) {
             Text("Żaden włączony moduł nie ma jeszcze widgetów.", color = Luxury.TextMuted, fontSize = 14.sp)
         } else {
@@ -109,6 +125,20 @@ internal fun WidgetPicker(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+
+    if (general) {
+        LuxuryPopup(onDismiss = { general = false }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Ogólne", fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                IconButton(onClick = { general = false }) { Icon(AppIcons.Close, contentDescription = "Zamknij", tint = Luxury.TextMuted) }
+            }
+            WidgetType.general.forEachIndexed { index, type ->
+                val there = !type.multi && onDashboard.any { it.type == type.key }
+                WidgetRow(type, locked = false, there = there, onAdd = { general = false; onAdd(type) })
+                if (index < WidgetType.general.lastIndex) LuxuryDivider()
+            }
+        }
     }
 
     open?.let { module ->
@@ -317,7 +347,7 @@ internal fun LessonsSettings(
         }
 
         LuxurySectionTitle("Podgląd", modifier = Modifier.padding(top = 4.dp))
-        LessonsWidget(draft, data, now, store = null, interactive = false, onSettings = {}, onOpen = {})
+        WidgetPreview(half) { LessonsWidget(draft, data, now, store = null, interactive = false, onSettings = {}, onOpen = {}) }
 
         Spacer(Modifier.height(4.dp))
         if (isNew) {

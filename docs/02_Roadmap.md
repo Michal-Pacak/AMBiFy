@@ -142,10 +142,12 @@ One list engine for several list types: shopping, tasks, deadlines (a new type i
 - [x] 0.7.1: Lists without end ("Kupione"), the community's product memory, Dashboard widgets, the changelog page
 - [x] 0.7.2 (released 2026-11-22): forms of the community's own units (board 24); premium sub-lists unfolding in place with their own access (`LISTS_SUBITEMS`); premium links (`LISTS_ATTACHMENTS`); "−8 dni" in every widget
 - [x] 0.7.3 (released 2026-11-22, boards 25–26): photos and files (`LISTS_ATTACHMENTS`) in lists-files/ next to the database (V012, copied to the NAS by ambify-backup), opened on tap, waiting offline; the separate screen of a sub-list
+- [x] 0.7.5 (released 2026-11-23): conflicts decided by the list's creator (board 9); sorting of sub-lists per level (board 17); the list widget shows what is left ("5 do kupienia", the list's open label) instead of the checked count (accepted 2026-11-23); the Dashboard logo on the bar no longer vanishes (it was sized before the view had a size; TEST 49); Dashboard header: "Witaj" and the community grow with the phone font only up to 115%, at most 2 lines each; a tap on the community switches it (popup, "Zarządzaj społecznościami") (accepted 2026-11-23, TEST 52)
+- [x] 0.7.5 also (boards 13–16 of the Dashboard canvas, accepted 2026-11-23, TEST 53): weather widget (Open-Meteo, up to 5 places, swipe / arrows); timetable widgets "Zajęcia dodatkowe" and "Jutro w szkole"; the community switcher with "Opuść" and search; handing the Owner role over with the other person's consent (V013 owner_transfers, 7 days), the Owner alone removes the community; older screens' dialogs and notices in the messages style
 - [x] Shared message components (`ui/components/Messages.kt`, Komunikaty canvas) used by Lists and the Timetable's plan (2026-11-17)
-- [ ] The older screens (Timetable, Settings, Platform, Account, Diary, Extra form) moved over to them
-- [ ] Conflicts (owner's decision 2026-11-16): when two people change the same item at the same time, the list's creator gets a notification and decides: keep one version, or "Wprowadź inne" (both versions go away; the creator may type a new value, leave it empty or remove the item). Until then the later version is shown with "do rozstrzygnięcia"; after 48 h the Owner/Admin decides. Checking off and changes of different fields are never conflicts. Marker: red outline "Konflikt" with a warning triangle, right of a short name, under a long name (mock-up approved 2026-11-16: Lists canvas, board 9; check the look on the phone in TEST)
-- [ ] "Kto widzi i edytuje" (2026-11-18): besides the whole community or chosen people, also chosen roles; the server keeps roles next to people (standard for every module, see Key Decisions)
+- [x] The older screens (Timetable, Settings, Platform, Account, Diary, Extra form) moved over to them (0.7.5)
+- [x] Conflicts (owner's decision 2026-11-16; built in 0.7.0, checked 2026-11-23): when two people change the same item at the same time, the list's creator gets a notification and decides: keep one version, or "Wprowadź inne" (both versions go away; the creator may type a new value, leave it empty or remove the item). Until then the later version is shown with "do rozstrzygnięcia"; after 48 h the Owner/Admin decides. Checking off and changes of different fields are never conflicts. Marker: red outline "Konflikt" with a warning triangle, right of a short name, under a long name (mock-up approved 2026-11-16: Lists canvas, board 9; check the look on the phone in TEST)
+- [x] "Kto widzi i edytuje" (2026-11-18; in Lists since 0.7.0: roles and people per list and per item, checked 2026-11-23 — other modules take it over when they get sharing): besides the whole community or chosen people, also chosen roles; the server keeps roles next to people (standard for every module, see Key Decisions)
 - [x] Premium features: reminders (`LISTS_REMINDERS`) — planned on each person's phone (2026-11-17, TEST)
 - [ ] Shown locked with "wkrótce" (owner's decision 2026-11-16), built together with their modules: shopping list generated from planned meals (`LISTS_MEAL_PLAN`, needs a meal plan), moving a task to Missions (`LISTS_TO_MISSIONS`, needs Missions)
 
@@ -162,8 +164,8 @@ Requested 2026-11-18; mock-ups approved first.
 Requested 2026-11-18; mock-ups approved first.
 
 - [ ] "Witaj, <name>" centred; below it a small tile with the current community's name and the actions Zmień / Opuść
-- [ ] Zmień → popup with the user's communities; a search field when there are more than 10
-- [ ] Opuść → warning and confirmation (the Owner cannot leave, as in Ustawienia today)
+- [x] Zmień → popup with the user's communities; a search field when there are more than 10 (0.7.5)
+- [x] Opuść → warning and confirmation (the Owner cannot leave, as in Ustawienia today) (0.7.5)
 - [ ] Later: leaving confirmed with the phone's lock (PIN / pattern / fingerprint), see "Later — Quick unlock"
 
 ### Stage 6 — Calendar v1 (v0.8)

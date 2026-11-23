@@ -514,6 +514,32 @@ class ListsTest {
     }
 
     @Test
+    fun itemsGoIntoAGroupAndOutOfIt() {
+        val w = world()
+        w.shoppingList()
+        w.add(w.owner, "a", ItemValues("Szczoteczka"))
+        w.add(w.owner, "b", ItemValues("Pasta"))
+        w.add(w.owner, "g", ItemValues("Kosmetyczka"))
+        fun move(who: UserSession, id: String, to: String?) =
+            w.send(who, change(ListChangeKind.MOVE_ITEM, "L1", id) { copy(parentId = to) }).results.single()
+        assertFalse(move(w.owner, "a", "g").ok, "premium")
+        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_SUBITEMS", true)
+        assertTrue(move(w.owner, "a", "g").ok)
+        assertTrue(move(w.owner, "b", "g").ok)
+        assertEquals(setOf("a", "b"), w.send(w.user).items.filter { it.parentId == "g" }.map { it.id }.toSet())
+        assertFalse(move(w.owner, "g", "a").ok, "a group never goes into another")
+        w.add(w.owner, "c", ItemValues("Krem"))
+        assertFalse(move(w.owner, "c", "a").ok, "no group in a group")
+        assertFalse(move(w.owner, "c", "c").ok)
+        // Out of the group again: back on the list as before.
+        assertTrue(move(w.owner, "a", null).ok)
+        assertNull(w.send(w.user).items.single { it.id == "a" }.parentId)
+        // Someone else's item needs "edytuje i usuwa" on the list.
+        w.add(w.user, "u", ItemValues("Ręcznik"))
+        assertTrue(move(w.owner, "u", "g").ok, "the owner edits all")
+    }
+
+    @Test
     fun anItemWithItsOwnAccessIsSeenOnlyByItsPeople() {
         val w = world()
         w.send(w.owner, change(ListChangeKind.CREATE_LIST, "T") { copy(list = ListInfo("T", ListType.TASKS, "Dom — porządki")) })

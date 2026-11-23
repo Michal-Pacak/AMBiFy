@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -123,15 +124,23 @@ private fun MessageTexts(kind: MessageKind, title: String, text: String, modifie
 }
 
 /** A result of an action, shown in the bubble at the bottom. */
-data class Bubble(val kind: MessageKind, val title: String, val text: String = "", val id: Long = System.nanoTime())
+data class Bubble(
+    val kind: MessageKind,
+    val title: String,
+    val text: String = "",
+    /** E.g. "Cofnij" (board 27); the bubble closes after it. */
+    val action: String? = null,
+    val onAction: (() -> Unit)? = null,
+    val id: Long = System.nanoTime(),
+)
 
 /** The bubble of a screen: [show] replaces the one shown. Success and information go away by themselves. */
 class Bubbles {
     var current by mutableStateOf<Bubble?>(null)
         private set
 
-    fun show(kind: MessageKind, title: String, text: String = "") {
-        current = Bubble(kind, title, text)
+    fun show(kind: MessageKind, title: String, text: String = "", action: String? = null, onAction: (() -> Unit)? = null) {
+        current = Bubble(kind, title, text, action, onAction)
     }
 
     fun close() {
@@ -145,7 +154,7 @@ fun BoxScope.BubbleHost(bubbles: Bubbles, bottomPadding: Int = 16) {
     val bubble = bubbles.current
     LaunchedEffect(bubble?.id) {
         if (bubble != null && bubble.kind != MessageKind.ERROR) {
-            delay(BUBBLE_MS)
+            delay(if (bubble.action != null) BUBBLE_MS * 2 else BUBBLE_MS)
             if (bubbles.current?.id == bubble.id) bubbles.close()
         }
     }
@@ -171,6 +180,11 @@ fun BoxScope.BubbleHost(bubbles: Bubbles, bottomPadding: Int = 16) {
         ) {
             Icon(kind.icon, contentDescription = null, tint = kind.color, modifier = Modifier.size(22.dp))
             MessageTexts(kind, shown.title, shown.text, Modifier.weight(1f))
+            if (shown.action != null && shown.onAction != null) {
+                TextButton(onClick = { bubbles.close(); shown.onAction.invoke() }) {
+                    Text(shown.action, color = Luxury.GoldText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
+            }
             if (kind == MessageKind.ERROR) {
                 IconButton(onClick = bubbles::close) { Icon(AppIcons.Close, contentDescription = "Zamknij komunikat", tint = Muted, modifier = Modifier.size(16.dp)) }
             }

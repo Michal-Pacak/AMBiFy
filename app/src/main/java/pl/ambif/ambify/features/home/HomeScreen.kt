@@ -45,6 +45,12 @@ import pl.ambif.ambify.core.network.ServerApi
 import pl.ambif.ambify.core.network.ServerError
 import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.session.SessionState
+import pl.ambif.ambify.features.account.HandOverDialog
+import pl.ambif.ambify.features.account.LeaveCommunityDialog
+import pl.ambif.ambify.features.account.Outcome
+import pl.ambif.ambify.features.account.PendingTransfer
+import pl.ambif.ambify.features.account.TransferRequestCard
+import pl.ambif.ambify.features.account.dashboardTransfers
 import pl.ambif.ambify.features.timetable.GoldButton
 import pl.ambif.ambify.modules.timetable.TimetableCache
 import pl.ambif.ambify.shared.Dashboard
@@ -54,6 +60,9 @@ import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.Recurrences
 import pl.ambif.ambify.shared.WidgetSlot
 import pl.ambif.ambify.shared.WidgetType
+import pl.ambif.ambify.ui.components.BubbleHost
+import pl.ambif.ambify.ui.components.Bubbles
+import pl.ambif.ambify.ui.components.MessageKind
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -71,6 +80,7 @@ fun HomeScreen(
     organizationName: String = "",
     userName: String = "",
     onOpenModule: (ModuleId) -> Unit = {},
+    onOpenCommunities: () -> Unit = {},
 ) {
     val session = LocalAppSession.current
     val api = session.api
@@ -89,6 +99,14 @@ fun HomeScreen(
     var timetable by remember(communityId) { mutableStateOf<TimetableData?>(null) }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     val scroll = rememberScrollState()
+    val me = (state as? SessionState.SignedIn)?.me
+    val communities = me?.communities.orEmpty()
+    var switcher by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf<pl.ambif.ambify.shared.CommunitySummary?>(null) }
+    // Requests to take a community over are answered on the Dashboard (board 16 C): fresh on every visit.
+    LaunchedEffect(Unit) { runCatching { session.refreshProfile() } }
+    val bubbles = remember { Bubbles() }
+    val outcome: Outcome = { kind, title, text -> bubbles.show(kind, title, text) }
 
     fun change(next: Dashboard) {
         val normalized = Dashboards.normalized(next)
@@ -119,9 +137,9 @@ fun HomeScreen(
         }
     }
 
-    val known = dashboard.widgets.filter { widget -> WidgetType.of(widget.type)?.module?.let { it in enabled } == true }
+    val known = dashboard.widgets.filter { widget -> WidgetType.of(widget.type)?.let { it.module == null || it.module in enabled } == true }
     val hidden = dashboard.widgets - known.toSet()
-    val needsTimetable = ModuleId.TIMETABLE in enabled && (picker || editing != null || known.any { it.type == WidgetType.LESSONS.key })
+    val needsTimetable = ModuleId.TIMETABLE in enabled && (picker || editing != null || known.any { WidgetType.of(it.type)?.module == ModuleId.TIMETABLE })
     LaunchedEffect(communityId, needsTimetable) {
         if (needsTimetable && communityId.isNotEmpty()) timetable = loadTimetable(api, context, communityId)
     }
@@ -150,9 +168,13 @@ fun HomeScreen(
                 scroll = scroll,
                 onMove = ::arrange,
                 header = {
-                    Column {
-                        Text("Witaj, $userName", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-                        Text(organizationName, style = MaterialTheme.typography.titleMedium, color = Luxury.GoldText)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HomeHeader(userName, organizationName, switchable = communities.size > 1) {
+                            if (communities.size > 1) switcher = true else onOpenCommunities()
+                        }
+                        me?.dashboardTransfers().orEmpty().forEach { transfer ->
+                            if (transfer.forMe) TransferRequestCard(transfer, outcome) else PendingTransfer(transfer, outcome)
+                        }
                     }
                 },
                 footer = {
@@ -189,9 +211,24 @@ fun HomeScreen(
                         onOpen = { onOpenModule(ModuleId.LISTS) },
                         modifier = modifier,
                     )
+                    WidgetType.EXTRAS -> ExtrasWidget(
+                        widget = widget, data = timetable, now = now, interactive = interactive,
+                        onSettings = { editing = Editing(widget, isNew = false) },
+                        onOpen = { onOpenModule(ModuleId.TIMETABLE) }, modifier = modifier,
+                    )
+                    WidgetType.TOMORROW -> TomorrowWidget(
+                        widget = widget, data = timetable, now = now, interactive = interactive,
+                        onSettings = { editing = Editing(widget, isNew = false) },
+                        onOpen = { onOpenModule(ModuleId.TIMETABLE) }, modifier = modifier,
+                    )
+                    WidgetType.WEATHER -> WeatherWidget(
+                        widget = widget, store = store, interactive = interactive,
+                        onSettings = { editing = Editing(widget, isNew = false) }, modifier = modifier,
+                    )
                     null -> Unit
                 }
             }
+            BubbleHost(bubbles)
             undo?.let { (name, before) ->
                 LaunchedEffect(undo) {
                     delay(6_000)
@@ -227,6 +264,40 @@ fun HomeScreen(
         }
     }
 
+    if (switcher && me != null) {
+        CommunitySwitcher(
+            me = me,
+            onPick = { community ->
+                switcher = false
+                scope.launch {
+                    try {
+                        session.switchCommunity(community.id)
+                        bubbles.show(MessageKind.SUCCESS, "Jesteś w: ${community.name}")
+                    } catch (e: ServerError) {
+                        bubbles.show(MessageKind.ERROR, "Nie udało się zmienić społeczności", e.message.orEmpty())
+                    } catch (e: java.io.IOException) {
+                        bubbles.show(MessageKind.ERROR, "Brak połączenia z serwerem", "Społeczność zmienisz, gdy wróci internet.")
+                    }
+                }
+            },
+            onLeave = { community ->
+                switcher = false
+                leaving = community
+            },
+            onManage = {
+                switcher = false
+                onOpenCommunities()
+            },
+            onDismiss = { switcher = false },
+            outcome = outcome,
+        )
+    }
+    leaving?.let { community ->
+        val close = { leaving = null }
+        if (community.role.owner) HandOverDialog(community, leave = true, onDismiss = close, outcome = outcome)
+        else LeaveCommunityDialog(community, onDismiss = close, outcome = outcome)
+    }
+
     editing?.let { open ->
         val rows = rowsOf(known)
         val index = rows.indexOfFirst { row -> row.widgets.any { it.id == open.widget.id } }
@@ -250,7 +321,16 @@ fun HomeScreen(
             arrange(known.filter { it.id != open.widget.id })
             editing = null
         }
-        if (WidgetType.of(open.widget.type)?.module == ModuleId.LISTS) {
+        val frame = SettingsFrame(
+            isNew = open.isNew, canMoveUp = index > 0, canMoveDown = index in 0 until rows.lastIndex,
+            onMove = onMove, onDismiss = { editing = null }, onDelete = onDelete,
+        )
+        val type = WidgetType.of(open.widget.type)
+        if (type == WidgetType.WEATHER) {
+            WeatherSettings(open.widget, frame, onSave)
+        } else if (type == WidgetType.EXTRAS || type == WidgetType.TOMORROW) {
+            TimetableWidgetSettings(open.widget, tomorrow = type == WidgetType.TOMORROW, data = timetable, now = now, frame = frame, onSave = onSave)
+        } else if (type?.module == ModuleId.LISTS) {
             pl.ambif.ambify.features.lists.ListsWidgetSettings(
                 widget = open.widget, isNew = open.isNew,
                 canMoveUp = index > 0, canMoveDown = index in 0 until rows.lastIndex,

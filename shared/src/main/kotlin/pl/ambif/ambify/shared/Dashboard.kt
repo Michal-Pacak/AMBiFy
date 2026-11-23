@@ -8,14 +8,14 @@ object DashboardPaths {
 }
 
 /**
- * The widget catalog. [module] decides where a widget is offered (only modules switched on in the community) and
+ * The widget catalog. [module] (null = a general widget, always offered) decides where a widget is offered (only modules switched on in the community) and
  * whether it is shown at all; [multi]: a widget with settings may be on the Dashboard more than once (e.g.
  * "Lekcje" of each child), one without settings only once; [half]: it also fits half of the width.
  * Saved by [key], so a phone that does not know a newer widget keeps it untouched.
  */
 enum class WidgetType(
     val key: String,
-    val module: ModuleId,
+    val module: ModuleId?,
     val label: String,
     val description: String,
     val multi: Boolean,
@@ -50,11 +50,33 @@ enum class WidgetType(
         "active_lists", ModuleId.LISTS, "Aktywne listy",
         "Wszystkie listy zwinięte do typów — rozwiń typ, by zobaczyć nazwy i stan.",
         multi = false,
+    ),
+
+    /** Extra activities of the chosen children ([DashboardWidget.people]) today and the next days (board 15 A). */
+    EXTRAS(
+        "extras", ModuleId.TIMETABLE, "Zajęcia dodatkowe",
+        "Zajęcia dodatkowe dzieci dziś i w najbliższe dni, z miejscem.",
+        multi = true, half = true,
+    ),
+
+    /** The next school day of one child: start, end, number of lessons, changes and activities after (board 15 B). */
+    TOMORROW(
+        "tomorrow", ModuleId.TIMETABLE, "Jutro w szkole",
+        "Od której do której jutro, ile lekcji, zastępstwa i odwołane, zajęcia po szkole.",
+        multi = true,
+    ),
+
+    /** The weather in up to 5 places ([DashboardWidget.people] = [WeatherPlace.encode]), swiped (board 13). */
+    WEATHER(
+        "weather", null, "Pogoda",
+        "Pogoda teraz i w najbliższych godzinach, dla kilku miejsc — przełączasz palcem albo strzałkami.",
+        multi = false, half = true,
     );
 
     companion object {
         fun of(key: String): WidgetType? = entries.firstOrNull { it.key == key }
         fun of(module: ModuleId): List<WidgetType> = entries.filter { it.module == module }
+        val general: List<WidgetType> get() = entries.filter { it.module == null }
     }
 }
 
@@ -113,5 +135,31 @@ object Dashboards {
             (halves - setOfNotNull(left, right)).forEach { result += it.copy(row = row++) }
         }
         return Dashboard(result)
+    }
+}
+
+/**
+ * One place of the weather widget, kept in [DashboardWidget.people] as text ("place|name|lat|lon|region"), so
+ * older phones keep it untouched. [name] is what the widget shows ("Dom"), [region] where it is.
+ */
+data class WeatherPlace(val name: String, val latitude: Double, val longitude: Double, val region: String = "") {
+    fun encode(): String = listOf(PREFIX, clean(name), "%.4f".format(java.util.Locale.ROOT, latitude), "%.4f".format(java.util.Locale.ROOT, longitude), clean(region)).joinToString("|")
+
+    companion object {
+        const val PREFIX = "place"
+        const val MAX = 5
+
+        private fun clean(text: String) = text.replace("|", " ").trim().take(40)
+
+        fun decode(text: String): WeatherPlace? {
+            val parts = text.split("|")
+            if (parts.size < 4 || parts[0] != PREFIX) return null
+            val lat = parts[2].toDoubleOrNull() ?: return null
+            val lon = parts[3].toDoubleOrNull() ?: return null
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0 || parts[1].isBlank()) return null
+            return WeatherPlace(parts[1], lat, lon, parts.getOrElse(4) { "" })
+        }
+
+        fun of(widget: DashboardWidget): List<WeatherPlace> = widget.people.mapNotNull(::decode).take(MAX)
     }
 }

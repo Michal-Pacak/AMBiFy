@@ -100,6 +100,8 @@ internal fun ListDialogs(
     onClosed: () -> Unit,
     onResolve: (String, ConflictDecision) -> Unit,
     onSaved: (String, String) -> Unit,
+    /** A result with "Cofnij" (board 27). */
+    onUndoable: (String, String, () -> Unit) -> Unit = { title, text, _ -> onSaved(title, text) },
 ) {
     val close = { onDialog(null) }
     when (dialog) {
@@ -144,11 +146,36 @@ internal fun ListDialogs(
                 ListType.DEADLINES -> "terminy"
             }
             val current = ui.prefs.itemSort(dialog.list)
+            val hasSubs = ui.data.items.any { it.listId == dialog.list.id && it.parentId != null && !it.cleared }
+            val same = ui.prefs.subsSameSort(dialog.list.id)
             SortDialog(
                 title = "Sortuj $what", where = "Poziom: lista „${dialog.list.name}”",
-                whereText = "Sortujesz $what tej listy, w każdej sekcji osobno.",
+                whereText = "Sortujesz $what tej listy, w każdej sekcji osobno." + if (hasSubs) " Grupy sortujesz po wejściu do nich." else "",
                 options = ItemSort.entries.map { Triple(it.label, it.description, it == current) },
                 onPick = { i -> ui.prefs.setItemSort(dialog.list, ItemSort.entries[i]); close() }, onDismiss = close,
+                inherit = if (!hasSubs) null else InheritToggle(
+                    on = same,
+                    text = if (same) "Grupy bez własnego wyboru też: ${current.label.lowercase()}." else "Grupy bez własnego wyboru: kolejność dodania.",
+                    onToggle = { ui.prefs.setSubsSameSort(dialog.list.id, !same) },
+                ),
+            )
+        }
+        is ListDialog.SortSub -> {
+            val tasks = dialog.list.type == ListType.TASKS
+            val own = ui.prefs.ownSubSort(dialog.parent.id)
+            val listSort = ui.prefs.itemSort(dialog.list)
+            val same = ui.prefs.subsSameSort(dialog.list.id)
+            val name = dialog.parent.values.name.let { if (it.length > 24) it.take(22).trimEnd() + "…" else it }
+            SortDialog(
+                title = "Sortuj grupę", where = "Poziom: grupa „$name”",
+                whereText = if (tasks) "Sortujesz tylko zadania w tej grupie." else "Sortujesz tylko to, co jest w tej grupie.",
+                options = listOf(Triple(
+                    "Jak lista „${dialog.list.name}”",
+                    if (same) "domyślnie · teraz: ${listSort.label.lowercase()}" else "lista ma wyłączone dziedziczenie — kolejność dodania",
+                    own == null,
+                )) + ItemSort.entries.map { Triple(it.label, it.description, it == own) },
+                onPick = { i -> ui.prefs.setOwnSubSort(dialog.parent.id, if (i == 0) null else ItemSort.entries[i - 1]); close() },
+                onDismiss = close,
             )
         }
         is ListDialog.Menu -> ListMenu(dialog.list, close,
@@ -188,6 +215,12 @@ internal fun ListDialogs(
             onArchive = { lists.updateList(dialog.list.copy(archived = true)); close(); onSaved("Przeniesiono do archiwum", "Lista „${dialog.list.name}”.") },
         )
         is ListDialog.Item -> ItemDialog(ui, dialog.list, lists, dialog.item, close,
+            onUngroup = { item ->
+                val group = ui.data.item(item.parentId)?.values?.name.orEmpty()
+                lists.ungroup(item)
+                close()
+                onSaved("Wyjęto z grupy", "„${item.values.name}” jest znów na liście" + if (group.isNotEmpty()) " (było w „$group”)." else ".")
+            },
             onSave = { values, remember ->
                 val item = dialog.item
                 close()
@@ -197,7 +230,34 @@ internal fun ListDialogs(
         )
         is ListDialog.Photos -> PhotoViewer(ui, dialog.list, lists, dialog.item.id, dialog.start, close)
         is ListDialog.OpenFile -> FileOpener(ui, lists, dialog.file, close)
+        is ListDialog.ToGroup -> ToGroupDialog(ui, dialog.list, dialog.ids, close) { groupId, name ->
+            val items = dialog.ids.mapNotNull { ui.data.item(it) }
+            val groupName = groupId?.let { ui.data.item(it)?.values?.name } ?: name.trim()
+            val undo = lists.toGroup(dialog.list, items, groupId, name)
+            ui.prefs.marked.clear()
+            groupId?.let { ui.prefs.setSubOpen(it, true) }
+            close()
+            onUndoable("${countWord(items.size, dialog.list)} w grupie „$groupName”", "", undo)
+        }
+        is ListDialog.DeleteMany -> {
+            val items = dialog.ids.mapNotNull { ui.data.item(it) }
+            LuxuryPopup(onDismiss = close) {
+                Text("Usunąć zaznaczone (${items.size})?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    items.take(4).joinToString(", ") { it.values.name } + (if (items.size > 4) " i ${items.size - 4} więcej" else "") + ". Znikną z listy u wszystkich.",
+                    fontSize = 13.sp, color = Muted,
+                )
+                DangerButton("Usuń (${items.size})", {
+                    lists.deleteAll(items)
+                    ui.prefs.marked.clear()
+                    close()
+                    onSaved("Usunięto", countWord(items.size, dialog.list) + ".")
+                })
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = close)
+            }
+        }
         is ListDialog.ItemMenu -> ItemMenu(ui, dialog.list, dialog.item, close,
+            onMove = { onDialog(ListDialog.ToGroup(dialog.list, listOf(dialog.item.id))) },
             onSubs = {
                 ui.prefs.setSubOpen(dialog.item.id, true)
                 ui.prefs.focusSub = dialog.item.id
@@ -209,18 +269,18 @@ internal fun ListDialogs(
         is ListDialog.ItemAccess -> AccessEditor(ui, dialog.list, isNew = false, item = dialog.item, onDismiss = close) { access ->
             lists.itemAccess(dialog.item, access)
             close()
-            onSaved("Zapisano dostęp", "„${dialog.item.values.name}” — " + if (access.isEmpty()) "jak na liście." else "razem z podlistą.")
+            onSaved("Zapisano dostęp", "„${dialog.item.values.name}” — " + if (access.isEmpty()) "jak na liście." else "razem z grupą.")
         }
         is ListDialog.CheckAll -> {
             val open = ui.data.subItemsOf(dialog.item.id).filter { !it.checked && ui.canCheck(dialog.list, it) }
             val tasks = dialog.list.type == ListType.TASKS
             LuxuryPopup(onDismiss = close) {
-                Text("„${dialog.item.values.name}” ma ${if (tasks) "otwarte podzadania" else "nieodhaczone podpozycje"}", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("„${dialog.item.values.name}” ma w grupie ${if (tasks) "niezrobione zadania" else "nieodhaczone pozycje"}", fontSize = 20.sp, fontWeight = FontWeight.Medium)
                 Text(
                     "Zostało: " + open.take(3).joinToString(", ") { it.values.name } + if (open.size > 3) " i ${open.size - 3} więcej." else ".",
                     fontSize = 13.sp, color = Muted,
                 )
-                GoldButton(if (tasks) "Odhacz wszystko (${open.size + 1})" else "Odhacz razem z podpozycjami") {
+                GoldButton(if (tasks) "Odhacz wszystko (${open.size + 1})" else "Odhacz razem z grupą") {
                     open.forEach { lists.check(it, true) }
                     lists.check(dialog.item, true)
                     close()
@@ -233,7 +293,7 @@ internal fun ListDialogs(
             }
         }
         is ListDialog.CheckParent -> LuxuryPopup(onDismiss = close) {
-            Text("Wszystko z podlisty zrobione", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Wszystko w grupie zrobione", fontSize = 20.sp, fontWeight = FontWeight.Medium)
             Text("Odhaczyć też „${dialog.item.values.name}”?", fontSize = 14.sp, color = Muted)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FramedButton("Nie", gold = false, modifier = Modifier.weight(1f), onClick = close)
@@ -438,11 +498,11 @@ private fun AccessEditor(
                 Text("${list.name} · ustala twórca listy", fontSize = 12.sp, color = Muted)
             } else {
                 Text(if (list.type == ListType.TASKS) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", fontSize = 20.sp, fontWeight = FontWeight.Medium)
-                Text("${item.values.name} · razem z podlistą", fontSize = 12.sp, color = Muted)
+                Text("${item.values.name} · razem z grupą", fontSize = 12.sp, color = Muted)
             }
         }
         if (item != null) {
-            MessageBar(MessageKind.INFO, "Tylko zawęża dostęp z listy", "Nikt nie dostanie tu więcej niż na liście „${list.name}”. Kto nie widzi, temu zniknie razem z podlistą.")
+            MessageBar(MessageKind.INFO, "Tylko zawęża dostęp z listy", "Nikt nie dostanie tu więcej niż na liście „${list.name}”. Kto nie widzi, temu zniknie razem z grupą.")
         }
         Text("Poziomy (każdy zawiera poprzedni): widzi → odhacza → dodaje → edytuje i usuwa cudze", fontSize = 12.sp, color = Muted, lineHeight = 17.sp)
         if (roles.isEmpty()) {
@@ -716,8 +776,19 @@ private fun VariantChips(variants: List<String>, current: String, onPick: (Strin
 
 // --- board 17: "Sortuj" of one level ---
 
+/** Board 17, "Podlisty sortuj tak samo" under the options of a list. */
+private class InheritToggle(val on: Boolean, val text: String, val onToggle: () -> Unit)
+
 @Composable
-private fun SortDialog(title: String, where: String, whereText: String, options: List<Triple<String, String, Boolean>>, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun SortDialog(
+    title: String,
+    where: String,
+    whereText: String,
+    options: List<Triple<String, String, Boolean>>,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    inherit: InheritToggle? = null,
+) {
     LuxuryPopup(onDismiss = onDismiss) {
         Text(title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
         Row(
@@ -748,6 +819,11 @@ private fun SortDialog(title: String, where: String, whereText: String, options:
                 }
             }
         }
+        inherit?.let { toggle ->
+            LuxuryDivider()
+            SwitchRow("Grupy sortuj tak samo", checked = toggle.on, enabled = true,
+                below = { Text(toggle.text, fontSize = 12.sp, color = Muted) }) { toggle.onToggle() }
+        }
         Text("Tylko u Ciebie, zapamiętane na tym telefonie.", fontSize = 12.sp, color = Muted)
         FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
     }
@@ -772,7 +848,9 @@ private fun Locked(title: String, text: String) {
 // --- board 16: ⋮ of an item ---
 
 @Composable
-private fun ItemMenu(ui: ListsUi, list: ListInfo, item: ListItem, onDismiss: () -> Unit, onSubs: () -> Unit, onDetails: () -> Unit, onAccess: () -> Unit) {
+private fun ItemMenu(
+    ui: ListsUi, list: ListInfo, item: ListItem, onDismiss: () -> Unit, onMove: () -> Unit, onSubs: () -> Unit, onDetails: () -> Unit, onAccess: () -> Unit,
+) {
     val tasks = list.type == ListType.TASKS
     val subs = ui.data.subItemsOf(item.id)
     LuxuryPopup(onDismiss = onDismiss) {
@@ -780,15 +858,23 @@ private fun ItemMenu(ui: ListsUi, list: ListInfo, item: ListItem, onDismiss: () 
         if (ui.canAddTo(list, item)) {
             Row(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onSubs), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    Text(if (subs.isNotEmpty()) "Dodaj coś do tej grupy" else "Zrób z tego grupę", fontSize = 16.sp)
                     Text(
-                        when {
-                            subs.isNotEmpty() -> if (tasks) "Dodaj kolejne podzadanie" else "Dodaj kolejną podpozycję"
-                            tasks -> "Dodaj podzadania"
-                            else -> "Dodaj podpozycje"
-                        },
-                        fontSize = 16.sp,
+                        if (subs.isNotEmpty()) "rozwinie się, z polem do wpisania"
+                        else if (tasks) "w środku wpiszesz kroki tego zadania" else "w środku wpiszesz, co do niej należy",
+                        fontSize = 12.sp, color = Muted,
                     )
-                    Text("rozwinie się pod ${if (tasks) "zadaniem" else "pozycją"}, z polem do wpisania", fontSize = 12.sp, color = Muted)
+                }
+                LuxuryOpenMark(size = 32.dp)
+            }
+            LuxuryDivider()
+        }
+        // A group itself does not go into another one (board 27).
+        if (subs.isEmpty() && ui.canEdit(list, item) && list.type != ListType.DEADLINES) {
+            Row(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onMove), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Przenieś do grupy…", fontSize = 16.sp)
+                    Text("do istniejącej albo nowej · kilka naraz: przytrzymaj pozycję", fontSize = 12.sp, color = Muted)
                 }
                 LuxuryOpenMark(size = 32.dp)
             }
@@ -800,6 +886,76 @@ private fun ItemMenu(ui: ListsUi, list: ListInfo, item: ListItem, onDismiss: () 
             MenuRow(if (tasks) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", onAccess)
         }
         FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+    }
+}
+
+/** "3 rzeczy", "1 zadanie" — what was marked (board 27). */
+internal fun countWord(n: Int, list: ListInfo): String {
+    val few = n % 10 in 2..4 && n % 100 !in 12..14
+    return if (list.type == ListType.TASKS) "$n " + when { n == 1 -> "zadanie"; few -> "zadania"; else -> "zadań" }
+    else "$n " + if (n == 1) "rzecz" else "rzeczy"
+}
+
+/** Board 27, "Dodaj do grupy": an existing group of the list or a new one, named here. */
+@Composable
+private fun ToGroupDialog(ui: ListsUi, list: ListInfo, ids: List<String>, onDismiss: () -> Unit, onDone: (String?, String) -> Unit) {
+    val items = ids.mapNotNull { ui.data.item(it) }
+    val groups = ui.data.itemsOf(list.id).filter { it.parentId == null && it.id !in ids && ui.data.subItemsOf(it.id).isNotEmpty() && ui.canAddTo(list, it) }
+    var target by remember { mutableStateOf(if (groups.isEmpty()) NEW_GROUP else "") }
+    var name by remember { mutableStateOf("") }
+    var tried by remember { mutableStateOf(false) }
+    LuxuryPopup(onDismiss = onDismiss) {
+        Text("Dodaj do grupy", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(
+            "${items.size} zaznaczone: " + items.take(4).joinToString(", ") { it.values.name } + if (items.size > 4) " i ${items.size - 4} więcej" else "",
+            fontSize = 13.sp, color = Muted, maxLines = 3, overflow = TextOverflow.Ellipsis,
+        )
+        Column {
+            groups.forEach { group ->
+                GroupOption(group.values.name, "istniejąca grupa · ${ui.data.subItemsOf(group.id).size} w środku", target == group.id) { target = group.id }
+                LuxuryDivider()
+            }
+            GroupOption("Nowa grupa", "powstanie na liście w miejscu pierwszej zaznaczonej", target == NEW_GROUP) { target = NEW_GROUP }
+        }
+        if (target == NEW_GROUP) {
+            OutlinedTextField(
+                value = name, onValueChange = { name = it }, singleLine = true,
+                label = { Text("Nazwa grupy") }, placeholder = { Text(if (list.type == ListType.TASKS) "np. Wymień żarówkę" else "np. Kosmetyczka") },
+                isError = tried && name.isBlank(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Luxury.GoldBase, unfocusedBorderColor = Outline),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (tried && name.isBlank()) FieldError("Wpisz nazwę grupy.")
+        }
+        if (tried && target.isEmpty()) FieldError("Wybierz grupę albo „Nowa grupa”.")
+        GoldButton("Dodaj ${items.size} do grupy") {
+            tried = true
+            when {
+                target.isEmpty() -> Unit
+                target == NEW_GROUP -> if (name.isNotBlank()) onDone(null, name)
+                else -> onDone(target, "")
+            }
+        }
+        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+    }
+}
+
+private const val NEW_GROUP = "#new"
+
+@Composable
+private fun GroupOption(title: String, text: String, on: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.RadioButton, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(modifier = Modifier.size(20.dp).clip(CircleShape).border(1.6.dp, Luxury.GoldBase, CircleShape), contentAlignment = Alignment.Center) {
+            if (on) Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Luxury.GoldLight))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp)
+            Text(text, fontSize = 12.sp, color = Muted)
+        }
     }
 }
 
@@ -1100,6 +1256,7 @@ private fun ItemDialog(
     onDismiss: () -> Unit,
     onSave: (ItemValues, Boolean) -> Unit,
     onDelete: (ListItem) -> Unit,
+    onUngroup: (ListItem) -> Unit = {},
 ) {
     var values by remember { mutableStateOf(item?.values ?: ItemValues(dueDate = if (list.type == ListType.DEADLINES) null else null)) }
     var keepUnit by remember { mutableStateOf(false) }
@@ -1110,8 +1267,8 @@ private fun ItemDialog(
     var skipLink by remember { mutableStateOf<String?>(null) }
     val editable = item == null || ui.canEdit(list, item)
     val title = when (list.type) {
-        ListType.SHOPPING -> if (item == null) "Nowa pozycja" else if (item.parentId != null) "Podpozycja" else "Pozycja"
-        ListType.TASKS -> if (item == null) "Nowe zadanie" else if (item.parentId != null) "Podzadanie" else "Zadanie"
+        ListType.SHOPPING -> if (item == null) "Nowa pozycja" else if (item.parentId != null) "Pozycja w grupie" else "Pozycja"
+        ListType.TASKS -> if (item == null) "Nowe zadanie" else if (item.parentId != null) "Zadanie w grupie" else "Zadanie"
         ListType.DEADLINES -> if (item == null) "Nowy termin" else "Termin"
     }
     val nameError = tried && values.name.isBlank()
@@ -1261,6 +1418,10 @@ private fun ItemDialog(
             Text("Tę pozycję zmienia jej autor albo ktoś z dostępem „edytuje i usuwa”.", fontSize = 12.sp, color = Muted)
             FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
             return@LuxuryPopup
+        }
+        if (item?.parentId != null) {
+            // Board 27: back on the list itself.
+            FramedButton("Wyjmij z grupy „${ui.data.item(item.parentId)?.values?.name.orEmpty().take(24)}”", gold = false, modifier = Modifier.fillMaxWidth()) { onUngroup(item) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (item != null) DangerButton("Usuń", { confirmDelete = true }, Modifier)

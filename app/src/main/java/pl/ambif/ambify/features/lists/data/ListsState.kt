@@ -175,6 +175,7 @@ data class ListsData(
             copy(units = units.filterNot { it.name == unit.name } + unit)
         } ?: this
         ListChangeKind.ITEM_ACCESS -> mapItem(change.itemId) { it.copy(access = change.access) }
+        ListChangeKind.MOVE_ITEM -> mapItem(change.itemId) { it.copy(parentId = change.parentId) }
         ListChangeKind.UNCHECK_ALL -> copy(items = items.map {
             if (it.listId == change.listId && it.checked && !it.cleared) it.copy(checked = false, checkedAt = null, checkedBy = null) else it
         })

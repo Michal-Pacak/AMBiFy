@@ -232,12 +232,12 @@ private fun OneList(ui: ListsUi, lists: ListsController, widget: DashboardWidget
     val now = System.currentTimeMillis()
     val open = items.filter { !it.checked }.let { if (list.type == ListType.SHOPPING) it.sortedBy { i -> i.addedAt } else it.sortedWith(dateOrder()) }
     val recent = items.filter { it.checked && (it.checkedAt ?: 0) > now - RECENT_MS }.sortedByDescending { it.checkedAt }
-    val done = items.count { it.checked }
     val count = countOf(widget.height)
     val shown = (open + recent).take(count)
     val canCheck = ui.canCheck(list)
-    val note = if (list.type == ListType.SHOPPING && done > 0) "$done ${list.look.doneLabel}" else null
-    WidgetCard(list.name, listIcon(list), note, interactive, onSettings, { onOpen(list.id) }, modifier) {
+    // What is left matters more than what is done (Michał, 23.11): "5 do kupienia", "3 do spakowania".
+    val note = if (list.type == ListType.SHOPPING && open.isNotEmpty()) "${open.size} ${list.look.openLabel}" else null
+    WidgetCard(list.name, listIcon(list), note, interactive, onSettings, { onOpen(list.id) }, modifier, noteColor = Luxury.GoldText) {
         when {
             items.isEmpty() -> Faded("Lista jest pusta.")
             open.isEmpty() && list.type == ListType.SHOPPING && list.look.finish == ListFinish.RESET -> {
@@ -474,6 +474,11 @@ fun ListsWidgetSettings(
             }
         }
         val ready = type != WidgetType.LIST || listId != null
+        LuxurySectionTitle("Podgląd", modifier = Modifier.padding(top = 4.dp))
+        pl.ambif.ambify.features.home.WidgetPreview(half) {
+            if (ready) ListsWidget(draft, interactive = false, onSettings = {}, onOpen = {})
+            else Faded("Wybierz listę, żeby zobaczyć podgląd.")
+        }
         if (isNew) {
             GoldButton("Dodaj na pulpit", enabled = ready) { onSave(draft) }
             FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)

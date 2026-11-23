@@ -135,6 +135,34 @@ class AppSession(context: Context) {
 
     suspend fun joinCommunity(code: String) = switchCommunity(api.joinCommunity(code).id)
 
+    /** Board 16: the Owner asks someone of [communityId] to take it over ([leave]: then leaves it). */
+    suspend fun requestOwnerTransfer(communityId: String, toUserId: String, leave: Boolean) {
+        api.forCommunity(communityId).requestOwnerTransfer(toUserId, leave)
+        refreshProfile()
+    }
+
+    suspend fun cancelOwnerTransfer(communityId: String) {
+        api.forCommunity(communityId).cancelOwnerTransfer()
+        refreshProfile()
+    }
+
+    /** The asked person answers; accepting makes them the Owner (the former one may leave at once). */
+    suspend fun answerOwnerTransfer(communityId: String, accept: Boolean) {
+        api.forCommunity(communityId).answerOwnerTransfer(accept)
+        refreshProfile()
+        refreshCommunity()
+    }
+
+    /** The Owner alone removes [communityId]; like leaving, the server's next answer picks another (or none). */
+    suspend fun deleteCommunity(communityId: String, name: String) {
+        api.forCommunity(communityId).deleteCommunity(name)
+        if ((_state.value as? SessionState.SignedIn)?.me?.communityId == communityId) {
+            preferences.edit { remove(KEY_COMMUNITY) }
+        }
+        refreshProfile()
+        refreshCommunity()
+    }
+
     /** After the Owner or an Admin switched a module, so the bar follows at once. */
     fun showModules(modules: CommunityModules) {
         preferences.edit { putString(KEY_MODULES, json.encodeToString(modules)) }

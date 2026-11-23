@@ -146,7 +146,7 @@ internal fun RolePickerDialog(member: Member, roles: List<Role>, myRole: Role, o
     val choices = roles.filter { !it.owner && it.rank < myRole.rank }
     var picked by remember { mutableStateOf(member.role.id) }
     val submit = rememberSubmit { onPick(choices.first { it.id == picked }) }
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Rola: ${member.name}") },
         text = {
@@ -160,7 +160,7 @@ internal fun RolePickerDialog(member: Member, roles: List<Role>, myRole: Role, o
                         Text(role.name, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
-                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                submit.error?.let { pl.ambif.ambify.ui.components.FieldError(it) }
             }
         },
         confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy && picked != member.role.id) { Text("Zapisz") } },
@@ -219,7 +219,7 @@ internal fun ChangePasswordDialog(onDismiss: () -> Unit, onSave: suspend (Change
         checkPasswords(new, repeat)
         onSave(ChangePasswordRequest(current, new))
     }
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Zmień hasło") },
         text = {
@@ -227,7 +227,7 @@ internal fun ChangePasswordDialog(onDismiss: () -> Unit, onSave: suspend (Change
                 PasswordInput("Obecne hasło", current) { current = it }
                 PasswordInput("Nowe hasło (min. 8 znaków)", new) { new = it }
                 PasswordInput("Powtórz nowe hasło", repeat) { repeat = it }
-                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                submit.error?.let { pl.ambif.ambify.ui.components.FieldError(it) }
             }
         },
         confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy) { Text("Zapisz") } },
@@ -243,7 +243,7 @@ internal fun EditProfileDialog(me: Me, onDismiss: () -> Unit, onSave: suspend (P
     var password by rememberSaveable { mutableStateOf("") }
     val emailChanged = email.trim().lowercase() != me.email
     val submit = rememberSubmit { onSave(ProfileUpdate(name, email, password.ifEmpty { null })) }
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Zmień dane") },
         text = {
@@ -268,7 +268,7 @@ internal fun EditProfileDialog(me: Me, onDismiss: () -> Unit, onSave: suspend (P
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                submit.error?.let { pl.ambif.ambify.ui.components.FieldError(it) }
             }
         },
         confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy) { Text("Zapisz") } },
@@ -278,7 +278,7 @@ internal fun EditProfileDialog(me: Me, onDismiss: () -> Unit, onSave: suspend (P
 
 @Composable
 internal fun CodeDialog(dialog: AccountDialog.Code, onShare: (() -> Unit)?, onDismiss: () -> Unit) {
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(dialog.title) },
         text = {
@@ -304,7 +304,7 @@ internal fun CodeDialog(dialog: AccountDialog.Code, onShare: (() -> Unit)?, onDi
 internal fun InputDialog(dialog: AccountDialog.Input, onDismiss: () -> Unit) {
     var value by rememberSaveable { mutableStateOf("") }
     val submit = rememberSubmit { dialog.onSave(value) }
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(dialog.title) },
         text = {
@@ -321,7 +321,7 @@ internal fun InputDialog(dialog: AccountDialog.Input, onDismiss: () -> Unit) {
                         keyboardType = if (dialog.label.contains("e-mail", ignoreCase = true)) KeyboardType.Email else KeyboardType.Text,
                     ),
                 )
-                submit.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                submit.error?.let { pl.ambif.ambify.ui.components.FieldError(it) }
             }
         },
         confirmButton = { TextButton(onClick = submit.run, enabled = !submit.busy) { Text(dialog.action) } },
@@ -331,7 +331,7 @@ internal fun InputDialog(dialog: AccountDialog.Input, onDismiss: () -> Unit) {
 
 @Composable
 internal fun ConfirmDialog(dialog: AccountDialog.Confirm, onDismiss: () -> Unit) {
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(dialog.question) },
         confirmButton = {

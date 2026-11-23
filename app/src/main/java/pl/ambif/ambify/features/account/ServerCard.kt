@@ -102,7 +102,7 @@ fun ServerCard(status: ServerStatus, onCheckConnection: () -> Unit) {
 
 @Composable
 fun DiagnosticsDialog(state: DiagnosticsState, onDismiss: () -> Unit) {
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Zamknij") }

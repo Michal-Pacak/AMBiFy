@@ -24,6 +24,9 @@ import pl.ambif.ambify.shared.ApiHeaders
 import pl.ambif.ambify.shared.AuthPaths
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.CreateCommunityRequest
+import pl.ambif.ambify.shared.DeleteCommunityRequest
+import pl.ambif.ambify.shared.OwnerTransferAnswer
+import pl.ambif.ambify.shared.OwnerTransferRequest
 import pl.ambif.ambify.shared.EmailRequest
 import pl.ambif.ambify.shared.GrantRequest
 import pl.ambif.ambify.shared.JoinRequest
@@ -108,6 +111,22 @@ fun Route.accountRoutes(service: AccountService) {
         get(AccountPaths.FAMILY) { call.respond(service.family(call.session())) }
         put(AccountPaths.FAMILY) {
             service.renameCommunity(call.session(), call.receive<CreateCommunityRequest>().name)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(AccountPaths.OWNER_TRANSFER) {
+            service.requestOwnerTransfer(call.session(), call.receive<OwnerTransferRequest>())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        delete(AccountPaths.OWNER_TRANSFER) {
+            service.cancelOwnerTransfer(call.session())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(AccountPaths.OWNER_TRANSFER_ANSWER) {
+            service.answerOwnerTransfer(call.session(), call.receive<OwnerTransferAnswer>())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        delete(AccountPaths.COMMUNITY) {
+            service.deleteCommunity(call.session(), DeleteCommunityRequest(call.request.queryParameters["name"].orEmpty()))
             call.respond(HttpStatusCode.NoContent)
         }
         post(AccountPaths.LEAVE) {

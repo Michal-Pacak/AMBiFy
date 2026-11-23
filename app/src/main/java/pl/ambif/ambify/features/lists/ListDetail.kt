@@ -1,6 +1,9 @@
 package pl.ambif.ambify.features.lists
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -149,10 +152,16 @@ internal fun ListDetail(
         return
     }
     val level = ui.level(list)
+    val marked = ui.prefs.marked
+    // Board 27: marking belongs to this list only; "Wstecz" ends it first.
+    LaunchedEffect(list.id) { marked.clear() }
+    BackHandler(enabled = marked.isNotEmpty()) { marked.clear() }
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (marked.isNotEmpty()) 120.dp else 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        if (marked.isNotEmpty()) MarkingHeader(marked.size) { marked.clear() } else
         // The buttons in one row, the list's name and who sees it under them on the whole width (Michał, 22.11).
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -178,6 +187,76 @@ internal fun ListDetail(
             ListType.TASKS -> Tasks(detail)
             ListType.DEADLINES -> Deadlines(detail)
         }
+    }
+    if (marked.isNotEmpty()) MarkingBar(detail, Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/** Board 27: instead of the list's title while items are marked. */
+@Composable
+private fun MarkingHeader(count: Int, onEnd: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).clip(RoundedCornerShape(16.dp)).background(Luxury.GoldBase.copy(alpha = 0.12f)).padding(end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onEnd) { Icon(AppIcons.Close, contentDescription = "Zakończ zaznaczanie", tint = Luxury.GoldText) }
+        Text("Zaznaczone: $count", fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text("stuknij, żeby dodać\nlub odjąć", fontSize = 11.sp, color = Muted, textAlign = TextAlign.End)
+    }
+}
+
+/** Board 27: what to do with the marked items — into a group, check them, delete them. */
+@Composable
+private fun MarkingBar(d: Detail, modifier: Modifier) {
+    val ui = d.ui
+    val list = d.list
+    val items = ui.prefs.marked.mapNotNull { ui.data.item(it) }
+    Row(
+        modifier = modifier.fillMaxWidth().background(Color(0xFF1B1B1F)).drawBehind {
+            drawLine(Luxury.GoldBase.copy(alpha = 0.35f), Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
+        }.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (list.type != ListType.DEADLINES) {
+            BarAction("Do grupy", AppIcons.GroupAdd, gold = true, modifier = Modifier.weight(1f)) {
+                when {
+                    !ui.subItems -> d.onInfo(MessageKind.INFO, "Grupy są w pakiecie premium", "Zaznaczone możesz teraz odhaczyć albo usunąć.")
+                    items.any { !ui.canEdit(list, it) } -> d.onInfo(MessageKind.INFO, "Nie wszystkie są Twoje", "Cudze pozycje przenosi ktoś z dostępem „edytuje i usuwa”. Odznacz je.")
+                    else -> d.onDialog(ListDialog.ToGroup(list, items.map { it.id }))
+                }
+            }
+        }
+        BarAction(if (list.type == ListType.SHOPPING) "Odhacz" else "Zrobione", AppIcons.Check, modifier = Modifier.weight(1f)) {
+            val open = items.filter { !it.checked && ui.canCheck(list, it) }
+            d.lists.checkAll(open)
+            ui.prefs.marked.clear()
+            d.onInfo(MessageKind.SUCCESS, "Odhaczono", countWord(open.size, list) + ".")
+        }
+        BarAction("Usuń", AppIcons.Trash, danger = true, modifier = Modifier.weight(1f)) {
+            if (items.any { !ui.canEdit(list, it) }) {
+                d.onInfo(MessageKind.INFO, "Nie wszystkie są Twoje", "Cudze pozycje usuwa ktoś z dostępem „edytuje i usuwa”. Odznacz je.")
+            } else d.onDialog(ListDialog.DeleteMany(list, items.map { it.id }))
+        }
+    }
+}
+
+@Composable
+private fun BarAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, gold: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    val color = when {
+        gold -> Luxury.Surface
+        danger -> MessageKind.ERROR.color
+        else -> Luxury.Text
+    }
+    Column(
+        modifier = modifier.heightIn(min = 56.dp).clip(shape)
+            .then(if (gold) Modifier.background(Luxury.GoldFill) else Modifier.border(1.dp, if (danger) MessageKind.ERROR.color.copy(alpha = 0.6f) else Outline, shape))
+            .clickable(role = Role.Button, onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+    ) {
+        Icon(icon, contentDescription = null, tint = if (gold) Luxury.Surface else if (danger) color else Luxury.GoldText, modifier = Modifier.size(20.dp))
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = color)
     }
 }
 
@@ -252,7 +331,7 @@ private fun Things(d: Detail) {
         addOrAsk(ui, list, d.lists, values, false, d.onDialog) { title, info -> d.onInfo(MessageKind.SUCCESS, title, info) }
         draft = ""
     }
-    if (ui.canAdd(list)) {
+    if (ui.canAdd(list) && ui.prefs.marked.isEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = draft,
@@ -535,7 +614,7 @@ internal fun nameText(values: ItemValues, checked: Boolean = false, suffix: Stri
  * A row: the check box, the name (opens the item), [meta] under it, [trailing] on the right, and the marks:
  * "PILNE", "Konflikt" (opens the decision) right of a short name, under a long one; "czeka na wysłanie" while not sent.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ItemRow(
     d: Detail,
@@ -556,8 +635,14 @@ private fun ItemRow(
     val subOpen = ui.prefs.subOpen(item.id)
     val access = ui.whoSeesItem(list, item)
     // ⋮ (board 16): sub-items, details, own access — with premium "Podlisty", on items (not sub-items).
-    val menu = item.parentId == null && ui.subItems && (ui.canAddTo(list, item) || ui.manageable(list))
+    val marking = ui.prefs.marked.isNotEmpty()
+    // Board 27: a group itself is not marked (it does not go into another one).
+    val markable = item.parentId == null && subs.isEmpty() && !item.pending
+    val isMarked = item.id in ui.prefs.marked
+    val toggleMark = { if (isMarked) ui.prefs.marked.remove(item.id) else ui.prefs.marked.add(item.id) }
+    val menu = !marking && item.parentId == null && ui.subItems && (ui.canAddTo(list, item) || ui.manageable(list))
     val check = @Composable {
+        if (marking) MarkCircle(isMarked, markable, item.values.name) { toggleMark() } else
         CheckBox(
             checked = item.checked, square = square, enabled = !item.pending && ui.canCheck(list, item),
             label = (if (item.checked) "Cofnij: " else if (list.type == ListType.SHOPPING) "Odhacz: " else "Zrobione: ") + item.values.name,
@@ -583,15 +668,31 @@ private fun ItemRow(
     @Composable
     fun row(stacked: Boolean) {
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).alpha(if (item.checked) 0.55f else 1f),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                .then(if (isMarked) Modifier.clip(RoundedCornerShape(12.dp)).background(Luxury.GoldBase.copy(alpha = 0.14f)) else Modifier)
+                .alpha(if (marking && !markable) 0.45f else if (item.checked) 0.55f else 1f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (!checkAtEnd) check()
+            if (!checkAtEnd || marking) check()
             Column(
                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
-                    .clickable(onClickLabel = if (subs.isEmpty()) "Szczegóły" else if (subOpen) "Zwiń" else "Rozwiń") {
-                        if (subs.isEmpty()) d.onDialog(ListDialog.Item(list, item)) else ui.prefs.setSubOpen(item.id, !subOpen)
+                    .combinedClickable(
+                        onClickLabel = when {
+                            marking -> if (isMarked) "Odznacz" else "Zaznacz"
+                            subs.isEmpty() -> "Szczegóły"
+                            subOpen -> "Zwiń"
+                            else -> "Rozwiń"
+                        },
+                        // Board 27: holding an item starts marking (several into a group, checked or deleted at once).
+                        onLongClickLabel = if (!marking && markable) "Zaznacz kilka" else null,
+                        onLongClick = if (!marking && markable) ({ ui.prefs.marked.add(item.id) }) else null,
+                    ) {
+                        when {
+                            marking -> if (markable) toggleMark()
+                            subs.isEmpty() -> d.onDialog(ListDialog.Item(list, item))
+                            else -> ui.prefs.setSubOpen(item.id, !subOpen)
+                        }
                     }
                     .padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -600,6 +701,7 @@ private fun ItemRow(
                     Text(nameText(item.values, item.checked), fontSize = 16.sp, modifier = if (longName || stacked) Modifier.fillMaxWidth() else Modifier)
                     if (conflict) MessageChip(MessageKind.ERROR, "Konflikt", icon = AppIcons.Warning) { d.onDialog(ListDialog.Conflict(list, item)) }
                 }
+                if (marking && subs.isNotEmpty()) Text("grupa — nie wkłada się jej do innej", fontSize = 12.sp, color = Muted)
                 if (urgent || meta != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (urgent) MessageChip(MessageKind.WARNING, "PILNE")
@@ -633,7 +735,7 @@ private fun ItemRow(
                 counter()
                 trailing()
             }
-            if (checkAtEnd) check()
+            if (checkAtEnd && !marking) check()
             menuButton()
         }
     }
@@ -668,6 +770,22 @@ private fun SubCounter(subs: List<ListItem>, open: Boolean, name: String, onClic
     }
 }
 
+/** Board 27: the round mark of a marked item (instead of its check box while marking). */
+@Composable
+private fun MarkCircle(on: Boolean, enabled: Boolean, name: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(44.dp).clip(CircleShape)
+            .clickable(enabled = enabled, onClickLabel = if (on) "Odznacz: $name" else "Zaznacz: $name", role = Role.Checkbox, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier.size(24.dp).clip(CircleShape)
+                .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.6.dp, Muted, CircleShape)),
+            contentAlignment = Alignment.Center,
+        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(14.dp)) }
+    }
+}
+
 /**
  * The sub-list of [parent] open in place (boards 16 and 18): the sub-items with a gold line on the left and the
  * field "+ Dodaj podzadanie". New ones need premium "Podlisty"; the ones there stay visible and can be checked.
@@ -677,7 +795,10 @@ private fun SubList(d: Detail, parent: ListItem) {
     val ui = d.ui
     val list = d.list
     if (parent.parentId != null || !ui.prefs.subOpen(parent.id)) return
-    val subs = ui.data.subItemsOf(parent.id)
+    val all = ui.data.subItemsOf(parent.id)
+    // Board 17: the sub-list's own order (or the list's); done ones after the open ones, as on the separate screen.
+    val subs = sorted(ui, list, all.filter { !it.checked }, ui.prefs.subSort(list, parent)).flatMap { it.items } +
+        all.filter { it.checked }.sortedByDescending { it.checkedAt ?: 0 }
     val tasks = list.type == ListType.TASKS
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = 20.dp, bottom = 8.dp)
@@ -687,20 +808,20 @@ private fun SubList(d: Detail, parent: ListItem) {
         subs.forEach { sub -> SubRow(d, sub, square = list.type == ListType.SHOPPING) }
         if (subs.isEmpty()) {
             Text(
-                if (tasks) "Wpisz pierwsze podzadanie, np. „Kupić płyn”, „Okna w salonie”." else "Wpisz pierwszą podpozycję.",
+                if (tasks) "Wpisz pierwsze zadanie tej grupy, np. „Kupić płyn”, „Okna w salonie”." else "Wpisz pierwszą rzecz tej grupy.",
                 fontSize = 12.sp, color = Muted, modifier = Modifier.padding(vertical = 8.dp),
             )
         }
         when {
             !ui.canAddTo(list, parent) -> Unit
             ui.subItems -> SubAddField(d, parent)
-            else -> Text("Nowe podzadania — w pakiecie premium „Podlisty”", fontSize = 12.sp, color = Faint, modifier = Modifier.padding(vertical = 8.dp))
+            else -> Text("Dodawanie do grup — w pakiecie premium „Grupy”", fontSize = 12.sp, color = Faint, modifier = Modifier.padding(vertical = 8.dp))
         }
         if (subs.isNotEmpty()) {
             Text(
                 "Otwórz na osobnym ekranie ›", fontSize = 12.sp, color = Luxury.GoldText,
                 modifier = Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp))
-                    .clickable(onClickLabel = "Otwórz podlistę „${parent.values.name}” na osobnym ekranie", role = Role.Button) { d.onOpenSub(parent.id) }
+                    .clickable(onClickLabel = "Otwórz grupę „${parent.values.name}” na osobnym ekranie", role = Role.Button) { d.onOpenSub(parent.id) }
                     .padding(vertical = 10.dp, horizontal = 2.dp),
             )
         }
@@ -717,7 +838,7 @@ private fun SubScreen(d: Detail, parent: ListItem) {
     val list = d.list
     val subs = ui.data.subItemsOf(parent.id)
     val tasks = list.type == ListType.TASKS
-    val order = sorted(ui, list, subs.filter { !it.checked }, d.sort)
+    val order = sorted(ui, list, subs.filter { !it.checked }, ui.prefs.subSort(list, parent))
     val done = subs.filter { it.checked }.sortedByDescending { it.checkedAt ?: 0 }
     val other = ui.whoSeesItem(list, parent)
     Column(
@@ -730,23 +851,23 @@ private fun SubScreen(d: Detail, parent: ListItem) {
                 Text("${list.name} ›", fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(parent.values.name, fontSize = 22.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
-                    (if (tasks) "podlista" else "podpozycje") + " · ${done.size}/${subs.size}" + (other?.let { " · inny dostęp: $it" } ?: ""),
+                    "grupa · ${done.size}/${subs.size}" + (other?.let { " · inny dostęp: $it" } ?: ""),
                     fontSize = 12.sp, color = Muted, maxLines = 2,
                 )
             }
-            IconButton(onClick = { d.onDialog(ListDialog.SortItems(list)) }) {
-                Icon(AppIcons.Sort, contentDescription = if (tasks) "Sortuj podzadania" else "Sortuj podpozycje", tint = Muted)
+            IconButton(onClick = { d.onDialog(ListDialog.SortSub(list, parent)) }) {
+                Icon(AppIcons.Sort, contentDescription = "Sortuj grupę", tint = Muted)
             }
         }
         SyncBar(ui, onRetry = {})
         when {
             !ui.canAddTo(list, parent) -> MessageBar(MessageKind.INFO, "Tylko do odhaczania", "Nowe dodaje ktoś z dostępem „dodaje”. Dostęp ustala twórca listy.", icon = AppIcons.Lock)
             ui.subItems -> SubAddField(d, parent)
-            else -> MessageBar(MessageKind.INFO, "Pakiet premium „Podlisty”", "Te podzadania zostają i można je odhaczać. Nowe dodasz z pakietem premium.", icon = AppIcons.Lock)
+            else -> MessageBar(MessageKind.INFO, "Pakiet premium „Grupy”", "To, co jest w grupie, zostaje i można to odhaczać. Nowe dodasz z pakietem premium.", icon = AppIcons.Lock)
         }
         LuxuryCard(contentPadding = CardPadding, spacing = 0.dp) {
-            LuxurySectionTitle((if (tasks) "Podzadania" else "Podpozycje") + " · ${done.size}/${subs.size}")
-            if (subs.isEmpty()) EmptyLine(if (tasks) "Wpisz pierwsze podzadanie, np. „Kupić płyn”." else "Wpisz pierwszą podpozycję.")
+            LuxurySectionTitle("W grupie · ${done.size}/${subs.size}")
+            if (subs.isEmpty()) EmptyLine(if (tasks) "Wpisz pierwsze zadanie tej grupy, np. „Kupić płyn”." else "Wpisz pierwszą rzecz tej grupy.")
             order.forEach { group ->
                 group.title?.let { Text(it, fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 8.dp)) }
                 group.items.forEach { sub -> SubRow(d, sub, square = list.type == ListType.SHOPPING) }
@@ -754,7 +875,7 @@ private fun SubScreen(d: Detail, parent: ListItem) {
             done.forEach { sub -> SubRow(d, sub, square = list.type == ListType.SHOPPING) }
         }
         Text(
-            "Gdy odhaczysz ostatnie ${if (tasks) "podzadanie" else "podpozycję"}, zapytamy, czy odhaczyć też „${parent.values.name}” na liście.",
+            "Gdy odhaczysz ${if (tasks) "ostatnie zadanie" else "ostatnią rzecz"} w grupie, zapytamy, czy odhaczyć też „${parent.values.name}” na liście.",
             fontSize = 12.sp, color = Muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -797,7 +918,7 @@ private fun SubAddField(d: Detail, parent: ListItem) {
     val list = d.list
     var draft by rememberSaveable(parent.id) { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    val hint = if (list.type == ListType.TASKS) "+ Dodaj podzadanie" else "+ Dodaj do „${parent.values.name.take(24)}”"
+    val hint = "+ Dodaj do grupy"
     fun add() {
         val text = draft.trim()
         if (text.isEmpty()) return

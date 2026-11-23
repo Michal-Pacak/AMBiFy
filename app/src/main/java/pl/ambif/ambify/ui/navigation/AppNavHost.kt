@@ -193,6 +193,7 @@ fun AppNavHost(
                     organizationName = me?.familyName ?: "",
                     userName = me?.name ?: "",
                     onOpenModule = { module -> navController.navigateToBottomDestination(module.route) },
+                    onOpenCommunities = { navController.navigate(AppDestination.SettingsCommunities.route) },
                 )
             }
 

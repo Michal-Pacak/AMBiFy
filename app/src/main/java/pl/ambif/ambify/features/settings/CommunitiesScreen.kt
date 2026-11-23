@@ -40,7 +40,9 @@ import pl.ambif.ambify.core.session.SessionState
 import pl.ambif.ambify.features.account.AccountDialog
 import pl.ambif.ambify.features.account.ButtonsRow
 import pl.ambif.ambify.features.account.ConfirmDialog
+import pl.ambif.ambify.features.account.HandOverDialog
 import pl.ambif.ambify.features.account.InputDialog
+import pl.ambif.ambify.features.account.PendingTransfer
 import pl.ambif.ambify.features.account.label
 import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.CommunitySummary
@@ -73,7 +75,8 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
     val selected = me.communities.firstOrNull { it.id == selectedId }
     var dialog by remember { mutableStateOf<AccountDialog?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    var ownerCannotLeave by remember { mutableStateOf(false) }
+    // Board 16: the Owner hands the community over (true: and leaves it).
+    var handOver by remember { mutableStateOf<Pair<CommunitySummary, Boolean>?>(null) }
 
     fun act(done: String?, block: suspend () -> Unit) {
         scope.launch {
@@ -102,6 +105,9 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                     }
                     LuxuryOpenButton("Pokaż akcje: ${community.name}", onClick = { selectedId = community.id })
                 }
+            }
+            me.transfers.firstOrNull { it.communityId == community.id && !it.forMe }?.let { transfer ->
+                PendingTransfer(transfer) { _, title, text -> notice = listOf(title, text).filter { it.isNotBlank() }.joinToString(". ") }
             }
         }
         if (me.communities.isEmpty()) {
@@ -168,6 +174,10 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                 selectedId = null
                 act("Bieżąca społeczność: ${community.name}.") { session.switchCommunity(community.id) }
             },
+            onHandOver = {
+                selectedId = null
+                handOver = community to false
+            },
             onRename = {
                 selectedId = null
                 dialog = AccountDialog.Input(
@@ -186,7 +196,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
             onLeave = {
                 selectedId = null
                 if (community.role.owner) {
-                    ownerCannotLeave = true
+                    handOver = community to true
                     return@CommunityPopup
                 }
                 dialog = AccountDialog.Confirm("Opuścić społeczność ${community.name}?", "Opuść") {
@@ -196,13 +206,8 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
         )
     }
 
-    if (ownerCannotLeave) {
-        AlertDialog(
-            onDismissRequest = { ownerCannotLeave = false },
-            title = { Text("Owner nie może opuścić społeczności") },
-            text = { Text("Przekazanie roli Ownera innej osobie jest w planach.") },
-            confirmButton = { TextButton(onClick = { ownerCannotLeave = false }) { Text("OK") } },
-        )
+    handOver?.let { (community, leave) ->
+        HandOverDialog(community, leave, onDismiss = { handOver = null }, outcome = { _, title, text -> notice = listOf(title, text).filter { it.isNotBlank() }.joinToString(". ") })
     }
 
     when (val current = dialog) {
@@ -224,6 +229,7 @@ private fun CommunityPopup(
     onGoogle: () -> Unit,
     onMakeCurrent: () -> Unit,
     onRename: () -> Unit,
+    onHandOver: () -> Unit,
     onLeave: () -> Unit,
 ) {
     val owner = community.role.owner
@@ -270,7 +276,11 @@ private fun CommunityPopup(
                 LuxuryDivider()
                 PopupAction("Ustaw jako bieżącą", color = Luxury.GoldText, arrow = false, onClick = onMakeCurrent)
             }
-            // Also for the Owner: the tap explains why an Owner cannot leave.
+            if (owner) {
+                LuxuryDivider()
+                PopupAction("Przekaż rolę Ownera", detail = "ktoś inny przejmie społeczność, Ty zostaniesz", onClick = onHandOver)
+            }
+            // The Owner first picks who takes the community over (board 16).
             LuxuryDivider()
             PopupAction("Opuść społeczność", color = Color(0xFFFF8A80), arrow = false, onClick = onLeave)
         }

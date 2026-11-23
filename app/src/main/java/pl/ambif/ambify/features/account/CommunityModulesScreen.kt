@@ -111,7 +111,7 @@ fun CommunityModulesScreen(communityId: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             ScreenTitle("Moduły", community?.name ?: "", onBack)
-            notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+            notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
             val current = modules ?: return@Column
 
             for ((title, tier) in listOf("Basic · w cenie" to Tier.BASIC, "Premium" to Tier.PREMIUM)) {

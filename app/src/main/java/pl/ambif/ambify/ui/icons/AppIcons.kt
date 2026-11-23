@@ -313,6 +313,15 @@ object AppIcons {
         }
     }
 
+    /** A folder with a plus ("Do grupy", board 27). */
+    val GroupAdd: ImageVector by lazy {
+        line("GroupAdd") {
+            moveTo(3f, 6f); lineTo(9f, 6f); lineTo(11f, 8f); lineTo(21f, 8f); lineTo(21f, 19f); lineTo(3f, 19f); close()
+            moveTo(12f, 11f); lineTo(12f, 16f)
+            moveTo(9.5f, 13.5f); lineTo(14.5f, 13.5f)
+        }
+    }
+
     /** Two sheets ("Zrób kopię"). */
     val Copy: ImageVector by lazy {
         line("Copy") {
@@ -344,6 +353,73 @@ object AppIcons {
             moveTo(4f, 12f); arcTo(8f, 8f, 0f, true, false, 7f, 5.8f)
             moveTo(4f, 4f); lineTo(4f, 8f); lineTo(8f, 8f)
             moveTo(12f, 8f); lineTo(12f, 12f); lineTo(15f, 14f)
+        }
+    }
+
+    // --- weather (board 13) ---
+
+    private fun androidx.compose.ui.graphics.vector.PathBuilder.cloud(dx: Float = 0f, dy: Float = 0f) {
+        moveTo(7f + dx, 18f + dy)
+        lineTo(17f + dx, 18f + dy)
+        arcTo(3.5f, 3.5f, 0f, false, false, 17f + dx, 11f + dy)
+        arcTo(5f, 5f, 0f, false, false, 7.5f + dx, 12.5f + dy)
+        arcTo(2.8f, 2.8f, 0f, false, false, 7f + dx, 18f + dy)
+        close()
+    }
+
+    private fun androidx.compose.ui.graphics.vector.PathBuilder.sun(cx: Float, cy: Float, r: Float, rays: Float) {
+        moveTo(cx + r, cy)
+        arcTo(r, r, 0f, true, true, cx - r, cy)
+        arcTo(r, r, 0f, true, true, cx + r, cy)
+        for (i in 0 until 8) {
+            val a = Math.PI * i / 4
+            val c = kotlin.math.cos(a).toFloat()
+            val s = kotlin.math.sin(a).toFloat()
+            moveTo(cx + c * (r + 1.8f), cy + s * (r + 1.8f))
+            lineTo(cx + c * (r + 1.8f + rays), cy + s * (r + 1.8f + rays))
+        }
+    }
+
+    val Sun: ImageVector by lazy { line("Sun") { sun(12f, 12f, 4f, 2.2f) } }
+    val Cloud: ImageVector by lazy { line("Cloud") { cloud() } }
+    val SunCloud: ImageVector by lazy {
+        line("SunCloud") {
+            sun(9f, 8.5f, 3f, 1.4f)
+            cloud(1.5f, 2f)
+        }
+    }
+    val Rain: ImageVector by lazy {
+        line("Rain") {
+            cloud(0f, -3f)
+            moveTo(8f, 18f); lineTo(7f, 21f)
+            moveTo(12f, 18f); lineTo(11f, 21f)
+            moveTo(16f, 18f); lineTo(15f, 21f)
+        }
+    }
+    val Snow: ImageVector by lazy {
+        line("Snow") {
+            cloud(0f, -3f)
+            moveTo(8f, 19f); lineTo(8f, 19.1f)
+            moveTo(12f, 20f); lineTo(12f, 20.1f)
+            moveTo(16f, 19f); lineTo(16f, 19.1f)
+        }
+    }
+    val Storm: ImageVector by lazy {
+        line("Storm") {
+            cloud(0f, -3f)
+            moveTo(12.5f, 16f); lineTo(10.5f, 19f); lineTo(13f, 19f); lineTo(11f, 22f)
+        }
+    }
+    val Fog: ImageVector by lazy {
+        line("Fog") {
+            cloud(0f, -4f)
+            moveTo(5f, 18f); lineTo(19f, 18f)
+            moveTo(7f, 21f); lineTo(17f, 21f)
+        }
+    }
+    val DragHandle: ImageVector by lazy {
+        line("DragHandle") {
+            for (y in listOf(6f, 12f, 18f)) for (x in listOf(9f, 15f)) { moveTo(x, y); lineTo(x, y + 0.1f) }
         }
     }
 

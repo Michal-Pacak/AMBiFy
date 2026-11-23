@@ -41,6 +41,8 @@ import pl.ambif.ambify.shared.Invitation
 import pl.ambif.ambify.shared.JoinRequest
 import pl.ambif.ambify.shared.LoginRequest
 import pl.ambif.ambify.shared.Me
+import pl.ambif.ambify.shared.OwnerTransferAnswer
+import pl.ambif.ambify.shared.OwnerTransferRequest
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ModuleOrder
 import pl.ambif.ambify.shared.ModulePaths
@@ -277,5 +279,55 @@ class CommunitiesTest {
         // Roles are the community's own since V005.
         service.setRole(UserSession("u1", "s1"), "u2", family.roles.single { it.name == "User" }.id)
         assertEquals("User", service.me(UserSession("u2", "s1")).role?.name)
+    }
+
+    @Test
+    fun ownerHandsTheCommunityOverOnlyWhenTheOtherAccepts() = app {
+        val michal = client.michal()
+        val ania = client.newAccount("ania@pacak.waw.pl", client.invitation(michal))
+        val aniaId = client.me(ania).id
+        val community = client.me(michal).communityId!!
+
+        val notOwner = client.send("POST", AccountPaths.OWNER_TRANSFER, OwnerTransferRequest(client.me(michal).id, true), ania.accessToken)
+        assertEquals(HttpStatusCode.Forbidden, notOwner.status)
+        client.send("POST", AccountPaths.OWNER_TRANSFER, OwnerTransferRequest(aniaId, leave = true), michal.accessToken)
+        // Until Ania answers nothing changes; both see the request.
+        assertTrue(client.me(michal).role!!.owner)
+        assertEquals(listOf(false), client.me(michal).transfers.map { it.forMe })
+        assertEquals(listOf(true), client.me(ania).transfers.map { it.forMe })
+
+        // She declines: Michał sees it, she does not; he asks again, she accepts and he is gone.
+        client.send("POST", AccountPaths.OWNER_TRANSFER_ANSWER, OwnerTransferAnswer(false), ania.accessToken, community)
+        assertEquals(listOf(true), client.me(michal).transfers.map { it.declined })
+        assertTrue(client.me(ania).transfers.isEmpty())
+        val again = client.send("POST", AccountPaths.OWNER_TRANSFER_ANSWER, OwnerTransferAnswer(true), ania.accessToken, community)
+        assertEquals(HttpStatusCode.NotFound, again.status)
+        client.send("POST", AccountPaths.OWNER_TRANSFER, OwnerTransferRequest(aniaId, leave = true), michal.accessToken)
+        client.send("POST", AccountPaths.OWNER_TRANSFER_ANSWER, OwnerTransferAnswer(true), ania.accessToken, community)
+
+        assertTrue(client.me(ania, community).role!!.owner)
+        assertTrue(client.me(michal).communities.none { it.id == community })
+        assertTrue(client.me(ania).transfers.isEmpty())
+    }
+
+    @Test
+    fun ownerWhoStaysGetsTheHighestOtherRoleAndAloneMayRemoveTheCommunity() = app {
+        val michal = client.michal()
+        val ania = client.newAccount("ania@pacak.waw.pl", client.invitation(michal))
+        val community = client.me(michal).communityId!!
+
+        val notAlone = client.send<Unit>("DELETE", AccountPaths.COMMUNITY + "?name=Pacakowie", token = michal.accessToken)
+        assertEquals("not_alone", notAlone.body<ApiError>().code)
+        client.send("POST", AccountPaths.OWNER_TRANSFER, OwnerTransferRequest(client.me(ania).id, leave = false), michal.accessToken)
+        client.send("POST", AccountPaths.OWNER_TRANSFER_ANSWER, OwnerTransferAnswer(true), ania.accessToken, community)
+        assertEquals("Admin", client.me(michal).role!!.name)
+
+        // Ania, now the Owner, removes Michał... he leaves himself; then she is alone and removes it.
+        client.send<Unit>("POST", AccountPaths.LEAVE, token = michal.accessToken, community = community)
+        val wrongName = client.send<Unit>("DELETE", AccountPaths.COMMUNITY + "?name=Inna", token = ania.accessToken, community = community)
+        assertEquals("name", wrongName.body<ApiError>().code)
+        val removed = client.send<Unit>("DELETE", AccountPaths.COMMUNITY + "?name=Pacakowie", token = ania.accessToken, community = community)
+        assertEquals(HttpStatusCode.NoContent, removed.status)
+        assertTrue(client.me(ania).communities.isEmpty())
     }
 }

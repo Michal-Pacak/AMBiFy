@@ -10,6 +10,8 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -25,11 +27,13 @@ import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.Avatar
 import pl.ambif.ambify.shared.Dashboard
 import pl.ambif.ambify.shared.Dashboards
+import pl.ambif.ambify.shared.WeatherPlace
 import pl.ambif.ambify.shared.AvatarShape
 import pl.ambif.ambify.shared.Avatars
 import pl.ambif.ambify.shared.ChangePasswordRequest
 import pl.ambif.ambify.shared.CommunityModules
 import pl.ambif.ambify.shared.CommunitySummary
+import pl.ambif.ambify.shared.DeleteCommunityRequest
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.Entitlements
 import pl.ambif.ambify.shared.Feature
@@ -39,6 +43,9 @@ import pl.ambif.ambify.shared.LoginRequest
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Member
 import pl.ambif.ambify.shared.Mode
+import pl.ambif.ambify.shared.OwnerTransfer
+import pl.ambif.ambify.shared.OwnerTransferAnswer
+import pl.ambif.ambify.shared.OwnerTransferRequest
 import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.PasswordResetCode
 import pl.ambif.ambify.shared.Permissions
@@ -212,6 +219,7 @@ class AccountService(
             platformAdmin = user[Users.platformAdmin],
             communities = communities,
             permissions = permissions,
+            transfers = transfers(session.userId),
         )
     }
 
@@ -267,6 +275,130 @@ class AccountService(
         }
     }
 
+    // --- handing the community over (board 16) ---
+
+    /** Open requests for [userId] or from them; expired ones go away. Must run in a transaction. */
+    private fun transfers(userId: String): List<OwnerTransfer> {
+        val now = clock()
+        OwnerTransfers.deleteWhere { (expiresAt greater 0L) and (expiresAt lessEq now) }
+        return OwnerTransfers.join(Organizations, JoinType.INNER, OwnerTransfers.organizationId, Organizations.id).selectAll()
+            .where { (OwnerTransfers.fromUser eq userId) or (OwnerTransfers.toUser eq userId) }
+            .mapNotNull { row ->
+                val forMe = row[OwnerTransfers.toUser] == userId
+                val declined = row[OwnerTransfers.expiresAt] == 0L
+                if (forMe && declined) return@mapNotNull null
+                OwnerTransfer(
+                    communityId = row[Organizations.id],
+                    communityName = row[Organizations.name],
+                    fromName = user(row[OwnerTransfers.fromUser])[Users.name],
+                    toId = row[OwnerTransfers.toUser],
+                    toName = user(row[OwnerTransfers.toUser])[Users.name],
+                    leave = row[OwnerTransfers.leaveAfter],
+                    createdAt = row[OwnerTransfers.createdAt],
+                    expiresAt = row[OwnerTransfers.expiresAt],
+                    forMe = forMe,
+                    declined = declined,
+                )
+            }
+    }
+
+    /** The Owner asks a person of the community to take it over (a new request replaces the open one). */
+    fun requestOwnerTransfer(session: UserSession, request: OwnerTransferRequest) {
+        transaction(database) {
+            val membership = membership(session)
+            if (!membership.role.owner) throw forbidden()
+            if (request.toUserId == session.userId) {
+                throw ApiException(HttpStatusCode.BadRequest, "self", "Wskaż kogoś innego niż Ty.")
+            }
+            val member = Memberships.selectAll()
+                .where { (Memberships.userId eq request.toUserId) and (Memberships.organizationId eq membership.organizationId) }
+                .singleOrNull() ?: throw notFound()
+            if (member[Memberships.userId].isEmpty()) throw notFound()
+            val now = clock()
+            OwnerTransfers.deleteWhere { organizationId eq membership.organizationId }
+            OwnerTransfers.insert {
+                it[organizationId] = membership.organizationId
+                it[fromUser] = session.userId
+                it[toUser] = request.toUserId
+                it[leaveAfter] = request.leave
+                it[createdAt] = now
+                it[expiresAt] = now + AccountRules.OWNER_TRANSFER_DAYS * 24 * 60 * 60 * 1000
+            }
+        }
+    }
+
+    /** The Owner withdraws the request (or closes a declined one). */
+    fun cancelOwnerTransfer(session: UserSession) {
+        transaction(database) {
+            val membership = membership(session)
+            if (!membership.role.owner) throw forbidden()
+            OwnerTransfers.deleteWhere { organizationId eq membership.organizationId }
+        }
+    }
+
+    /**
+     * The asked person answers. Yes: they get the Owner's role; the Owner leaves (when asked so) or keeps the highest
+     * other role. No: the Owner sees "declined" and picks someone else.
+     */
+    fun answerOwnerTransfer(session: UserSession, answer: OwnerTransferAnswer) {
+        transaction(database) {
+            val membership = membership(session)
+            val now = clock()
+            val row = OwnerTransfers.selectAll().where { OwnerTransfers.organizationId eq membership.organizationId }.singleOrNull()
+                ?.takeIf { it[OwnerTransfers.toUser] == session.userId && it[OwnerTransfers.expiresAt] > now }
+                ?: throw ApiException(HttpStatusCode.NotFound, "transfer_gone", "Ta prośba wygasła albo została anulowana.")
+            if (!answer.accept) {
+                OwnerTransfers.update({ OwnerTransfers.organizationId eq membership.organizationId }) { it[expiresAt] = 0L }
+                return@transaction
+            }
+            val roles = rolesOf(membership.organizationId)
+            val ownerRole = roles.first { it.owner }
+            val fromUser = row[OwnerTransfers.fromUser]
+            val stillOwner = Memberships.selectAll()
+                .where { (Memberships.userId eq fromUser) and (Memberships.organizationId eq membership.organizationId) }
+                .singleOrNull()?.let { it[Memberships.role] == ownerRole.id } == true
+            if (!stillOwner) {
+                OwnerTransfers.deleteWhere { organizationId eq membership.organizationId }
+                throw ApiException(HttpStatusCode.Conflict, "transfer_gone", "Ta prośba jest już nieaktualna.")
+            }
+            Memberships.update({ (Memberships.userId eq session.userId) and (Memberships.organizationId eq membership.organizationId) }) {
+                it[role] = ownerRole.id
+            }
+            OwnerTransfers.deleteWhere { organizationId eq membership.organizationId }
+            if (row[OwnerTransfers.leaveAfter]) {
+                removeMembership(fromUser, membership.organizationId)
+            } else {
+                val next = roles.first { !it.owner }
+                Memberships.update({ (Memberships.userId eq fromUser) and (Memberships.organizationId eq membership.organizationId) }) {
+                    it[role] = next.id
+                }
+            }
+        }
+    }
+
+    /** The Owner alone in the community removes it with everything in it; the name is typed again to confirm. */
+    fun deleteCommunity(session: UserSession, request: DeleteCommunityRequest) {
+        val organizationId = transaction(database) {
+            val membership = membership(session)
+            if (!membership.role.owner) throw forbidden()
+            val others = Memberships.selectAll()
+                .where { (Memberships.organizationId eq membership.organizationId) and (Memberships.userId neq session.userId) }.count()
+            if (others > 0) {
+                throw ApiException(HttpStatusCode.Conflict, "not_alone", "W społeczności są jeszcze inne osoby — najpierw przekaż ją komuś.")
+            }
+            val name = Organizations.selectAll().where { Organizations.id eq membership.organizationId }.single()[Organizations.name]
+            if (request.name.trim() != name.trim()) {
+                throw ApiException(HttpStatusCode.BadRequest, "name", "Wpisz dokładnie nazwę społeczności.")
+            }
+            Invitations.deleteWhere { Invitations.organizationId eq membership.organizationId }
+            Memberships.deleteWhere { Memberships.organizationId eq membership.organizationId }
+            Organizations.deleteWhere { id eq membership.organizationId }
+            membership.organizationId
+        }
+        // The photos and files of its lists (see ListFileStore); the id comes from the database.
+        if (organizationId.matches(Regex("[A-Za-z0-9-]{1,64}"))) java.io.File("lists-files").resolve(organizationId).deleteRecursively()
+    }
+
     /** Admin or User leaves the current community; the Owner cannot (handing the role over comes later). */
     fun leave(session: UserSession) {
         transaction(database) {
@@ -274,7 +406,7 @@ class AccountService(
             if (membership.role.owner) {
                 throw ApiException(
                     HttpStatusCode.Conflict, "owner_cannot_leave",
-                    "Owner nie może opuścić swojej społeczności. Przekazanie roli Ownera będzie dostępne później.",
+                    "Owner nie może opuścić społeczności — najpierw przekaż ją komuś.",
                 )
             }
             removeMembership(session.userId, membership.organizationId)
@@ -327,7 +459,7 @@ class AccountService(
             name = communityName(organizationId),
             members = membersOf(organizationId)
                 .orderBy(Memberships.joinedAt)
-                .map { Member(it[Users.id], it[Users.name], role(it[Memberships.role]), it.memberAvatar(it[Users.name])) },
+                .map { Member(it[Users.id], it[Users.name], role(it[Memberships.role]), it.memberAvatar(it[Users.name]), it[Memberships.joinedAt]) },
             roles = membership.roles,
             invitations = if (can(membership, Action.INVITE) != Mode.ALLOWED) emptyList() else Invitations.selectAll()
                 .where { (Invitations.organizationId eq organizationId) and Invitations.usedBy.isNull() and (Invitations.expiresAt greater clock()) }
@@ -427,7 +559,7 @@ class AccountService(
             Dashboard(
                 dashboard.widgets
                     .filter { it.id.matches(token) && it.type.matches(token) }
-                    .map { it.copy(people = it.people.filter { p -> p.matches(token) }.distinct().take(20)) },
+                    .map { it.copy(people = it.people.filter { p -> p.matches(token) || WeatherPlace.decode(p) != null }.distinct().take(20)) },
             ),
         )
         transaction(database) {
@@ -776,6 +908,8 @@ class AccountService(
         Invitations.update({ (Invitations.usedBy eq userId) and (Invitations.organizationId eq organizationId) }) { it[usedBy] = null }
         Invitations.deleteWhere { (createdBy eq userId) and (Invitations.organizationId eq organizationId) }
         Memberships.deleteWhere { (Memberships.userId eq userId) and (Memberships.organizationId eq organizationId) }
+        // A request asked of someone who is gone is void.
+        OwnerTransfers.deleteWhere { (OwnerTransfers.organizationId eq organizationId) and (toUser eq userId) }
     }
 
     /**

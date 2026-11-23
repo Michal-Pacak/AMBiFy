@@ -413,7 +413,7 @@ internal fun TimetableSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         ScreenTitle("Ustawienia planu", "", onBack = onBack)
-        notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+        notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
         LuxuryCard {
             LuxurySectionTitle("DZIENNIK SZKOLNY")
             val list = connections
@@ -479,7 +479,7 @@ internal fun TimetableSettingsScreen(
     }
 
     confirm?.let { connection ->
-        androidx.compose.material3.AlertDialog(
+        pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
             onDismissRequest = { confirm = null },
             title = { Text("Odłączyć eduVulcan?") },
             text = { Text("Plan przestanie się aktualizować z tego konta. Uczniowie, ich dotychczasowe lekcje i zajęcia dodatkowe zostają.") },

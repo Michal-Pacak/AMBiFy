@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryOpenButton
-import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** Font sizes every widget uses, so a half and a whole widget read the same in every module. */
 object WidgetText {
@@ -52,13 +51,24 @@ fun WidgetHeader(
     note: (@Composable () -> Unit)? = null,
 ) {
     val tap = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = interactive, onClickLabel = openLabel, role = Role.Button, onClick = onOpen)
-    Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-        LuxurySectionTitle(module, modifier = Modifier.weight(1f).then(tap).padding(vertical = 8.dp))
-        IconButton(onClick = onSettings, enabled = interactive) {
-            Icon(AppIcons.Gear, contentDescription = "Ustawienia widgetu", tint = Luxury.TextMuted, modifier = Modifier.size(20.dp))
+    // A half widget is narrow (S24: ~150 dp): no "open" button there — the title opens — and the title stays on one
+    // line (Michał, 23.11: "Zajęcia" broke into two lines).
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val narrow = maxWidth < 220.dp
+        Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                module.uppercase(), color = Luxury.GoldText, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                letterSpacing = if (narrow) 1.sp else 1.6.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).then(tap).padding(vertical = 8.dp),
+            )
+            IconButton(onClick = onSettings, enabled = interactive) {
+                Icon(AppIcons.Gear, contentDescription = "Ustawienia widgetu", tint = Luxury.TextMuted, modifier = Modifier.size(20.dp))
+            }
+            if (!narrow) {
+                if (interactive) LuxuryOpenButton(openLabel, onOpen) else Box(Modifier.size(44.dp))
+                Spacer(Modifier.width(4.dp))
+            }
         }
-        if (interactive) LuxuryOpenButton(openLabel, onOpen) else Box(Modifier.size(44.dp))
-        Spacer(Modifier.width(4.dp))
     }
     if (name != null || note != null) {
         Column(modifier = Modifier.fillMaxWidth().padding(end = 10.dp).then(tap).padding(bottom = 6.dp)) {

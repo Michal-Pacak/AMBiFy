@@ -160,7 +160,7 @@ internal fun ExtraFormScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ScreenTitle(if (activity == null) "Nowe zajęcia dodatkowe" else "Zmień zajęcia", "", onBack)
-            notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+            notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
 
             LuxuryCard(contentPadding = PaddingValues(14.dp), spacing = 10.dp) {
                 LuxurySectionTitle("DLA KOGO")
@@ -431,7 +431,7 @@ internal fun DateDialog(date: LocalDate, onDismiss: () -> Unit, onPick: (LocalDa
 @Composable
 internal fun TimeDialog(title: String, time: LocalTime, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
     val state = rememberTimePickerState(initialHour = time.hour, initialMinute = time.minute, is24Hour = true)
-    AlertDialog(
+    pl.ambif.ambify.ui.theme.LuxuryAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { TimePicker(state = state) },

@@ -110,3 +110,14 @@ object PasswordResets : Table("password_resets") {
     val expiresAt = long("expires_at")
     override val primaryKey = PrimaryKey(codeHash)
 }
+
+/** V013: the Owner's open request to hand the community over (one per community). */
+object OwnerTransfers : Table("owner_transfers") {
+    val organizationId = text("organization_id")
+    val fromUser = text("from_user")
+    val toUser = text("to_user")
+    val leaveAfter = bool("leave_after")
+    val createdAt = long("created_at")
+    val expiresAt = long("expires_at")
+    override val primaryKey = PrimaryKey(organizationId)
+}

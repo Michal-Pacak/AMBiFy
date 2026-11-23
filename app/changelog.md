@@ -2,6 +2,35 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.5 · 23 listopada 2026
+
+### Pulpit
+- Nowy widget **Pogoda** (dane: Open-Meteo):
+  - do 5 miejsc z własnymi nazwami („Dom”, „Praca”, „Działka”), pod nazwą zostaje miejscowość;
+  - miejsce dodajesz, wpisując miejscowość albo raz biorąc położenie z telefonu;
+  - między miejscami przechodzisz strzałkami albo przesunięciem palca; widget pamięta ostatnie;
+  - teraz: temperatura, odczuwalna, min/max, deszcz i wiatr; przy Średniej najbliższe godziny co 3 h i ostrzeżenia (burza, silny wiatr, mróz), przy Dużej także jutro;
+  - prognoza zostaje w telefonie, więc bez internetu widać ostatnią.
+- Nowe widgety Planu lekcji:
+  - **Zajęcia dodatkowe** — dziś i najbliższe dni z zajęciami wybranych dzieci, z godziną i miejscem;
+  - **Jutro w szkole** — start, koniec, liczba lekcji, zmiany w planie i zajęcia po szkole.
+- W ustawieniach każdego widgetu jest podgląd; przy „Pół szerokości” ma prawdziwą szerokość połówki Pulpitu. Gdy na pół szerokości wysokość nic nie zmienia (Pogoda, Zajęcia), jej wybór jest wyłączony.
+- Widgety na pół szerokości mają zwarty nagłówek: tytuł w jednej linii, moduł otwiera stuknięcie tytułu.
+- „Witaj” i nazwa społeczności rosną z czcionką telefonu tylko do 115% i mają najwyżej 2 linie.
+- Stuknięcie nazwy społeczności otwiera listę Twoich społeczności: przełączanie, „Opuść” przy każdej, szukanie przy ponad 10 i „Zarządzaj społecznościami”.
+- Logo na dolnym pasku już nie znika.
+
+### Społeczności
+- Przekazanie roli Ownera: Owner wybiera następcę, a ten musi się zgodzić (prośba ważna 7 dni, można ją wycofać). Po zgodzie dotychczasowy Owner odchodzi albo zostaje z najwyższą inną rolą.
+- Owner, który jest w społeczności sam, może ją usunąć po wpisaniu jej nazwy.
+
+### Listy
+- Grupy (dawniej „Podlisty”): zaznaczasz pozycje i przenosisz je „Do grupy” albo „Wyjmij z grupy”; grupy mają własne sortowanie.
+- Widget listy pokazuje, co zostało (np. „5 do kupienia”), zamiast liczby odhaczonych.
+
+### Wygląd
+- Okna i komunikaty w starszych ekranach (Plan lekcji, Ustawienia, Konto, Dziennik) w tym samym złotym stylu co Listy.
+
 ## 0.7.4 · 22 listopada 2026
 
 ### Listy

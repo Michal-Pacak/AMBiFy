@@ -45,6 +45,18 @@ class DashboardTest {
     }
 
     @Test
+    fun weatherPlacesAreKeptOtherTextIsNot() {
+        val service = service()
+        val owner = service.session(service.setup(SetupRequest("Pacakowie", "Michał Pacak", "michal@pacak.waw.pl", "sekretne1", "S24")))
+        val home = pl.ambif.ambify.shared.WeatherPlace("Dom", 52.0808, 21.0234, "mazowieckie").encode()
+        service.saveDashboard(owner, Dashboard(listOf(widget("w", 0, people = listOf(home, "place|zle", "<script>")))))
+
+        val kept = service.dashboard(owner).widgets.single().people
+        assertEquals(listOf(home), kept)
+        assertEquals("Dom", pl.ambif.ambify.shared.WeatherPlace.decode(kept.single())?.name)
+    }
+
+    @Test
     fun separateInEachCommunity() {
         val service = service()
         val issued = service.setup(SetupRequest("Pacakowie", "Michał Pacak", "michal@pacak.waw.pl", "sekretne1", "S24"))

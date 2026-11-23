@@ -161,6 +161,13 @@ class ServerApi(
     suspend fun family(): Family = get(AccountPaths.FAMILY)
     suspend fun renameCommunity(name: String) = send("PUT", AccountPaths.FAMILY, json.encodeToString(CreateCommunityRequest(name)), auth = true)
     suspend fun leaveCommunity() = send("POST", AccountPaths.LEAVE, null, auth = true)
+    suspend fun requestOwnerTransfer(toUserId: String, leave: Boolean) =
+        send("POST", AccountPaths.OWNER_TRANSFER, json.encodeToString(pl.ambif.ambify.shared.OwnerTransferRequest(toUserId, leave)), auth = true)
+    suspend fun cancelOwnerTransfer() = send("DELETE", AccountPaths.OWNER_TRANSFER, null, auth = true)
+    suspend fun answerOwnerTransfer(accept: Boolean) =
+        send("POST", AccountPaths.OWNER_TRANSFER_ANSWER, json.encodeToString(pl.ambif.ambify.shared.OwnerTransferAnswer(accept)), auth = true)
+    suspend fun deleteCommunity(name: String) =
+        send("DELETE", AccountPaths.COMMUNITY + "?name=" + java.net.URLEncoder.encode(name, "UTF-8"), null, auth = true)
     suspend fun createInvitation(): Invitation = post(AccountPaths.INVITATIONS, null as String?)
     suspend fun cancelInvitation(code: String) = send("DELETE", "${AccountPaths.INVITATIONS}/$code", null, auth = true)
     suspend fun removeMember(id: String) = send("DELETE", "${AccountPaths.MEMBERS}/$id", null, auth = true)

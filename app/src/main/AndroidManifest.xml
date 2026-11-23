@@ -6,6 +6,8 @@
     <!-- Android 17+: the AMBiFy server is on the home network, which needs the local network permission. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 0.7.5: the weather widget may take the phone's rough position once, when the person asks for it. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Reminders of extra activities: notifications, exact alarms, the alarm over the lock screen, again after a restart. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />

@@ -215,6 +215,7 @@ fun ListsScreen(resetKey: Int = 0) {
             }
         },
         onSaved = { title, text -> bubbles.show(MessageKind.SUCCESS, title, text) },
+        onUndoable = { title, text, undo -> bubbles.show(MessageKind.SUCCESS, title, text, "Cofnij", undo) },
     )
 }
 
@@ -389,6 +390,45 @@ internal class ListsController(
         return id
     }
     fun delete(item: ListItem) = run(ListChangeKind.DELETE_ITEM, item.listId, item.id) { this }
+
+    /** Several changes in this order, then one sync (board 27: a group made and filled, or undone). */
+    private fun batch(block: suspend () -> Unit) {
+        scope.launch {
+            block()
+            repo.sync()
+            sendFiles()
+        }
+    }
+
+    /**
+     * Board 27, "Dodaj do grupy": [items] go into [groupId], or into a new group [newName] made where the first of
+     * them was. Returns what "Cofnij" does: the items back where they were (and the new group gone).
+     */
+    fun toGroup(list: ListInfo, items: List<ListItem>, groupId: String?, newName: String): () -> Unit {
+        val target = groupId ?: UUID.randomUUID().toString()
+        val before = items.map { it.id to it.parentId }
+        batch {
+            if (groupId == null) {
+                val at = items.minOf { it.addedAt } - 1
+                repo.change(ListChangeKind.ADD_ITEM, list.id, target) { copy(values = ItemValues(name = newName.trim().replaceFirstChar { it.uppercase() }), madeAt = at) }
+                ListPrefs.openNow(target)
+            }
+            items.forEach { item -> repo.change(ListChangeKind.MOVE_ITEM, list.id, item.id) { copy(parentId = target) } }
+        }
+        return {
+            batch {
+                before.forEach { (id, parent) -> repo.change(ListChangeKind.MOVE_ITEM, list.id, id) { copy(parentId = parent) } }
+                if (groupId == null) repo.change(ListChangeKind.DELETE_ITEM, list.id, target)
+            }
+        }
+    }
+
+    /** "Wyjmij z grupy": back on the list itself. */
+    fun ungroup(item: ListItem) = run(ListChangeKind.MOVE_ITEM, item.listId, item.id) { copy(parentId = null) }
+
+    /** Board 27, "Odhacz" and "Usuń" for the marked ones. */
+    fun checkAll(items: List<ListItem>) = batch { items.forEach { repo.change(ListChangeKind.CHECK_ITEM, it.listId, it.id) { copy(checked = true) } } }
+    fun deleteAll(items: List<ListItem>) = batch { items.forEach { repo.change(ListChangeKind.DELETE_ITEM, it.listId, it.id) } }
     fun clearChecked(listId: String) = run(ListChangeKind.CLEAR_CHECKED, listId) { this }
     fun uncheckAll(listId: String) = run(ListChangeKind.UNCHECK_ALL, listId) { this }
 
@@ -413,6 +453,12 @@ internal sealed interface ListDialog {
     data class Merge(val list: ListInfo, val first: ListItem, val second: ListItem) : ListDialog
     data object SortLists : ListDialog
     data class SortItems(val list: ListInfo) : ListDialog
+    /** Board 17: sorting of one group ("Jak lista" or its own). */
+    data class SortSub(val list: ListInfo, val parent: ListItem) : ListDialog
+    /** Board 27: the marked items into a group, an old one or a new one. */
+    data class ToGroup(val list: ListInfo, val ids: List<String>) : ListDialog
+    /** Board 27: "Usuń" for the marked items. */
+    data class DeleteMany(val list: ListInfo, val ids: List<String>) : ListDialog
     data class Menu(val list: ListInfo) : ListDialog
     /** Board 20: "Zamknij" in a list: finish, archive, copy, send as text, delete. */
     data class Close(val list: ListInfo) : ListDialog

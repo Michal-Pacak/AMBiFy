@@ -250,12 +250,12 @@ class ListService(
                 if (values.links.isNotEmpty()) requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
                 val parentId = change.parentId
                 if (parentId != null) {
-                    requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Podlisty są w pakiecie premium.")
+                    requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Grupy są w pakiecie premium.")
                     val parent = ListItems.selectAll().where { (ListItems.id eq parentId) and (ListItems.listId eq change.listId) }
                         .singleOrNull() ?: throw notFound()
                     if (parent[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
                     if (parent[ListItems.parentId] != null) {
-                        throw ApiException(HttpStatusCode.BadRequest, "nested", "Podlista nie może mieć własnej podlisty.")
+                        throw ApiException(HttpStatusCode.BadRequest, "nested", "W grupie nie ma kolejnych grup.")
                     }
                     requireItemLevel(membership, list, parent, AccessLevel.ADD)
                 }
@@ -398,7 +398,7 @@ class ListService(
                     .singleOrNull() ?: throw notFound()
                 if (item[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
                 if (item[ListItems.parentId] != null) {
-                    throw ApiException(HttpStatusCode.BadRequest, "sub_item", "Inny dostęp ustawia się dla całej pozycji z podlistą.")
+                    throw ApiException(HttpStatusCode.BadRequest, "sub_item", "Inny dostęp ustawia się dla całej grupy.")
                 }
                 val access = validAccess(membership, change.access)
                 if (access.isNotEmpty()) requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Inny dostęp do zadania jest w pakiecie premium.")
@@ -409,6 +409,31 @@ class ListService(
                 }
                 // The sub-items go to the phones again: they are seen (or not) with their item.
                 ListItems.update({ ListItems.parentId eq item[ListItems.id] }) { it[ListItems.rev] = rev }
+            }
+            ListChangeKind.MOVE_ITEM -> {
+                // Board 27: own items, or anyone's with "edytuje i usuwa"; a group itself never goes into another.
+                val (list, item) = editableItem(membership, change, need = null)
+                val target = change.parentId
+                if (item[ListItems.parentId] == target) return ChangeResult(change.id, ok = true)
+                val children = ListItems.selectAll().where { (ListItems.parentId eq item[ListItems.id]) and (ListItems.deleted eq false) }.count()
+                if (target != null) {
+                    requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Grupy są w pakiecie premium.")
+                    if (children > 0) throw ApiException(HttpStatusCode.BadRequest, "nested", "Grupy nie wkłada się do innej grupy.")
+                    if (target == item[ListItems.id]) throw invalid()
+                    val group = ListItems.selectAll().where { (ListItems.id eq target) and (ListItems.listId eq change.listId) }
+                        .singleOrNull() ?: throw notFound()
+                    if (group[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę grupę.")
+                    if (group[ListItems.parentId] != null) throw ApiException(HttpStatusCode.BadRequest, "nested", "W grupie nie ma kolejnych grup.")
+                    if (toItem(item).access.isNotEmpty()) {
+                        throw ApiException(HttpStatusCode.BadRequest, "own_access", "Ta pozycja ma inny dostęp. Ustaw jej dostęp jak na liście, potem dodaj do grupy.")
+                    }
+                    requireItemLevel(membership, list, group, AccessLevel.ADD)
+                }
+                val rev = nextRev(organizationId)
+                ListItems.update({ ListItems.id eq item[ListItems.id] }) {
+                    it[ListItems.parentId] = target
+                    it[ListItems.rev] = rev
+                }
             }
             ListChangeKind.UNCHECK_ALL -> {
                 editable(membership, change.listId, AccessLevel.CHECK)

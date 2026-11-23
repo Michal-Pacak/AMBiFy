@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
 /** Gold popup (lighter graphite, brighter border) over the screen; a tap outside closes it. Scrolls when tall. */
@@ -75,6 +76,35 @@ fun LuxuryPopup(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 content = footer,
             )
+        }
+    }
+}
+
+/**
+ * The older screens' dialogs in the gold popup (the messages canvas): the same slots as Material's AlertDialog,
+ * so a screen only swaps the name. The buttons stay at the bottom, on the right.
+ */
+@Composable
+fun LuxuryAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+) {
+    LuxuryPopup(onDismiss = onDismissRequest) {
+        title?.let {
+            androidx.compose.material3.ProvideTextStyle(androidx.compose.ui.text.TextStyle(fontSize = 20.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, color = Luxury.Text)) { it() }
+        }
+        text?.let {
+            androidx.compose.material3.ProvideTextStyle(androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = Luxury.Text)) { it() }
+        }
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, androidx.compose.ui.Alignment.End),
+        ) {
+            dismissButton?.invoke()
+            confirmButton()
         }
     }
 }

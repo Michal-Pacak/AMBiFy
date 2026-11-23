@@ -24,6 +24,12 @@ object AccountPaths {
     const val JOIN = "/communities/join"
     /** POST: leave the current community (Admin and User; the Owner cannot). */
     const val LEAVE = "/family/leave"
+    /** POST [OwnerTransferRequest] (the Owner asks someone to take over), DELETE (the Owner cancels it). */
+    const val OWNER_TRANSFER = "/family/owner-transfer"
+    /** POST [OwnerTransferAnswer]: the asked person accepts or declines (the community in the header). */
+    const val OWNER_TRANSFER_ANSWER = "/family/owner-transfer/answer"
+    /** DELETE: the Owner alone in the community removes it with everything in it (board 16 D). */
+    const val COMMUNITY = "/family"
 }
 
 /** Only for the Platform Admin (a flag on the account, above all communities). */
@@ -36,6 +42,7 @@ object PlatformPaths {
 object AccountRules {
     const val MIN_PASSWORD_LENGTH = 8
     const val INVITATION_DAYS = 7L
+    const val OWNER_TRANSFER_DAYS = 7L
     const val SESSION_IDLE_DAYS = 90L
     const val MAX_FAILED_LOGINS = 5
     const val LOCK_MINUTES = 15L
@@ -105,7 +112,35 @@ data class Me(
     val communities: List<CommunitySummary> = emptyList(),
     /** What my role may do in the current community (every action of [Action]). */
     val permissions: Map<Action, Mode> = emptyMap(),
+    /** Open requests to take over a community: asked of me ([OwnerTransfer.forMe]) or sent by me. */
+    val transfers: List<OwnerTransfer> = emptyList(),
 )
+
+/** The Owner of [communityName] asks [toName] to become its Owner; [leave]: the Owner then leaves it. */
+@Serializable
+data class OwnerTransfer(
+    val communityId: String,
+    val communityName: String,
+    val fromName: String,
+    val toId: String,
+    val toName: String,
+    val leave: Boolean,
+    val createdAt: Long,
+    val expiresAt: Long,
+    val forMe: Boolean,
+    /** The asked person declined: the Owner sees it until they pick someone else or close it. */
+    val declined: Boolean = false,
+)
+
+@Serializable
+data class OwnerTransferRequest(val toUserId: String, val leave: Boolean)
+
+@Serializable
+data class OwnerTransferAnswer(val accept: Boolean)
+
+/** The name typed again to confirm removing the community. */
+@Serializable
+data class DeleteCommunityRequest(val name: String)
 
 /** [avatar] is the person's own icon in that community. */
 @Serializable
@@ -143,7 +178,7 @@ data class GrantRequest(val granted: Boolean)
 data class EmailRequest(val email: String)
 
 @Serializable
-data class Member(val id: String, val name: String, val role: Role, val avatar: Avatar? = null)
+data class Member(val id: String, val name: String, val role: Role, val avatar: Avatar? = null, val joinedAt: Long? = null)
 
 @Serializable
 data class Invitation(val code: String, val expiresAt: Long)

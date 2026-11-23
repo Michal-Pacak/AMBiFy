@@ -100,7 +100,7 @@ fun PlatformScreen(resetKey: Int = 0) {
             val selected = communities.firstOrNull { it.id == selectedId }
             if (selected == null) {
                 ScreenTitle("Platform Admin", "Wszystkie społeczności na serwerze", onBack = null)
-                notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+                notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
@@ -135,7 +135,7 @@ fun PlatformScreen(resetKey: Int = 0) {
                 }
             } else {
                 ScreenTitle(selected.name, "Platform Admin", onBack = { selectedId = null })
-                notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+                notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
                 AccountCard("Informacje") {
                     Text(summary(selected), style = MaterialTheme.typography.bodyMedium)
                     Text(

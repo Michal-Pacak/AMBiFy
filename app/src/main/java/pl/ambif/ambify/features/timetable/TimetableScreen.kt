@@ -799,7 +799,7 @@ private fun ExtrasScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             ScreenTitle("Zajęcia dodatkowe", "kto może dodawać — wg uprawnień społeczności", onBack)
-            notice?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodyMedium) }
+            notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
             val current = week ?: return@Column
             current.students.forEachIndexed { index, student ->
                 val activities = current.activities.filter { it.studentId == student.id }.sortedBy { it.name }

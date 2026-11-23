@@ -56,6 +56,26 @@ internal class ListPrefs(context: Context) {
 
     fun setItemSort(list: ListInfo, sort: ItemSort) { prefs.edit().putString("sort_${list.id}", sort.name).apply(); changed() }
 
+    /** Board 17, "Podlisty sortuj tak samo" (on by default): sub-lists without their own choice follow the list. */
+    fun subsSameSort(listId: String): Boolean { tick; return prefs.getBoolean("subs_same_$listId", true) }
+
+    fun setSubsSameSort(listId: String, same: Boolean) { prefs.edit().putBoolean("subs_same_$listId", same).apply(); changed() }
+
+    /** A sub-list's own sorting; null = "Jak lista". */
+    fun ownSubSort(itemId: String): ItemSort? {
+        tick
+        return prefs.getString("sub_sort_$itemId", null)?.let { runCatching { ItemSort.valueOf(it) }.getOrNull() }
+    }
+
+    fun setOwnSubSort(itemId: String, sort: ItemSort?) {
+        prefs.edit().apply { if (sort == null) remove("sub_sort_$itemId") else putString("sub_sort_$itemId", sort.name) }.apply()
+        changed()
+    }
+
+    /** The order a sub-list is shown in: its own, else the list's (when inherited), else as added. */
+    fun subSort(list: ListInfo, parent: ListItem): ItemSort =
+        ownSubSort(parent.id) ?: if (subsSameSort(list.id)) itemSort(list) else ItemSort.ADDED
+
     /** "Zostaw" after the list was done: not asked again until something newer than [addedAt] is added. */
     fun doneAnswered(listId: String): Long = prefs.getLong("done_$listId", 0)
 
@@ -73,11 +93,18 @@ internal class ListPrefs(context: Context) {
 
     /** A kind of lists ("Listy rzeczy") opened in the widget "Aktywne listy" [widgetId]; folded at first. */
     /** Board 16: a sub-list open under its item (kept after the app is closed). */
-    fun subOpen(itemId: String): Boolean { tick; return prefs.getBoolean("sub_open_$itemId", false) }
+    fun subOpen(itemId: String): Boolean {
+        tick
+        if (takeOpened(itemId)) prefs.edit().putBoolean("sub_open_$itemId", true).apply()
+        return prefs.getBoolean("sub_open_$itemId", false)
+    }
 
     fun setSubOpen(itemId: String, open: Boolean) { prefs.edit().putBoolean("sub_open_$itemId", open).apply(); changed() }
 
-    /** The sub-list just made with "Dodaj podzadania": its field gets the keyboard (not kept). */
+    /** Board 27: the items marked on the open list (not kept); none = no marking. */
+    val marked = androidx.compose.runtime.mutableStateListOf<String>()
+
+    /** The group just made with "Zrób z tego grupę": its field gets the keyboard (not kept). */
     var focusSub by androidx.compose.runtime.mutableStateOf<String?>(null)
 
     fun widgetKindOpen(widgetId: String, type: ListType): Boolean { tick; return prefs.getBoolean("widget_kind_${widgetId}_${type.name}", false) }
@@ -97,6 +124,15 @@ internal class ListPrefs(context: Context) {
     }
 
     private fun pairKey(a: String, b: String) = listOf(a, b).sorted().joinToString("|")
+
+    companion object {
+        private val opened = mutableSetOf<String>()
+
+        /** A group made by "Dodaj do grupy" shows open on the list (the prefs are per screen, this is per app). */
+        fun openNow(itemId: String) { synchronized(opened) { opened += itemId } }
+
+        fun takeOpened(itemId: String): Boolean = synchronized(opened) { opened.remove(itemId) }
+    }
 }
 
 /** A group of items under a header ("BARTEK · 2"); [title] null = no header. */

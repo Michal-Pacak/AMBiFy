@@ -222,6 +222,8 @@ enum class ListChangeKind {
     SAVE_UNIT,
     /** 0.7.2: "Inny dostęp do tego zadania" ([ListChange.access]; empty = as on the list). */
     ITEM_ACCESS,
+    /** 0.7.5, groups (board 27): the item goes into the group [ListChange.parentId], or out of its group (null). */
+    MOVE_ITEM,
 }
 
 /**
@@ -243,7 +245,7 @@ data class ListChange(
     val checked: Boolean = false,
     /** Remember the item's unit (and pack size) for this product in the whole community. */
     val rememberUnit: Boolean = false,
-    /** [ListChangeKind.ADD_ITEM]: a sub-item of this item. */
+    /** [ListChangeKind.ADD_ITEM]: a sub-item of this item; [ListChangeKind.MOVE_ITEM]: the group it goes into (null = out). */
     val parentId: String? = null,
     val access: List<ListAccess> = emptyList(),
     val unit: ListUnit? = null,

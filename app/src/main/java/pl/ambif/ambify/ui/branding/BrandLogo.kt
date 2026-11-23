@@ -89,20 +89,31 @@ fun BrandLogo(
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
+                    fitLogo(view)
+                }
+
+                /**
+                 * Sizes the logo to the view. The page can finish before the view has its size (e.g. the bar built
+                 * while the app comes back from the background): then the logo stayed 0 px high and the bar showed
+                 * an empty cradle. So it waits for the first layout with a size and tries again.
+                 */
+                private fun fitLogo(view: WebView, attempt: Int = 0) {
                     view.evaluateJavascript(sizeSvgToViewportScript(cropToLogo, outlined = outlineColor != null), { result ->
-                        if (result == "true") {
-                            if (animated) {
-                                view.evaluateJavascript(animationScript(), null)
-                            }
-                        } else if (animated) {
-                            latestOnAnimationError.value(
-                                "Nie udało się dopasować logo do rozmiaru ekranu.",
-                            )
-                        } else {
-                            Log.e(
-                                "AMBiFyBrandLogo",
-                                "Unable to size static logo to the WebView viewport.",
-                            )
+                        when {
+                            result == "true" -> if (animated) view.evaluateJavascript(animationScript(), null)
+                            result == "\"later\"" && view.width > 0 && view.height > 0 ->
+                                // The view has its size, the page does not see it yet: try again shortly (up to 5 s).
+                                if (attempt < 50) view.postDelayed({ fitLogo(view, attempt + 1) }, 100)
+                            result == "\"later\"" -> view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+                                override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+                                    if (r - l <= 0 || b - t <= 0) return
+                                    v.removeOnLayoutChangeListener(this)
+                                    // After the layout the page sees its new size on the next frame.
+                                    v.post { fitLogo(view, attempt + 1) }
+                                }
+                            })
+                            animated -> latestOnAnimationError.value("Nie udało się dopasować logo do rozmiaru ekranu.")
+                            else -> Log.e("AMBiFyBrandLogo", "Unable to size static logo to the WebView viewport.")
                         }
                     })
                 }
@@ -232,8 +243,12 @@ private fun outlineStyle(color: Color): String {
 private fun sizeSvgToViewportScript(cropToLogo: Boolean, outlined: Boolean): String = """
     (function() {
         const svg = document.querySelector('svg');
-        if (!svg || window.innerWidth <= 0 || window.innerHeight <= 0) {
+        if (!svg) {
             return false;
+        }
+        // No size yet: the app calls again after the view's layout.
+        if (window.innerWidth <= 0 || window.innerHeight <= 0) {
+            return 'later';
         }
         if ($cropToLogo) {
             svg.setAttribute('viewBox', '${if (outlined) OUTLINED_LOGO_BOUNDS_VIEW_BOX else LOGO_BOUNDS_VIEW_BOX}');
