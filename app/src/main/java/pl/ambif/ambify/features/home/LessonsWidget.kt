@@ -60,6 +60,7 @@ import pl.ambif.ambify.shared.Lesson
 import pl.ambif.ambify.shared.Student
 import pl.ambif.ambify.shared.TimetableWeek
 import pl.ambif.ambify.shared.WidgetHeight
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
@@ -185,7 +186,7 @@ private fun PersonSwitch(people: List<Student>, selected: String?, interactive: 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PersonAvatar(person.name, person.avatar, size = 30.dp)
+                PersonAvatar(person.name, person.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
                 if (names) {
                     Text(person.name.substringBefore(' '), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
                 }

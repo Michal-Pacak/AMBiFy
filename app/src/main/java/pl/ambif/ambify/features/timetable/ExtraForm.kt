@@ -68,6 +68,7 @@ import pl.ambif.ambify.shared.Recurrence
 import pl.ambif.ambify.shared.Reminder
 import pl.ambif.ambify.shared.ReminderKind
 import pl.ambif.ambify.shared.Student
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -205,7 +206,7 @@ internal fun ExtraFormScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        PersonAvatar(member?.name ?: "?", member?.avatar, size = 26.dp)
+                        PersonAvatar(member?.name ?: "?", member?.avatar, size = 26.dp, zoom = AvatarZoom.HOLD)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 (if (reminder.kind == ReminderKind.ALARM) "Budzik" else "Powiadomienie") + " · " + (member?.name ?: "?"),
@@ -344,7 +345,7 @@ internal fun PersonChip(name: String, avatar: pl.ambif.ambify.shared.Avatar?, on
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PersonAvatar(name, avatar, size = 26.dp)
+        PersonAvatar(name, avatar, size = 26.dp, zoom = AvatarZoom.HOLD)
         Text(name, fontSize = 15.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
     }
 }

@@ -10,6 +10,7 @@ object Organizations : Table("organizations") {
     val createdAt = long("created_at")
     val createdBy = text("created_by").nullable()
     val paidFounding = bool("paid_founding")
+    val photosBlocked = bool("photos_blocked").default(false)
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -23,6 +24,7 @@ object Users : Table("users") {
     val platformAdmin = bool("platform_admin")
     val foundingCredits = integer("founding_credits")
     val createdAt = long("created_at")
+    val photoId = text("photo_id").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -35,6 +37,8 @@ object Memberships : Table("memberships") {
     val avatarShape = text("avatar_shape").nullable()
     val avatarColor = text("avatar_color").nullable()
     val dashboard = text("dashboard").nullable()
+    val photoHiddenBy = text("photo_hidden_by").nullable()
+    val photoHiddenAt = long("photo_hidden_at").nullable()
     override val primaryKey = PrimaryKey(userId, organizationId)
 }
 

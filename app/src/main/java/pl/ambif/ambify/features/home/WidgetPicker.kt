@@ -46,6 +46,7 @@ import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.WidgetHeight
 import pl.ambif.ambify.shared.WidgetSlot
 import pl.ambif.ambify.shared.WidgetType
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
@@ -287,7 +288,7 @@ internal fun LessonsSettings(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                PersonAvatar(student.name, student.avatar, size = 30.dp)
+                PersonAvatar(student.name, student.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
                 Text(student.name, fontSize = 15.sp, modifier = Modifier.weight(1f))
                 Box(
                     modifier = Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).border(1.6.dp, Luxury.GoldBase, RoundedCornerShape(6.dp)),

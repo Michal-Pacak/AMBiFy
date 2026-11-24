@@ -8,10 +8,12 @@ enum class AvatarShape { CIRCLE, SQUARE, TRIANGLE, STAR, HEXAGON, DIAMOND }
 
 /**
  * A person's icon in one community: initials on a color, in a shape. The server hands it out once and keeps it,
- * so the same person looks the same in every module of that community.
+ * so the same person looks the same in every module of that community. [photo] (0.7.6): the path of the person's
+ * profile photo ([AccountPaths.photo]), shown in a circle instead of the initials; null when they have none, the
+ * community switched photos off or the person's photo is hidden there.
  */
 @Serializable
-data class Avatar(val initials: String, val color: String, val shape: AvatarShape)
+data class Avatar(val initials: String, val color: String, val shape: AvatarShape, val photo: String? = null)
 
 object Avatars {
     /** Member colors, given out least-used first. */

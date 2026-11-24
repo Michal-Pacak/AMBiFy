@@ -82,6 +82,7 @@ import pl.ambif.ambify.shared.ReminderKind
 import pl.ambif.ambify.ui.components.FieldError
 import pl.ambif.ambify.ui.components.MessageBar
 import pl.ambif.ambify.ui.components.MessageKind
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
@@ -583,7 +584,7 @@ private fun AccessRow(
 ) {
     var open by remember { mutableStateOf(false) }
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        avatar?.let { PersonAvatar(it.name, it.avatar, size = 28.dp) }
+        avatar?.let { PersonAvatar(it.name, it.avatar, size = 28.dp, zoom = AvatarZoom.HOLD) }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 15.sp)
             hint?.let { Text(it, fontSize = 11.sp, color = Muted) }
@@ -755,7 +756,7 @@ private fun ItemCard(ui: ListsUi, item: ListItem, meta: String, amount: String) 
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Color(0xFF1B1B1F)).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PersonAvatar(member?.name ?: "?", member?.avatar, size = 30.dp)
+        PersonAvatar(member?.name ?: "?", member?.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
         Column(modifier = Modifier.weight(1f)) {
             Text(nameText(item.values), fontSize = 15.sp)
             Text(meta, fontSize = 12.sp, color = Muted)
@@ -1464,7 +1465,7 @@ private fun FieldRow(label: String, value: String, avatar: pl.ambif.ambify.share
     ) {
         Text(label, fontSize = 13.sp, color = if (error) MessageKind.ERROR.color else Muted, modifier = Modifier.widthIn(min = 92.dp))
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            avatar?.let { PersonAvatar(it.name, it.avatar, size = 28.dp) }
+            avatar?.let { PersonAvatar(it.name, it.avatar, size = 28.dp, zoom = AvatarZoom.HOLD) }
             Text(value, fontSize = 15.sp)
         }
         if (enabled) LuxuryOpenMark(size = 32.dp)

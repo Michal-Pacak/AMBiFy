@@ -80,6 +80,7 @@ import pl.ambif.ambify.shared.Mode
 import pl.ambif.ambify.shared.Recurrences
 import pl.ambif.ambify.shared.Student
 import pl.ambif.ambify.shared.TimetableWeek
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.navigation.SettingsNavIcon
@@ -395,7 +396,7 @@ private fun StudentTabs(students: List<Student>, selected: String?, onPick: (Str
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PersonAvatar(student.name, student.avatar, size = 30.dp)
+                PersonAvatar(student.name, student.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
                 Text(student.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
             }
         }
@@ -740,7 +741,7 @@ private fun LessonPopup(student: Student, lesson: Lesson, onDismiss: () -> Unit)
         LuxuryDivider()
         PopupRow("Uczeń") {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PersonAvatar(student.name, student.avatar, size = 26.dp)
+                PersonAvatar(student.name, student.avatar, size = 26.dp, zoom = AvatarZoom.HOLD)
                 Text(student.name, fontSize = 15.sp)
             }
         }
@@ -806,7 +807,7 @@ private fun ExtrasScreen(
                 val color = student.color(index)
                 LuxuryCard(contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 6.dp), spacing = 4.dp) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PersonAvatar(student.name, student.avatar, size = 28.dp)
+                        PersonAvatar(student.name, student.avatar, size = 28.dp, zoom = AvatarZoom.HOLD)
                         LuxurySectionTitle(student.name.uppercase())
                     }
                     if (activities.isEmpty()) Text("Brak zajęć dodatkowych.", fontSize = 14.sp, color = Luxury.TextMuted, modifier = Modifier.padding(vertical = 8.dp))

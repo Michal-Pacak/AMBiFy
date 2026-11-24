@@ -40,11 +40,13 @@ def main() -> int:
     print(f"Backup written: {target / name}")
     copied, removed = mirror_files(database.parent / "lists-files", target / "lists-files")
     print(f"List photos and files: {copied} copied, {removed} moved to the deleted ones (kept {KEEP} days)")
+    copied, removed = mirror_files(database.parent / "avatars", target / "avatars")
+    print(f"Profile photos: {copied} copied, {removed} moved to the deleted ones (kept {KEEP} days)")
     return 0
 
 
 def mirror_files(source: pathlib.Path, target: pathlib.Path) -> tuple[int, int]:
-    """Photos and files of lists (0.7.3): new ones are copied; one deleted in AMBiFy is moved to
+    """Photos and files of lists (0.7.3) and profile photos (0.7.6): new ones are copied; one deleted in AMBiFy is moved to
     lists-files-deleted/<date of deletion>/ and kept KEEP days, like the database copies, so a restored
     database finds its photos."""
     if not source.is_dir():
@@ -52,7 +54,7 @@ def mirror_files(source: pathlib.Path, target: pathlib.Path) -> tuple[int, int]:
     copied = removed = 0
     present = set()
     for file in source.glob("*/*"):
-        if not file.is_file() or file.parent.name.startswith("."):
+        if not file.is_file() or file.parent.name.startswith(".") or file.name.endswith(".part"):
             continue
         relative = file.relative_to(source)
         present.add(relative)

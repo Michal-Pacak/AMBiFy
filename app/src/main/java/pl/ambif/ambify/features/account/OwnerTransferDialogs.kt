@@ -52,6 +52,7 @@ import pl.ambif.ambify.shared.OwnerTransfer
 import pl.ambif.ambify.ui.components.FieldError
 import pl.ambif.ambify.ui.components.MessageBar
 import pl.ambif.ambify.ui.components.MessageKind
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -155,7 +156,7 @@ private fun PersonOption(person: Member, suggested: Boolean, on: Boolean, onClic
         Box(modifier = Modifier.size(20.dp).clip(CircleShape).border(1.6.dp, Luxury.GoldBase, CircleShape), contentAlignment = Alignment.Center) {
             if (on) Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Luxury.GoldLight))
         }
-        PersonAvatar(person.name, person.avatar, size = 34.dp)
+        PersonAvatar(person.name, person.avatar, size = 34.dp, zoom = AvatarZoom.HOLD)
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(person.name, fontSize = 15.sp)

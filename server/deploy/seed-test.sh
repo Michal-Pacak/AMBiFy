@@ -36,3 +36,25 @@ for i, p in enumerate(pos[:5]):
     c.execute("update lessons set change_kind=?, change_note=? where student_id=? and date=? and position=?", (kind, note, sid, day, p))
 c.commit(); print("zmiany Bartosza:", day, len(pos[:5]))
 PY
+
+# Zdjęcia profilowe (0.7.6): Ola i Ula ze zdjęciem (Ula = Filip na widgetach), Adam (= Bartosz) ze zdjęciem
+# ukrytym przez Olę — na inicjałach i na liście „Ukryte zdjęcia”.
+HERE=$(dirname "$0")
+TMP=$(mktemp -d)
+login() {
+    curl -s -X POST $B/auth/login -H 'Content-Type: application/json' \
+        -d "{\"email\":\"$1@test.ambify\",\"password\":\"test1234\",\"deviceName\":\"seed-test\"}" \
+        | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])'
+}
+photo() {
+    "$HERE/seed-portrait.py" "$3" "$4" "$5" "$6" "$TMP/$1.png"
+    curl -s -o /dev/null -w "%{http_code} zdjęcie $1\n" -X PUT $B/me/photo -H "Authorization: Bearer $2" -H 'Content-Type: image/png' --data-binary "@$TMP/$1.png"
+}
+TO=$(login owner); TA=$(login admin); TU=$(login user)
+photo owner "$TO" 8AA6C2 E2B99A 5D6E86 6B4A2E
+photo user "$TU" E8C27A F0C8A8 9B5C4A 3A2A1E
+photo admin "$TA" 9AD7A4 D9A57E 2F5F4A 1E1E1E
+ADAM=$(curl -s $B/me -H "Authorization: Bearer $TA" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+curl -s -o /dev/null -w "%{http_code} ukryte zdjęcie Adama\n" -X PUT "$B/family/members/$ADAM/photo-hidden" \
+    -H "Authorization: Bearer $TO" -H 'Content-Type: application/json' -d '{"hidden":true}'
+rm -rf "$TMP"

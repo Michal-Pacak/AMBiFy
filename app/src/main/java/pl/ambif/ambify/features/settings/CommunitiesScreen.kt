@@ -48,6 +48,7 @@ import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.CommunitySummary
 import pl.ambif.ambify.shared.Me
 import pl.ambif.ambify.shared.Mode
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -58,7 +59,7 @@ import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** What a popup action opens for one community. */
-enum class CommunitySection { MEMBERS, INVITATIONS, MODULES, PERMISSIONS, REQUESTS }
+enum class CommunitySection { MEMBERS, INVITATIONS, MODULES, PERMISSIONS, REQUESTS, PHOTOS }
 
 /**
  * My communities. A tap opens a popup with my role there and the actions that role allows; they act on that
@@ -94,7 +95,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
         me.communities.forEach { community ->
             LuxuryCard(contentPadding = PaddingValues(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    PersonAvatar(me.name, community.avatar, size = 44.dp)
+                    PersonAvatar(me.name, community.avatar, size = 44.dp, zoom = AvatarZoom.HOLD)
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(community.name, style = MaterialTheme.typography.titleMedium)
                         // The badge sits next to the role: next to a long name it had no room and broke into letters.
@@ -245,7 +246,7 @@ private fun CommunityPopup(
                 .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PersonAvatar(me.name, community.avatar, size = 46.dp)
+                PersonAvatar(me.name, community.avatar, size = 46.dp, zoom = AvatarZoom.HOLD)
                 Column {
                     Text(community.name, style = MaterialTheme.typography.titleLarge)
                     Text("Twoja rola: ${community.role.label()}", style = MaterialTheme.typography.bodyMedium, color = Luxury.GoldText)
@@ -266,6 +267,10 @@ private fun CommunityPopup(
             PopupAction(if (can(Action.SWITCH_MODULES)) "Moduły" else "Moduły (podgląd)") { onOpen(CommunitySection.MODULES) }
             LuxuryDivider()
             PopupAction(if (owner) "Role i uprawnienia" else "Uprawnienia ról (podgląd)") { onOpen(CommunitySection.PERMISSIONS) }
+            if (can(Action.PHOTOS_MODERATE)) {
+                LuxuryDivider()
+                PopupAction("Zdjęcia profilowe", detail = if (community.photosBlocked) "wyłączone — wszyscy na inicjałach" else "włączone") { onOpen(CommunitySection.PHOTOS) }
+            }
             if (can(Action.RENAME_COMMUNITY)) {
                 LuxuryDivider()
                 PopupAction("Zmień nazwę społeczności", onClick = onRename)

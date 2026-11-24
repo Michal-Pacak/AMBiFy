@@ -1,6 +1,17 @@
 package pl.ambif.ambify.server.accounts
 
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.http.content.LocalFileContent
+import io.ktor.server.request.receiveChannel
+import io.ktor.server.response.header
+import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import pl.ambif.ambify.shared.PhotoHidden
+import pl.ambif.ambify.shared.PhotoRules
+import pl.ambif.ambify.shared.PhotosSetting
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
@@ -70,7 +81,7 @@ fun Application.installAccountAuth(service: AccountService, tokens: AccessTokens
     }
 }
 
-fun Route.accountRoutes(service: AccountService) {
+fun Route.accountRoutes(service: AccountService, photos: ProfilePhotos) {
     get(AuthPaths.STATUS) { call.respond(service.status()) }
     post(AuthPaths.SETUP) { call.respond(service.setup(call.receive<SetupRequest>())) }
     post(AuthPaths.REGISTER) { call.respond(service.register(call.receive<RegisterRequest>())) }
@@ -105,6 +116,53 @@ fun Route.accountRoutes(service: AccountService) {
         get(AccountPaths.MODULE_ORDER) { call.respond(ModuleOrder(service.moduleOrder(call.session()))) }
         put(AccountPaths.MODULE_ORDER) {
             service.saveModuleOrder(call.session(), call.receive<ModuleOrder>().routes)
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        put(AccountPaths.MY_PHOTO) {
+            val session = call.session()
+            val upload = photos.incoming()
+            val size = withContext(Dispatchers.IO) {
+                call.receiveChannel().toInputStream().use { input ->
+                    upload.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (total <= PhotoRules.MAX_BYTES) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            total += read
+                        }
+                        total
+                    }
+                }
+            }
+            if (size > PhotoRules.MAX_BYTES) {
+                upload.delete()
+                throw ApiException(HttpStatusCode.PayloadTooLarge, "photo_too_big", "Zdjęcie jest za duże (najwyżej 5 MB).")
+            }
+            withContext(Dispatchers.IO) { photos.set(session, upload) }
+            call.respond(service.me(session))
+        }
+        delete(AccountPaths.MY_PHOTO) {
+            photos.delete(call.session())
+            call.respond(service.me(call.session()))
+        }
+        get("${AccountPaths.PEOPLE}/{userId}/photo/{photoId}") {
+            val file = photos.file(
+                call.session(), call.parameters["userId"]!!, call.parameters["photoId"]!!,
+                small = call.request.queryParameters["size"] == "s",
+            )
+            // A new photo gets a new id, so the old address never changes its picture.
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
+            call.respond(LocalFileContent(file, ContentType.Image.JPEG))
+        }
+        put(AccountPaths.FAMILY_PHOTOS) {
+            photos.setBlocked(call.session(), call.receive<PhotosSetting>().blocked)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        put("${AccountPaths.MEMBERS}/{id}/${AccountPaths.PHOTO_HIDDEN}") {
+            photos.setHidden(call.session(), call.parameters["id"]!!, call.receive<PhotoHidden>().hidden)
             call.respond(HttpStatusCode.NoContent)
         }
 

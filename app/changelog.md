@@ -2,6 +2,12 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.6 · 24 listopada 2026
+
+### Zdjęcia profilowe
+- Dodano opcję zdjęcia profilowego: Ustawienia → Konto → Zdjęcie profilowe. Stuknięcie awatara pokazuje je powiększone.
+- Owner może wyłączyć zdjęcia w społeczności albo ukryć zdjęcie jednej osoby.
+
 ## 0.7.5 · 23 listopada 2026
 
 ### Pulpit

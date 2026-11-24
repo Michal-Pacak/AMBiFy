@@ -27,6 +27,7 @@ enum class Action(
     ASSIGN_ROLES(null, "Nadawanie i odbieranie ról", "tylko rolom niższym od własnej", Mode.ALLOWED, Mode.DENIED, approvable = false),
     REMOVE_MEMBERS(null, "Usuwanie osób, wylogowanie, reset hasła", "tylko osobom z ról niższych", Mode.ALLOWED, Mode.DENIED, approvable = false),
     SWITCH_MODULES(null, "Włączanie i wyłączanie modułów", "posiadanych przez społeczność", Mode.ALLOWED, Mode.DENIED, approvable = false),
+    PHOTOS_MODERATE(null, "Zdjęcia profilowe: wyłączanie i ukrywanie", "w tej społeczności", Mode.ALLOWED, Mode.DENIED, approvable = false),
     RENAME_COMMUNITY(null, "Zmiana nazwy społeczności", "", Mode.DENIED, Mode.DENIED, ownerOnly = true),
     MANAGE_ROLES(null, "Tworzenie i zmiana ról", "nazwy i kolejność ról", Mode.DENIED, Mode.DENIED, ownerOnly = true),
     EDIT_PERMISSIONS(null, "Zmiana tej tabeli uprawnień", "", Mode.DENIED, Mode.DENIED, ownerOnly = true),

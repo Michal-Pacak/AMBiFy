@@ -61,6 +61,7 @@ fun main() {
             AppReleases(File(config.releasesDir)),
             MonitorService(File(config.monitorDir)),
             dataDir.resolve("lists-files"),
+            dataDir.resolve("avatars"),
         )
     }.start(wait = true)
 }
@@ -74,11 +75,14 @@ fun Application.module(
     monitor: MonitorService = MonitorService(File("monitor")),
     /** 0.7.3: photos and files of list items; next to the database, so ambify-backup copies them with it. */
     listFilesDir: File = File("lists-files"),
+    /** 0.7.6: profile photos, next to the database too. */
+    photosDir: File = File("avatars"),
 ) {
     val accounts = AccountService(database, tokens)
     val timetable = TimetableService(database, accounts, vault)
     val listFiles = ListFileStore(listFilesDir)
     val lists = ListService(database, accounts, files = listFiles)
+    val photos = pl.ambif.ambify.server.accounts.ProfilePhotos(database, accounts, photosDir)
     install(ContentNegotiation) {
         json()
     }
@@ -90,7 +94,7 @@ fun Application.module(
     }
     installAccountAuth(accounts, tokens)
     routing {
-        accountRoutes(accounts)
+        accountRoutes(accounts, photos)
         timetableRoutes(timetable)
         listRoutes(lists, listFiles)
         releaseRoutes(releases)

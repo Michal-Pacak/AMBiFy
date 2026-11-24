@@ -18,10 +18,13 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import pl.ambif.ambify.shared.AccountPaths
 import pl.ambif.ambify.shared.AccountRules
+import pl.ambif.ambify.shared.HiddenPhoto
 import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.AuthStatus
 import pl.ambif.ambify.shared.Avatar
@@ -220,6 +223,7 @@ class AccountService(
             communities = communities,
             permissions = permissions,
             transfers = transfers(session.userId),
+            photo = user[Users.photoId]?.let { AccountPaths.photo(session.userId, it) },
         )
     }
 
@@ -235,7 +239,10 @@ class AccountService(
             val avatar = Memberships.selectAll()
                 .where { (Memberships.userId eq userId) and (Memberships.organizationId eq organizationId) }
                 .single().memberAvatar(name)
-            CommunitySummary(organizationId, row[Organizations.name], role(row[Memberships.role]), avatar)
+            CommunitySummary(
+                organizationId, row[Organizations.name], role(row[Memberships.role]), avatar,
+                photosBlocked = row[Organizations.photosBlocked], myPhotoHidden = row[Memberships.photoHiddenBy] != null,
+            )
         }
     }
 
@@ -465,6 +472,13 @@ class AccountService(
                 .where { (Invitations.organizationId eq organizationId) and Invitations.usedBy.isNull() and (Invitations.expiresAt greater clock()) }
                 .orderBy(Invitations.createdAt)
                 .map { Invitation(it[Invitations.code], it[Invitations.expiresAt]) },
+            photosBlocked = Organizations.select(Organizations.photosBlocked).where { Organizations.id eq organizationId }.single()[Organizations.photosBlocked],
+            hiddenPhotos = if (can(membership, Action.PHOTOS_MODERATE) != Mode.ALLOWED) emptyList() else membersOf(organizationId)
+                .filter { it[Memberships.photoHiddenBy] != null }
+                .map { row ->
+                    val by = Users.select(Users.name).where { Users.id eq row[Memberships.photoHiddenBy]!! }.singleOrNull()?.get(Users.name) ?: "?"
+                    HiddenPhoto(row[Users.id], row[Users.name], by, row[Memberships.photoHiddenAt] ?: 0)
+                },
         )
     }
 
@@ -945,7 +959,18 @@ class AccountService(
     internal fun ResultRow.memberAvatar(name: String): Avatar? {
         val shape = this[Memberships.avatarShape] ?: return null
         val color = this[Memberships.avatarColor] ?: return null
-        return Avatar(Avatars.initials(name), color, AvatarShape.valueOf(shape))
+        return Avatar(Avatars.initials(name), color, AvatarShape.valueOf(shape), photoPath(this))
+    }
+
+    /** The person's photo as seen in the membership's community: none when switched off there or hidden. */
+    internal fun photoPath(membership: ResultRow): String? {
+        if (membership[Memberships.photoHiddenBy] != null) return null
+        val userId = membership[Memberships.userId]
+        val organizationId = membership[Memberships.organizationId]
+        val blocked = Organizations.select(Organizations.photosBlocked).where { Organizations.id eq organizationId }.single()[Organizations.photosBlocked]
+        if (blocked) return null
+        val photoId = Users.select(Users.photoId).where { Users.id eq userId }.single()[Users.photoId] ?: return null
+        return AccountPaths.photo(userId, photoId)
     }
 
     private fun validInvitation(code: String): ResultRow {
@@ -1090,7 +1115,7 @@ class AccountService(
             .orderBy(CommunityRoles.rank, SortOrder.DESC)
             .map { it.toRole() }
 
-    private fun role(roleId: String): Role =
+    internal fun role(roleId: String): Role =
         CommunityRoles.selectAll().where { CommunityRoles.id eq roleId }.single().toRole()
 
     private fun lowestRole(organizationId: String): Role = rolesOf(organizationId).last()

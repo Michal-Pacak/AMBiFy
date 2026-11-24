@@ -30,7 +30,35 @@ object AccountPaths {
     const val OWNER_TRANSFER_ANSWER = "/family/owner-transfer/answer"
     /** DELETE: the Owner alone in the community removes it with everything in it (board 16 D). */
     const val COMMUNITY = "/family"
+    /** PUT a JPEG (my profile photo, 0.7.6), DELETE removes it. */
+    const val MY_PHOTO = "/me/photo"
+    /** GET a person's photo: [photo] gives the whole path; `?size=s` the small one. */
+    const val PEOPLE = "/people"
+    /** PUT [PhotosSetting]: photos on or off in the current community ([Action.PHOTOS_MODERATE]). */
+    const val FAMILY_PHOTOS = "/family/photos"
+
+    fun photo(userId: String, photoId: String) = "$PEOPLE/$userId/photo/$photoId"
+
+    /** PUT [PhotoHidden] on `MEMBERS/{id}/photo-hidden`: one person's photo hidden in the current community. */
+    const val PHOTO_HIDDEN = "photo-hidden"
 }
+
+object PhotoRules {
+    /** The phone sends a square of this side; the server keeps it and a small copy of [SMALL_SIDE]. */
+    const val SIDE = 1024
+    const val SMALL_SIDE = 256
+    const val MAX_BYTES = 5L * 1024 * 1024
+}
+
+@Serializable
+data class PhotosSetting(val blocked: Boolean)
+
+@Serializable
+data class PhotoHidden(val hidden: Boolean)
+
+/** Someone whose photo is hidden in the community, for those who may show it again (board 2 A). */
+@Serializable
+data class HiddenPhoto(val memberId: String, val name: String, val byName: String, val at: Long)
 
 /** Only for the Platform Admin (a flag on the account, above all communities). */
 object PlatformPaths {
@@ -114,6 +142,8 @@ data class Me(
     val permissions: Map<Action, Mode> = emptyMap(),
     /** Open requests to take over a community: asked of me ([OwnerTransfer.forMe]) or sent by me. */
     val transfers: List<OwnerTransfer> = emptyList(),
+    /** My profile photo's path (0.7.6), null without one. */
+    val photo: String? = null,
 )
 
 /** The Owner of [communityName] asks [toName] to become its Owner; [leave]: the Owner then leaves it. */
@@ -144,7 +174,16 @@ data class DeleteCommunityRequest(val name: String)
 
 /** [avatar] is the person's own icon in that community. */
 @Serializable
-data class CommunitySummary(val id: String, val name: String, val role: Role, val avatar: Avatar? = null)
+data class CommunitySummary(
+    val id: String,
+    val name: String,
+    val role: Role,
+    val avatar: Avatar? = null,
+    /** Photos switched off there (everyone on initials). */
+    val photosBlocked: Boolean = false,
+    /** My photo hidden there by someone allowed to. */
+    val myPhotoHidden: Boolean = false,
+)
 
 /** New name, and a new e-mail address only together with the current password. */
 @Serializable
@@ -191,6 +230,9 @@ data class Family(
     val roles: List<Role>,
     /** Only those who may invite see pending invitations. */
     val invitations: List<Invitation>,
+    val photosBlocked: Boolean = false,
+    /** Only for those who may switch photos off ([Action.PHOTOS_MODERATE]). */
+    val hiddenPhotos: List<HiddenPhoto> = emptyList(),
 )
 
 @Serializable

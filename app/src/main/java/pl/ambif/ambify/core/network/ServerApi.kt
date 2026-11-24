@@ -159,6 +159,19 @@ class ServerApi(
     suspend fun saveDashboard(dashboard: Dashboard) = send("PUT", DashboardPaths.DASHBOARD, json.encodeToString(dashboard), auth = true)
 
     suspend fun family(): Family = get(AccountPaths.FAMILY)
+
+    /** 0.7.6: my profile photo (a square JPEG); the answer is my profile with its new path. */
+    suspend fun uploadMyPhoto(source: File): Me =
+        json.decodeFromString(transfer("PUT", AccountPaths.MY_PHOTO, emptyMap(), upload = source to "image/jpeg", download = null, onProgress = {}))
+    suspend fun deleteMyPhoto(): Me = json.decodeFromString(send("DELETE", AccountPaths.MY_PHOTO, null, auth = true))
+    /** Saves a person's photo ([path] from their avatar) into [target]; [small]: the 256 px one. */
+    suspend fun downloadPhoto(path: String, small: Boolean, target: File) {
+        transfer("GET", if (small) "$path?size=s" else path, emptyMap(), upload = null, download = target, onProgress = {})
+    }
+    suspend fun setPhotosBlocked(blocked: Boolean) =
+        send("PUT", AccountPaths.FAMILY_PHOTOS, json.encodeToString(pl.ambif.ambify.shared.PhotosSetting(blocked)), auth = true)
+    suspend fun setPhotoHidden(memberId: String, hidden: Boolean) =
+        send("PUT", "${AccountPaths.MEMBERS}/$memberId/${AccountPaths.PHOTO_HIDDEN}", json.encodeToString(pl.ambif.ambify.shared.PhotoHidden(hidden)), auth = true)
     suspend fun renameCommunity(name: String) = send("PUT", AccountPaths.FAMILY, json.encodeToString(CreateCommunityRequest(name)), auth = true)
     suspend fun leaveCommunity() = send("POST", AccountPaths.LEAVE, null, auth = true)
     suspend fun requestOwnerTransfer(toUserId: String, leave: Boolean) =

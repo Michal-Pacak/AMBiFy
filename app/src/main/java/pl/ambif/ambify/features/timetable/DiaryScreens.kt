@@ -70,6 +70,7 @@ import pl.ambif.ambify.shared.DiaryConnection
 import pl.ambif.ambify.shared.Member
 import pl.ambif.ambify.shared.Student
 import pl.ambif.ambify.shared.TimetableWeek
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -250,7 +251,7 @@ internal fun DiaryConnectScreen(members: List<Member>, onBack: () -> Unit, onDon
                 val student = students.firstOrNull { it.id == pupil.studentId }
                 LuxuryCard {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PersonAvatar(pupil.name, student?.avatar, size = 40.dp)
+                        PersonAvatar(pupil.name, student?.avatar, size = 40.dp, zoom = AvatarZoom.HOLD)
                         Column {
                             Text(pupil.name, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                             Text(listOf("klasa ${pupil.clazz}", pupil.school).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 12.sp, color = Luxury.TextMuted)
@@ -454,7 +455,7 @@ internal fun TimetableSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            PersonAvatar(student.name, student.avatar, size = 30.dp)
+                            PersonAvatar(student.name, student.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("${student.name} · ${student.clazz}", fontSize = 15.sp)
                                 Text(member?.let { "konto AMBiFy: ${it.name}" } ?: "bez konta AMBiFy", fontSize = 12.sp, color = Luxury.TextMuted)

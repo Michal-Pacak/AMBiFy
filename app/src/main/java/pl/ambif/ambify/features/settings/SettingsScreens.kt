@@ -58,6 +58,7 @@ import pl.ambif.ambify.features.account.label
 import pl.ambif.ambify.features.account.status
 import pl.ambif.ambify.shared.Device
 import pl.ambif.ambify.shared.Me
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -74,7 +75,7 @@ fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onO
     SettingsLayout(title = "Ustawienia", onBack = null) {
         HubCard(onClick = onOpenAccount, title = "Konto") {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PersonAvatar(me.name, me.myAvatar(), size = 52.dp)
+                PersonAvatar(me.name, me.myAvatar(), size = 52.dp, zoom = AvatarZoom.HOLD)
                 Column(modifier = Modifier.padding(start = 14.dp)) {
                     Text(me.name, style = MaterialTheme.typography.titleMedium)
                     Text(me.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -137,16 +138,17 @@ fun AccountSettingsScreen(onBack: () -> Unit) {
     SettingsLayout(title = "Konto", onBack = onBack, notice = notice) {
         LuxuryCard(contentPadding = PaddingValues(20.dp), spacing = 8.dp) {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PersonAvatar(me.name, me.myAvatar(), size = 84.dp)
+                // My photo here even where a community switched photos off.
+                PersonAvatar(me.name, me.myAvatar()?.copy(photo = me.photo), size = 96.dp)
                 Text(me.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 4.dp))
                 Text(me.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("zdjęcie profilowe — wkrótce", style = MaterialTheme.typography.bodySmall, color = Luxury.Disabled)
             }
             ButtonsRow {
                 FilledTonalButton(onClick = { dialog = AccountDialog.EditProfile }) { Text("Zmień dane") }
                 FilledTonalButton(onClick = { dialog = AccountDialog.ChangePassword }) { Text("Zmień hasło") }
             }
         }
+        AccountCard("Zdjęcie profilowe") { ProfilePhotoPart(me, session) { notice = it } }
         AccountCard("Połączone konta") {
             Row(modifier = Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {

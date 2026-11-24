@@ -46,6 +46,7 @@ import pl.ambif.ambify.shared.Lesson
 import pl.ambif.ambify.shared.Student
 import pl.ambif.ambify.shared.WidgetHeight
 import pl.ambif.ambify.shared.WidgetSlot
+import pl.ambif.ambify.ui.components.AvatarZoom
 import pl.ambif.ambify.ui.components.PersonAvatar
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
@@ -377,7 +378,7 @@ internal fun TimetableWidgetSettings(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                PersonAvatar(student.name, student.avatar, size = 30.dp)
+                PersonAvatar(student.name, student.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
                 Text(student.name, fontSize = 15.sp, modifier = Modifier.weight(1f))
                 Box(Modifier.width(1.dp))
             }

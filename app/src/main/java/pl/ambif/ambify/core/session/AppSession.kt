@@ -63,6 +63,10 @@ class AppSession(context: Context) {
 
     val api = ServerApi(tokens = tokenStore, community = { preferences.getString(KEY_COMMUNITY, null) })
 
+    init {
+        pl.ambif.ambify.ui.components.AvatarImages.init(context.applicationContext, api)
+    }
+
     /** Shown on the "My devices" list, e.g. "Galaxy S24 Ultra". */
     val deviceName: String = Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
         ?.takeIf { it.isNotBlank() } ?: Build.MODEL
@@ -116,6 +120,13 @@ class AppSession(context: Context) {
     }
 
     suspend fun createCommunity(name: String) = switchCommunity(api.createCommunity(name).id)
+
+    /** 0.7.6: my new profile photo ([jpeg]: the cropped square), or none. */
+    suspend fun setMyPhoto(jpeg: java.io.File?) {
+        val me = if (jpeg != null) api.uploadMyPhoto(jpeg) else api.deleteMyPhoto()
+        preferences.edit { putString(KEY_ME, json.encodeToString(me)) }
+        _state.value = SessionState.SignedIn(me)
+    }
 
     suspend fun updateProfile(update: ProfileUpdate) {
         val me = api.updateProfile(update)

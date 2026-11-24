@@ -1,4 +1,1 @@
-Nowy widget Pogoda: kilka miejsc, np. Dom i Działka
-Widgety Zajęcia dodatkowe i Jutro w szkole
-Zmiana społeczności stuknięciem jej nazwy na Pulpicie
-Listy: grupy pozycji, widget pokazuje, co zostało
+Dodano opcję zdjęcia profilowego
