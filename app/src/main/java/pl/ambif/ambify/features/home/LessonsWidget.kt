@@ -81,8 +81,8 @@ data class TimetableData(val weeks: List<TimetableWeek>, val offlineSince: Long?
             ?.extrasOn(student, date).orEmpty()
 }
 
-private val Cancelled = Color(0xFFFF8A80)
-private val ChipBorder = Color(0xFF3A3A40)
+private val Cancelled: androidx.compose.ui.graphics.Color get() = Luxury.Error
+private val ChipBorder: androidx.compose.ui.graphics.Color get() = Luxury.Outline
 
 /**
  * "Lekcje": the coming lessons of one person and, at the bottom, always a time: the end of lessons today, or after
@@ -150,7 +150,7 @@ internal fun LessonsWidget(
                 Spacer(Modifier.height(8.dp))
                 LuxuryDivider()
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(day.footerLabel, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Luxury.TextMuted, modifier = Modifier.weight(1f))
+                    Text(day.footerLabel, fontSize = 10.5.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Luxury.TextMuted, modifier = Modifier.weight(1f))
                     Text(day.footerTime, fontSize = 20.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldLight)
                 }
             }

@@ -67,7 +67,7 @@ import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** Ustawienia from the module bar: Konto, Społeczności and Aplikacja (settings of this phone). */
 @Composable
-fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onOpenApp: () -> Unit) {
+fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onOpenApp: () -> Unit, onOpenLook: () -> Unit) {
     val session = LocalAppSession.current
     val state by session.state.collectAsState()
     val me = (state as? SessionState.SignedIn)?.me ?: return
@@ -86,6 +86,16 @@ fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onO
             Text(me.familyName ?: "Brak społeczności", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Dostępne: ${me.communities.size}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        val themes by session.themes.collectAsState()
+        HubCard(onClick = onOpenLook, title = "Wygląd") {
+            val name = themes?.accountTheme?.let { key -> themeName(themes!!, key) } ?: "jak w społeczności"
+            Text("Mój motyw: $name", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Własne motywy i tapeta — Premium konta",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

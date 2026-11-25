@@ -47,6 +47,7 @@ import pl.ambif.ambify.shared.ModuleId
 import pl.ambif.ambify.shared.ModuleOrder
 import pl.ambif.ambify.shared.ModulePaths
 import pl.ambif.ambify.shared.ModuleSwitch
+import pl.ambif.ambify.shared.PlatformAccount
 import pl.ambif.ambify.shared.PlatformCommunity
 import pl.ambif.ambify.shared.PlatformPaths
 import pl.ambif.ambify.shared.RegisterRequest
@@ -135,6 +136,12 @@ class CommunitiesTest {
         assertEquals(listOf("Pacakowie", "Dziadkowie", "Klasa 3b", "Praca"), list.map { it.name })
         assertEquals(listOf(false, false, true, true), list.map { it.paidFounding })
         assertEquals("Ania", list[1].ownerName)
+
+        // E-mail hints: every account with its communities, only for the Platform Admin.
+        val accounts: List<PlatformAccount> = client.send<Unit>("GET", PlatformPaths.ACCOUNTS, token = michal.accessToken).body()
+        assertEquals(listOf("Dziadkowie", "Klasa 3b"), accounts.single { it.email == "ania@pacak.waw.pl" }.communities)
+        assertEquals(2, accounts.size)
+        assertEquals(HttpStatusCode.Forbidden, client.send<Unit>("GET", PlatformPaths.ACCOUNTS, token = ania.accessToken).status)
     }
 
     @Test

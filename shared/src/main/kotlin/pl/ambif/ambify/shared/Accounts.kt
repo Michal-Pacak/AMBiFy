@@ -65,6 +65,7 @@ object PlatformPaths {
     const val COMMUNITIES = "/platform/communities"
     const val FOUNDING_CREDITS = "/platform/founding-credits"
     const val RESET_CODES = "/platform/reset-codes"
+    const val ACCOUNTS = "/platform/accounts"
 }
 
 object AccountRules {
@@ -194,6 +195,10 @@ data class CreateCommunityRequest(val name: String)
 
 @Serializable
 data class JoinRequest(val code: String)
+
+/** An account on the server, for the Platform Admin's e-mail hints. */
+@Serializable
+data class PlatformAccount(val name: String, val email: String, val communities: List<String> = emptyList())
 
 /** One community on the Platform Admin's list. */
 @Serializable

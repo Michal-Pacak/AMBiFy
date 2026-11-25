@@ -53,7 +53,7 @@ enum class Feature(val module: ModuleId, val label: String) {
  */
 object Entitlements {
     val grantKeys: List<String> =
-        ModuleId.entries.filter { it.tier == Tier.PREMIUM }.map { it.name } + Feature.entries.map { it.name }
+        ModuleId.entries.filter { it.tier == Tier.PREMIUM }.map { it.name } + Feature.entries.map { it.name } + Themes.COMMUNITY_GRANT
 
     fun owned(grants: Set<String>): List<ModuleId> =
         ModuleId.entries.filter { it.tier == Tier.BASIC || it.name in grants }

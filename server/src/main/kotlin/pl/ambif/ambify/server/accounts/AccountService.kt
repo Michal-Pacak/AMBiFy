@@ -24,6 +24,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import pl.ambif.ambify.shared.AccountPaths
 import pl.ambif.ambify.shared.AccountRules
+import pl.ambif.ambify.shared.PlatformAccount
 import pl.ambif.ambify.shared.HiddenPhoto
 import pl.ambif.ambify.shared.Action
 import pl.ambif.ambify.shared.AuthStatus
@@ -823,6 +824,16 @@ class AccountService(
         }
     }
 
+    /** Every account with its communities: the Platform Admin's hints while typing an e-mail. */
+    fun platformAccounts(session: UserSession): List<PlatformAccount> = transaction(database) {
+        requirePlatformAdmin(session)
+        val names = Organizations.selectAll().associate { it[Organizations.id] to it[Organizations.name] }
+        val communities = Memberships.selectAll().groupBy({ it[Memberships.userId] }) { names[it[Memberships.organizationId]] }
+        Users.selectAll().orderBy(Users.name).map { user ->
+            PlatformAccount(user[Users.name], user[Users.email], communities[user[Users.id]].orEmpty().filterNotNull().sorted())
+        }
+    }
+
     /** Grants or takes back a premium module or feature, free of charge. */
     fun setGrant(session: UserSession, organizationId: String, key: String, granted: Boolean) {
         if (key !in Entitlements.grantKeys) {
@@ -1034,7 +1045,7 @@ class AccountService(
     private fun communityName(organizationId: String): String =
         Organizations.selectAll().where { Organizations.id eq organizationId }.single()[Organizations.name]
 
-    private fun grants(organizationId: String): Set<String> =
+    internal fun grants(organizationId: String): Set<String> =
         OrganizationGrants.selectAll().where { OrganizationGrants.organizationId eq organizationId }
             .map { it[OrganizationGrants.grantKey] }.toSet()
 
@@ -1122,7 +1133,7 @@ class AccountService(
 
     private fun ResultRow.toRole() = Role(this[CommunityRoles.id], this[CommunityRoles.name], this[CommunityRoles.rank], this[CommunityRoles.isOwner])
 
-    private fun overrides(organizationId: String): Map<Pair<String, Action>, Mode> =
+    internal fun overrides(organizationId: String): Map<Pair<String, Action>, Mode> =
         RolePermissions.join(CommunityRoles, JoinType.INNER, RolePermissions.roleId, CommunityRoles.id).selectAll()
             .where { CommunityRoles.organizationId eq organizationId }
             .mapNotNull { row ->

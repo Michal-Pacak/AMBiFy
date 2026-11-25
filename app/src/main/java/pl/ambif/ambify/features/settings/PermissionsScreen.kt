@@ -54,7 +54,7 @@ import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val ApprovalColor = Color(0xFFF2C27B)
+private val ApprovalColor: androidx.compose.ui.graphics.Color get() = Luxury.Warning
 
 /**
  * Roles and the permission table of one community. Everyone may look; the Owner adds, renames, orders and removes
@@ -144,7 +144,7 @@ fun PermissionsScreen(communityId: String, onBack: () -> Unit) {
                     val on = module == key
                     OutlinedButton(
                         onClick = { module = key },
-                        border = BorderStroke(1.dp, if (on) Luxury.GoldLink else Color(0xFF3A3A40)),
+                        border = BorderStroke(1.dp, if (on) Luxury.GoldLink else Luxury.Outline),
                         shape = RoundedCornerShape(18.dp),
                     ) { Text(label, color = if (on) Luxury.GoldLight else Luxury.TextMuted, fontSize = 13.sp) }
                 }

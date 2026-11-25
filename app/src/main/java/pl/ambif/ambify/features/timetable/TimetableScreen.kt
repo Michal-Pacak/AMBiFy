@@ -104,8 +104,10 @@ private sealed interface Page {
     data class Connect(val from: Page) : Page
 }
 
-internal val Substitution = Color(0xFFF2C27B)
-private val StudentColors = listOf(Color(0xFF8EC3F0), Color(0xFF9AD7A4), Color(0xFFE3A8C0), Color(0xFFF2C27B), Color(0xFFB8A6F0))
+internal val Substitution: androidx.compose.ui.graphics.Color get() = Luxury.Warning
+private val StudentColors: List<Color>
+    get() = if (Luxury.palette.light) listOf(Color(0xFF1F5F95), Color(0xFF2E7D3A), Color(0xFF9C3D66), Color(0xFF8A5A00), Color(0xFF5B45A8))
+    else listOf(Color(0xFF8EC3F0), Color(0xFF9AD7A4), Color(0xFFE3A8C0), Color(0xFFF2C27B), Color(0xFFB8A6F0))
 
 /**
  * Plan lekcji: lessons from the school diary (eduVulcan, read by the server, connected by an Owner/Admin in the
@@ -356,7 +358,7 @@ internal fun LocalDate.dayMonth() = "$dayOfMonth.$monthValue"
 @Composable
 private fun ViewSwitch(view: TimetableView, onPick: (TimetableView) -> Unit) {
     Row(
-        modifier = Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).border(1.dp, Color(0xFF5A5A60), RoundedCornerShape(19.dp)).padding(3.dp),
+        modifier = Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).border(1.dp, Luxury.Faint, RoundedCornerShape(19.dp)).padding(3.dp),
     ) {
         TimetableView.entries.forEach { option ->
             val on = option == view
@@ -372,8 +374,9 @@ private fun ViewSwitch(view: TimetableView, onPick: (TimetableView) -> Unit) {
                 Text(
                     if (option == TimetableView.DAY) "Dzień" else "Tydzień",
                     fontSize = 13.sp,
+                    fontFamily = Luxury.HeadingFont,
                     fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
-                    color = if (on) Luxury.Surface else Luxury.TextMuted,
+                    color = if (on) Luxury.OnGold else Luxury.TextMuted,
                 )
             }
         }
@@ -389,7 +392,7 @@ private fun StudentTabs(students: List<Student>, selected: String?, onPick: (Str
                 modifier = Modifier
                     .height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
-                    .border(1.dp, if (on) Luxury.GoldLink else Color(0xFF3A3A40), RoundedCornerShape(22.dp))
+                    .border(1.dp, if (on) Luxury.GoldLink else Luxury.Outline, RoundedCornerShape(22.dp))
                     .then(if (on) Modifier.background(Luxury.GoldBase.copy(alpha = 0.14f)) else Modifier)
                     .clickable { onPick(student.id) }
                     .padding(start = 6.dp, end = 16.dp),
@@ -397,7 +400,7 @@ private fun StudentTabs(students: List<Student>, selected: String?, onPick: (Str
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PersonAvatar(student.name, student.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
-                Text(student.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
+                Text(student.name, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.GoldLight else Luxury.TextMuted, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
             }
         }
     }
@@ -431,13 +434,13 @@ private fun DayPicker(monday: LocalDate, day: LocalDate, today: LocalDate, onPic
                     .clip(RoundedCornerShape(14.dp))
                     .then(
                         if (on) Modifier.background(Luxury.GoldFill)
-                        else Modifier.background(Color(0xFF1C1C20)).border(1.dp, if (date == today) Luxury.GoldDeep else Color(0xFF3A3A40), RoundedCornerShape(14.dp)),
+                        else Modifier.background(Luxury.Surface).border(1.dp, if (date == today) Luxury.GoldDeep else Luxury.Outline, RoundedCornerShape(14.dp)),
                     )
                     .clickable { onPick(date) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                val color = if (on) Luxury.Surface else Luxury.TextMuted
+                val color = if (on) Luxury.OnGold else Luxury.TextMuted
                 Text(DayShort[offset], fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
                 Text(date.dayMonth(), fontSize = 12.sp, color = color)
             }
@@ -537,7 +540,7 @@ private fun RunningLesson(lesson: Lesson, span: Pair<LocalTime, LocalTime>, now:
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clip(shape)
-            .background(Color(0xFF2C2818))
+            .background(Luxury.AccentTint)
             .border(1.5.dp, Luxury.GoldBase, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -553,7 +556,7 @@ private fun RunningLesson(lesson: Lesson, span: Pair<LocalTime, LocalTime>, now:
                 "TERAZ",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Luxury.Surface,
+                color = Luxury.OnGold,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Luxury.GoldBase).padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
@@ -603,7 +606,7 @@ private fun WeekGrid(week: TimetableWeek, student: Student, today: LocalDate, on
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    color = if (on) Luxury.Surface else Luxury.GoldText,
+                    color = if (on) Luxury.OnGold else Luxury.GoldText,
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
@@ -656,7 +659,7 @@ private fun WeekGrid(week: TimetableWeek, student: Student, today: LocalDate, on
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-        Legend("trwa teraz", Modifier.background(Color(0xFF2C2818)).border(1.5.dp, Luxury.GoldBase, RoundedCornerShape(3.dp)))
+        Legend("trwa teraz", Modifier.background(Luxury.AccentTint).border(1.5.dp, Luxury.GoldBase, RoundedCornerShape(3.dp)))
         Legend("zajęcia dodatkowe", Modifier.background(color.copy(alpha = 0.3f)))
     }
 }
@@ -668,7 +671,7 @@ private fun WeekCell(lesson: Lesson, running: Boolean, past: Boolean, onClick: (
         modifier = Modifier
             .fillMaxSize()
             .clip(shape)
-            .background(if (running) Color(0xFF2C2818) else Color(0xFF26262B))
+            .background(if (running) Luxury.AccentTint else Luxury.Surface)
             .then(if (running) Modifier.border(1.5.dp, Luxury.GoldBase, shape) else Modifier)
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -719,7 +722,7 @@ private fun LessonPopup(student: Student, lesson: Lesson, onDismiss: () -> Unit)
     LuxuryPopup(onDismiss = onDismiss) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Luxury.GoldFill), contentAlignment = Alignment.Center) {
-                Text("${lesson.position}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Luxury.Surface)
+                Text("${lesson.position}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Luxury.OnGold)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(lesson.subject, style = MaterialTheme.typography.titleLarge)
@@ -781,7 +784,7 @@ private fun changeTitle(kind: ChangeKind) = when (kind) {
     ChangeKind.CHANGED -> "Zmiana w planie"
 }
 
-private fun changeColor(kind: ChangeKind) = if (kind == ChangeKind.CANCELLED) Color(0xFFFF8A80) else Substitution
+private fun changeColor(kind: ChangeKind) = if (kind == ChangeKind.CANCELLED) Luxury.Error else Substitution
 
 /** All extra activities of the community, by student, with Edytuj / Usuń. */
 @Composable
@@ -823,7 +826,7 @@ private fun ExtrasScreen(
                 Box(
                     modifier = Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp)).background(Luxury.GoldFill).clickable(onClick = onAdd),
                     contentAlignment = Alignment.Center,
-                ) { Text("+  Dodaj zajęcia dodatkowe", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Luxury.Surface) }
+                ) { Text("+  Dodaj zajęcia dodatkowe", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Luxury.OnGold) }
             } else {
                 Text(
                     "Twoja rola nie może dodawać zajęć. Jeśli plan ucznia ma być Twój, poproś Ownera lub Admina o połączenie go z Twoim kontem.",
@@ -840,7 +843,7 @@ private fun ExtraItem(activity: ExtraActivity, color: Color, onEdit: () -> Unit,
     var menu by remember { mutableStateOf(false) }
     val ended = activity.recurrence.endDate?.let { LocalDate.parse(it).isBefore(LocalDate.now()) } == true
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(modifier = Modifier.width(6.dp).height(44.dp).clip(RoundedCornerShape(3.dp)).background(if (ended) Color(0xFF5A5A60) else color))
+        Box(modifier = Modifier.width(6.dp).height(44.dp).clip(RoundedCornerShape(3.dp)).background(if (ended) Luxury.Faint else color))
         Column(modifier = Modifier.weight(1f).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(activity.name, fontSize = 16.sp, color = if (ended) Luxury.Disabled else Luxury.Text)
             Text(

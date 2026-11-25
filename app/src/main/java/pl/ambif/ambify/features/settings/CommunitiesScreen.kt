@@ -59,7 +59,7 @@ import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** What a popup action opens for one community. */
-enum class CommunitySection { MEMBERS, INVITATIONS, MODULES, PERMISSIONS, REQUESTS, PHOTOS }
+enum class CommunitySection { MEMBERS, INVITATIONS, MODULES, PERMISSIONS, REQUESTS, PHOTOS, LOOK }
 
 /**
  * My communities. A tap opens a popup with my role there and the actions that role allows; they act on that
@@ -267,6 +267,8 @@ private fun CommunityPopup(
             PopupAction(if (can(Action.SWITCH_MODULES)) "Moduły" else "Moduły (podgląd)") { onOpen(CommunitySection.MODULES) }
             LuxuryDivider()
             PopupAction(if (owner) "Role i uprawnienia" else "Uprawnienia ról (podgląd)") { onOpen(CommunitySection.PERMISSIONS) }
+            LuxuryDivider()
+            PopupAction("Wygląd", detail = "motyw tej społeczności i Twój wybór") { onOpen(CommunitySection.LOOK) }
             if (can(Action.PHOTOS_MODERATE)) {
                 LuxuryDivider()
                 PopupAction("Zdjęcia profilowe", detail = if (community.photosBlocked) "wyłączone — wszyscy na inicjałach" else "włączone") { onOpen(CommunitySection.PHOTOS) }
@@ -287,7 +289,7 @@ private fun CommunityPopup(
             }
             // The Owner first picks who takes the community over (board 16).
             LuxuryDivider()
-            PopupAction("Opuść społeczność", color = Color(0xFFFF8A80), arrow = false, onClick = onLeave)
+            PopupAction("Opuść społeczność", color = Luxury.Error, arrow = false, onClick = onLeave)
         }
     }
 }

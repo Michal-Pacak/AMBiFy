@@ -580,7 +580,8 @@ object Lists {
         return to.copy(quantity = round(a + b * factorB / factorA))
     }
 
-    private fun round(value: Double) = Math.round(value * 1000) / 1000.0
+    /** An amount kept to three decimals (0,25 of a chicken), so steps do not pile up 0,30000000004. */
+    fun round(value: Double) = Math.round(value * 1000) / 1000.0
 
     fun scopeOf(list: ListInfo): MemoryScope = when (list.type) {
         ListType.TASKS -> MemoryScope.TASKS

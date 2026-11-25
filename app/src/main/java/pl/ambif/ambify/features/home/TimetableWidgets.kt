@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,8 +54,8 @@ import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val CancelledColor = Color(0xFFFF8A80)
-private val ChoiceOutline = Color(0xFF3A3A40)
+private val CancelledColor: androidx.compose.ui.graphics.Color get() = Luxury.Error
+private val ChoiceOutline: androidx.compose.ui.graphics.Color get() = Luxury.Outline
 
 private val dayNames = mapOf(
     DayOfWeek.MONDAY to "pn.", DayOfWeek.TUESDAY to "wt.", DayOfWeek.WEDNESDAY to "śr.", DayOfWeek.THURSDAY to "czw.",
@@ -124,7 +125,7 @@ internal fun ExtrasWidget(
             }
             days.take(shownDays).forEachIndexed { index, (date, list) ->
                 if (index > 0 || date != today) Box(Modifier.padding(vertical = 4.dp)) { LuxuryDivider() }
-                Text(dayLabel(date, today), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted)
+                Text(dayLabel(date, today), fontSize = 11.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted)
                 list.take(if (half) 3 else 5).forEach { (student, extra) ->
                     val running = date == today && runCatching {
                         val t = now.toLocalTime()
@@ -134,7 +135,9 @@ internal fun ExtrasWidget(
                         Text(
                             if (half) extra.startTime.shortTime() else "${extra.startTime.shortTime()}–${extra.endTime.shortTime()}",
                             fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (running) Luxury.GoldLight else Luxury.TextMuted,
-                            modifier = Modifier.width(if (half) 40.dp else 84.dp),
+                            // At least this wide, never broken in two (S10+ with a bigger font: "17:0 / 0", 25.11).
+                            maxLines = 1, softWrap = false,
+                            modifier = Modifier.widthIn(min = if (half) 40.dp else 84.dp),
                         )
                         if (people.size > 1) PersonAvatar(student.name, student.avatar, size = 22.dp)
                         // The place under the name, not beside it (S24, 23.11: "Piłka n…" squeezed by the place).
@@ -218,19 +221,19 @@ internal fun TomorrowWidget(
                     Tile("LEKCJI", held.size.toString(), Modifier.weight(1f))
                 }
                 if (changes.isNotEmpty()) {
-                    Text("ZMIANY", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted, modifier = Modifier.padding(top = 4.dp))
+                    Text("ZMIANY", fontSize = 11.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted, modifier = Modifier.padding(top = 4.dp))
                     val shown = if (widget.height == WidgetHeight.LARGE) 6 else 3
                     changes.take(shown).forEach { ChangeLine(it, half) }
                     if (changes.size > shown) Text("+ ${changes.size - shown} więcej · Duża pokazuje do 6", fontSize = 12.sp, color = Luxury.TextMuted)
                 }
                 if (extras.isNotEmpty()) {
                     Box(Modifier.padding(vertical = 4.dp)) { LuxuryDivider() }
-                    Text("PO SZKOLE", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted)
+                    Text("PO SZKOLE", fontSize = 11.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted)
                     extras.take(3).forEach { extra ->
                         Row(modifier = Modifier.heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 if (half) extra.startTime.shortTime() else "${extra.startTime.shortTime()}–${extra.endTime.shortTime()}",
-                                fontSize = 13.sp, color = Luxury.TextMuted, maxLines = 1, softWrap = false, modifier = Modifier.width(if (half) 48.dp else 84.dp),
+                                fontSize = 13.sp, color = Luxury.TextMuted, maxLines = 1, softWrap = false, modifier = Modifier.widthIn(min = if (half) 48.dp else 84.dp),
                             )
                             Text(extra.name, fontSize = WidgetText.Item, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -253,7 +256,7 @@ private fun Tile(label: String, value: String, modifier: Modifier) {
         modifier = modifier.clip(RoundedCornerShape(14.dp)).background(Luxury.GoldBase.copy(alpha = 0.08f)).padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted)
+        Text(label, fontSize = 10.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted)
         Text(value, fontSize = 22.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldLight)
     }
 }
@@ -261,7 +264,7 @@ private fun Tile(label: String, value: String, modifier: Modifier) {
 @Composable
 private fun TileRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 30.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted, maxLines = 1, modifier = Modifier.weight(1f))
+        Text(label.uppercase(), fontSize = 10.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = Luxury.TextMuted, maxLines = 1, modifier = Modifier.weight(1f))
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldLight, maxLines = 1, softWrap = false)
     }
 }

@@ -2,6 +2,33 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.7 · 25 listopada 2026
+
+### Motywy
+- Ustawienia → **Wygląd**: wybór motywu dla całej aplikacji. Dla każdego: **Luxury** (fale), **Perła** (jasny, iskry), **Neon** (laser).
+- Premium: **Kod** (spadające znaki) i **Gaming** (trafienie „+10 XP”).
+- Efekt dotknięcia przychodzi z motywem i wychodzi spod krawędzi kafelka.
+- W społeczności możesz mieć inny motyw niż w reszcie aplikacji (Społeczności → Wygląd).
+- Owner może ustawić motyw społeczności i go zablokować — wtedy wszyscy widzą ten sam.
+- Premium: **edytor własnych motywów**:
+  - do 3 kolorów;
+  - tło jasne albo ciemne w dowolnym odcieniu;
+  - styl obwódek;
+  - efekt dotknięcia;
+  - tapeta ze wzoru albo ze zdjęcia z galerii.
+  
+  W czasie edycji cała aplikacja od razu pokazuje zmiany.
+- Każdy motyw ma swoje pismo w tytułach, nagłówkach i na przyciskach.
+
+### Wygodniej
+- W oknach przyciski Zapisz/Anuluj są zawsze widoczne, także przy otwartej klawiaturze; strzałka pokazuje, że niżej jest coś jeszcze.
+- Klawiatura nie zasłania już pól na żadnym ekranie.
+- Obrót telefonu nie zamyka otwartego okna.
+- Pasek modułów na dole zawsze prowadzi na ekran główny modułu.
+
+### Listy
+- Ilość można wpisać dowolną, np. 0,5 albo 0,25 szt. (stuknij liczbę).
+
 ## 0.7.6 · 24 listopada 2026
 
 ### Zdjęcia profilowe

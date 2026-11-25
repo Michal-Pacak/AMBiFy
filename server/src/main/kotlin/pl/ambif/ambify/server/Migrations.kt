@@ -24,6 +24,7 @@ object Migrations {
         "V012__list_files.sql",
         "V013__owner_transfers.sql",
         "V014__profile_photos.sql",
+        "V015__themes.sql",
     )
 
     /** First line of a file that rebuilds a table: it runs with foreign keys off, checked before commit. */

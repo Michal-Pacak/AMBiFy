@@ -65,14 +65,14 @@ import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 
 internal object AuthColors {
-    val Gold = Color(0xFFD4A93C)
-    val OnGold = Color(0xFF1A1A1A)
-    val Muted = Luxury.TextMuted
-    val Field = Color(0xFF1C1C1F)
-    val FieldBorder = Color(0xFF5A5A60)
+    val Gold get() = Luxury.GoldBase
+    val OnGold get() = Luxury.OnGold
+    val Muted get() = Luxury.TextMuted
+    val Field get() = Luxury.Surface
+    val FieldBorder get() = Luxury.Faint
     val Tonal = Color(0xFF3B4258)
     val OnTonal = Color(0xFFC9D3F2)
-    val Error = Color(0xFFFF8A80)
+    val Error get() = Luxury.Error
 }
 
 /** A new account without a community; founding one or joining with a code comes next ([StartScreen]). */
@@ -153,7 +153,7 @@ private const val JOIN = "join"
 private fun StartChoice(title: String, text: String, primary: Boolean, onClick: () -> Unit) {
     val content: @Composable () -> Unit = {
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Text(title, fontSize = 19.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold)
             Text(text, fontSize = 14.sp, lineHeight = 19.sp)
         }
     }
@@ -357,7 +357,7 @@ private fun AuthHeader(title: String, subtitle: String, centered: Boolean = fals
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (logo) BrandLogo(modifier = Modifier.size(76.dp), animated = false, cropToLogo = true)
-        Text(title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = Color.White, fontSize = 28.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold)
         Text(subtitle, color = AuthColors.Muted, fontSize = 15.sp, lineHeight = 21.sp, textAlign = if (centered) TextAlign.Center else TextAlign.Start)
     }
 }
@@ -447,7 +447,7 @@ private fun CodeField(label: String, value: String, onValueChange: (String) -> U
 @Composable
 private fun SubmitButton(text: String, submit: Submit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
-        submit.error?.let { Text(it, color = AuthColors.Error, fontSize = 15.sp) }
+        submit.error?.let { Text(it, color = AuthColors.Error, fontSize = 15.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
         Button(
             onClick = submit.run,
             enabled = !submit.busy,
@@ -463,7 +463,7 @@ private fun SubmitButton(text: String, submit: Submit) {
             if (submit.busy) {
                 CircularProgressIndicator(modifier = Modifier.size(22.dp), color = AuthColors.OnGold, strokeWidth = 2.dp)
             } else {
-                Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
             }
         }
     }

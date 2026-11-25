@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -89,6 +90,7 @@ import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 @Composable
@@ -243,18 +245,20 @@ internal fun ListDialogs(
         is ListDialog.DeleteMany -> {
             val items = dialog.ids.mapNotNull { ui.data.item(it) }
             LuxuryPopup(onDismiss = close) {
-                Text("Usunąć zaznaczone (${items.size})?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("Usunąć zaznaczone (${items.size})?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                 Text(
                     items.take(4).joinToString(", ") { it.values.name } + (if (items.size > 4) " i ${items.size - 4} więcej" else "") + ". Znikną z listy u wszystkich.",
                     fontSize = 13.sp, color = Muted,
                 )
-                DangerButton("Usuń (${items.size})", {
-                    lists.deleteAll(items)
-                    ui.prefs.marked.clear()
-                    close()
-                    onSaved("Usunięto", countWord(items.size, dialog.list) + ".")
-                })
-                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = close)
+                PopupButtons {
+                    DangerButton("Usuń (${items.size})", {
+                        lists.deleteAll(items)
+                        ui.prefs.marked.clear()
+                        close()
+                        onSaved("Usunięto", countWord(items.size, dialog.list) + ".")
+                    })
+                    FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = close)
+                }
             }
         }
         is ListDialog.ItemMenu -> ItemMenu(ui, dialog.list, dialog.item, close,
@@ -276,29 +280,33 @@ internal fun ListDialogs(
             val open = ui.data.subItemsOf(dialog.item.id).filter { !it.checked && ui.canCheck(dialog.list, it) }
             val tasks = dialog.list.type == ListType.TASKS
             LuxuryPopup(onDismiss = close) {
-                Text("„${dialog.item.values.name}” ma w grupie ${if (tasks) "niezrobione zadania" else "nieodhaczone pozycje"}", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("„${dialog.item.values.name}” ma w grupie ${if (tasks) "niezrobione zadania" else "nieodhaczone pozycje"}", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                 Text(
                     "Zostało: " + open.take(3).joinToString(", ") { it.values.name } + if (open.size > 3) " i ${open.size - 3} więcej." else ".",
                     fontSize = 13.sp, color = Muted,
                 )
-                GoldButton(if (tasks) "Odhacz wszystko (${open.size + 1})" else "Odhacz razem z grupą") {
-                    open.forEach { lists.check(it, true) }
-                    lists.check(dialog.item, true)
-                    close()
+                PopupButtons {
+                    GoldButton(if (tasks) "Odhacz wszystko (${open.size + 1})" else "Odhacz razem z grupą") {
+                        open.forEach { lists.check(it, true) }
+                        lists.check(dialog.item, true)
+                        close()
+                    }
+                    FramedButton(if (tasks) "Tylko to zadanie" else "Tylko „${dialog.item.values.name.take(20)}”", modifier = Modifier.fillMaxWidth()) {
+                        lists.check(dialog.item, true)
+                        close()
+                    }
+                    FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = close)
                 }
-                FramedButton(if (tasks) "Tylko to zadanie" else "Tylko „${dialog.item.values.name.take(20)}”", modifier = Modifier.fillMaxWidth()) {
-                    lists.check(dialog.item, true)
-                    close()
-                }
-                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = close)
             }
         }
         is ListDialog.CheckParent -> LuxuryPopup(onDismiss = close) {
-            Text("Wszystko w grupie zrobione", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Wszystko w grupie zrobione", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text("Odhaczyć też „${dialog.item.values.name}”?", fontSize = 14.sp, color = Muted)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FramedButton("Nie", gold = false, modifier = Modifier.weight(1f), onClick = close)
-                Box(modifier = Modifier.weight(1f)) { GoldButton("Odhacz") { lists.check(dialog.item, true); close() } }
+            PopupButtons {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FramedButton("Nie", gold = false, modifier = Modifier.weight(1f), onClick = close)
+                    Box(modifier = Modifier.weight(1f)) { GoldButton("Odhacz") { lists.check(dialog.item, true); close() } }
+                }
             }
         }
         is ListDialog.Quantity -> LuxuryPopup(onDismiss = close) {
@@ -321,7 +329,7 @@ internal fun ListDialogs(
 @Composable
 private fun Header(title: String, subtitle: String) {
     Row(verticalAlignment = Alignment.Bottom) {
-        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text(title, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         Text(subtitle, fontSize = 12.sp, color = Muted)
     }
 }
@@ -336,7 +344,7 @@ private fun ListForm(ui: ListsUi, editing: ListInfo?, onDismiss: () -> Unit, onD
     var style by remember { mutableStateOf(editing?.look ?: ListStyle.SHOPPING) }
     var tried by remember { mutableStateOf(false) }
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(if (editing == null) "Nowa lista" else "Ustawienia listy", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(if (editing == null) "Nowa lista" else "Ustawienia listy", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         if (editing == null) {
             LuxurySectionTitle("Rodzaj")
             ListType.entries.forEach { option ->
@@ -401,18 +409,20 @@ private fun ListForm(ui: ListsUi, editing: ListInfo?, onDismiss: () -> Unit, onD
         )
         if (tried && name.isBlank()) FieldError("Wpisz nazwę listy.")
         if (editing == null) Text("Kto widzi i co może — w następnym kroku.", fontSize = 12.sp, color = Muted)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
-            FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
-            Box(modifier = Modifier.weight(1f)) {
-                GoldButton(if (editing == null) "Dalej" else "Zapisz") {
-                    tried = true
-                    val clean = style.copy(
-                        openLabel = style.openLabel.trim().ifEmpty { ListStyle.CUSTOM.openLabel },
-                        doneLabel = style.doneLabel.trim().ifEmpty { ListStyle.CUSTOM.doneLabel },
-                    )
-                    if (name.isNotBlank()) {
-                        val base = editing ?: ListInfo(id = "", type = type, name = "", createdBy = ui.me.id)
-                        onDone(base.copy(name = name.trim(), style = clean.takeIf { type == ListType.SHOPPING }))
+        PopupButtons {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                Box(modifier = Modifier.weight(1f)) {
+                    GoldButton(if (editing == null) "Dalej" else "Zapisz") {
+                        tried = true
+                        val clean = style.copy(
+                            openLabel = style.openLabel.trim().ifEmpty { ListStyle.CUSTOM.openLabel },
+                            doneLabel = style.doneLabel.trim().ifEmpty { ListStyle.CUSTOM.doneLabel },
+                        )
+                        if (name.isNotBlank()) {
+                            val base = editing ?: ListInfo(id = "", type = type, name = "", createdBy = ui.me.id)
+                            onDone(base.copy(name = name.trim(), style = clean.takeIf { type == ListType.SHOPPING }))
+                        }
                     }
                 }
             }
@@ -495,10 +505,10 @@ private fun AccessEditor(
     LuxuryPopup(onDismiss = onDismiss) {
         Column {
             if (item == null) {
-                Text("Dostęp do listy", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("Dostęp do listy", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                 Text("${list.name} · ustala twórca listy", fontSize = 12.sp, color = Muted)
             } else {
-                Text(if (list.type == ListType.TASKS) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text(if (list.type == ListType.TASKS) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                 Text("${item.values.name} · razem z grupą", fontSize = 12.sp, color = Muted)
             }
         }
@@ -559,14 +569,16 @@ private fun AccessEditor(
             "Lista może tylko zawęzić to, na co pozwala tabela uprawnień społeczności (np. „Zadania dla innych” dalej wymaga zatwierdzenia).",
             fontSize = 11.sp, color = Faint, lineHeight = 15.sp,
         )
-        if (item != null && item.access.isNotEmpty()) {
-            FramedButton("Jak na liście (usuń inny dostęp)", gold = false, modifier = Modifier.fillMaxWidth()) { onSave(emptyList()) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FramedButton(if (isNew) "Wstecz" else "Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
-            Box(modifier = Modifier.weight(1f)) {
-                GoldButton(if (isNew) "Utwórz" else "Zapisz dostęp") {
-                    if (item != null && roles.isEmpty()) onDismiss() else onSave(if (roles.isEmpty()) emptyList() else access)
+        PopupButtons {
+            if (item != null && item.access.isNotEmpty()) {
+                FramedButton("Jak na liście (usuń inny dostęp)", gold = false, modifier = Modifier.fillMaxWidth()) { onSave(emptyList()) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FramedButton(if (isNew) "Wstecz" else "Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                Box(modifier = Modifier.weight(1f)) {
+                    GoldButton(if (isNew) "Utwórz" else "Zapisz dostęp") {
+                        if (item != null && roles.isEmpty()) onDismiss() else onSave(if (roles.isEmpty()) emptyList() else access)
+                    }
                 }
             }
         }
@@ -631,7 +643,7 @@ private fun DoneDialog(ui: ListsUi, list: ListInfo, lists: ListsController, onDi
     val answer = { ui.prefs.answerDone(list.id, newest) }
     LuxuryPopup(onDismiss = { answer(); onDismiss() }) {
         LuxurySectionTitle(if (shopping && list.look.preset == ListPreset.SHOPPING) "Wszystko kupione" else "Wszystko zrobione", color = MessageKind.SUCCESS.color)
-        Text("Co z listą „${list.name}”?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Co z listą „${list.name}”?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         Text(
             "Odhaczono ostatnią pozycję. Możesz usunąć listę albo ją zostawić" + when {
                 !shopping -> "."
@@ -677,7 +689,7 @@ private fun DuplicateDialog(ui: ListsUi, dialog: ListDialog.Duplicate, lists: Li
     var variant by remember { mutableStateOf("") }
     LuxuryPopup(onDismiss = onDismiss) {
         LuxurySectionTitle("Jest już na liście")
-        Text(nameText(adding, suffix = if (addingText.isNotEmpty()) " — dodajesz $addingText" else " — dodajesz jeszcze raz"), fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Text(nameText(adding, suffix = if (addingText.isNotEmpty()) " — dodajesz $addingText" else " — dodajesz jeszcze raz"), fontSize = 18.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         ItemCard(ui, existing, "dodał(a) ${ui.name(existing.addedBy)} · ${time(existing.addedAt)}", if (quantity) Lists.quantityText(existing.values, units) else "")
         if (sum != null) {
             GoldButton("Dodaj do istniejącej → razem ${Lists.quantityText(sum, units)}") {
@@ -712,7 +724,9 @@ private fun DuplicateDialog(ui: ListsUi, dialog: ListDialog.Duplicate, lists: Li
                 onDismiss()
             }
         }
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -725,7 +739,7 @@ private fun MergeDialog(ui: ListsUi, dialog: ListDialog.Merge, lists: ListsContr
     fun added(item: ListItem) = time(item.addedAt) + if (item.id in ui.waitingItems) " · czeka na wysłanie" else ""
     LuxuryPopup(onDismiss = onDismiss) {
         LuxurySectionTitle("Podwójnie?")
-        Text(nameText(first.values, suffix = " jest na liście dwa razy"), fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Text(nameText(first.values, suffix = " jest na liście dwa razy"), fontSize = 18.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         Text(
             if (first.addedBy != second.addedBy) "Dwie osoby dodały to niezależnie (np. jedna bez sieci). Połączyć w jedną pozycję?"
             else "Ta sama pozycja jest dodana dwa razy. Połączyć w jedną?",
@@ -753,7 +767,7 @@ private fun MergeDialog(ui: ListsUi, dialog: ListDialog.Merge, lists: ListsContr
 private fun ItemCard(ui: ListsUi, item: ListItem, meta: String, amount: String) {
     val member = ui.member(item.addedBy)
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Color(0xFF1B1B1F)).padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Luxury.Surface).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PersonAvatar(member?.name ?: "?", member?.avatar, size = 30.dp, zoom = AvatarZoom.HOLD)
@@ -772,7 +786,7 @@ private fun VariantChips(variants: List<String>, current: String, onPick: (Strin
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         variants.take(8).forEach { Chip(it, it == current.trim()) { onPick(it) } }
     }
-    Text("Podpowiedzi: rodzaje używane wcześniej w społeczności.", fontSize = 11.sp, color = Muted)
+    Text("Podpowiedzi: rodzaje używane wcześniej w społeczności.", fontSize = 11.sp, color = Muted, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
 }
 
 // --- board 17: "Sortuj" of one level ---
@@ -791,7 +805,7 @@ private fun SortDialog(
     inherit: InheritToggle? = null,
 ) {
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(title, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         Row(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, Luxury.GoldLink, RoundedCornerShape(14.dp))
                 .background(Luxury.GoldBase.copy(alpha = 0.08f)).padding(12.dp),
@@ -826,7 +840,9 @@ private fun SortDialog(
                 below = { Text(toggle.text, fontSize = 12.sp, color = Muted) }) { toggle.onToggle() }
         }
         Text("Tylko u Ciebie, zapamiętane na tym telefonie.", fontSize = 12.sp, color = Muted)
-        FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -855,7 +871,7 @@ private fun ItemMenu(
     val tasks = list.type == ListType.TASKS
     val subs = ui.data.subItemsOf(item.id)
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(item.values.name, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 2)
+        Text(item.values.name, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, maxLines = 2)
         if (ui.canAddTo(list, item)) {
             Row(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onSubs), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -886,7 +902,9 @@ private fun ItemMenu(
             LuxuryDivider()
             MenuRow(if (tasks) "Inny dostęp do tego zadania" else "Inny dostęp do tej pozycji", onAccess)
         }
-        FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -906,7 +924,7 @@ private fun ToGroupDialog(ui: ListsUi, list: ListInfo, ids: List<String>, onDism
     var name by remember { mutableStateOf("") }
     var tried by remember { mutableStateOf(false) }
     LuxuryPopup(onDismiss = onDismiss) {
-        Text("Dodaj do grupy", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Dodaj do grupy", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         Text(
             "${items.size} zaznaczone: " + items.take(4).joinToString(", ") { it.values.name } + if (items.size > 4) " i ${items.size - 4} więcej" else "",
             fontSize = 13.sp, color = Muted, maxLines = 3, overflow = TextOverflow.Ellipsis,
@@ -930,15 +948,17 @@ private fun ToGroupDialog(ui: ListsUi, list: ListInfo, ids: List<String>, onDism
             if (tried && name.isBlank()) FieldError("Wpisz nazwę grupy.")
         }
         if (tried && target.isEmpty()) FieldError("Wybierz grupę albo „Nowa grupa”.")
-        GoldButton("Dodaj ${items.size} do grupy") {
-            tried = true
-            when {
-                target.isEmpty() -> Unit
-                target == NEW_GROUP -> if (name.isNotBlank()) onDone(null, name)
-                else -> onDone(target, "")
+        PopupButtons {
+            GoldButton("Dodaj ${items.size} do grupy") {
+                tried = true
+                when {
+                    target.isEmpty() -> Unit
+                    target == NEW_GROUP -> if (name.isNotBlank()) onDone(null, name)
+                    else -> onDone(target, "")
+                }
             }
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
         }
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
     }
 }
 
@@ -1045,7 +1065,7 @@ private fun UnitFormsDialog(list: ListInfo, itemName: String, editing: ListUnit,
     val sample = itemName.ifBlank { "Ogórki kiszone" }
     LuxuryPopup(onDismiss = onDismiss) {
         Column {
-            Text(if (isNew) "Nowa jednostka" else "Odmiana: „${editing.name}”", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text(if (isNew) "Nowa jednostka" else "Odmiana: „${editing.name}”", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text(if (isNew) "${list.name} · własna jednostka" else "Przytrzymany chip jednostki → „Popraw odmianę”", fontSize = 12.sp, color = Muted)
         }
         if (isNew) {
@@ -1104,7 +1124,7 @@ private fun UnitFormsDialog(list: ListInfo, itemName: String, editing: ListUnit,
 @Composable
 private fun ListMenu(list: ListInfo, onDismiss: () -> Unit, onEdit: () -> Unit, onAccess: () -> Unit, onArchive: () -> Unit, onDelete: () -> Unit) {
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(list.name, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(list.name, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         MenuRow(if (list.type == ListType.SHOPPING) "Nazwa i ustawienia" else "Zmień nazwę", onEdit)
         LuxuryDivider()
         MenuRow("Dostęp do listy", onAccess)
@@ -1112,7 +1132,9 @@ private fun ListMenu(list: ListInfo, onDismiss: () -> Unit, onEdit: () -> Unit, 
         MenuRow(if (list.archived) "Przywróć z archiwum" else "Archiwizuj", onArchive)
         LuxuryDivider()
         MenuRow("Usuń listę", onDelete, color = MessageKind.ERROR.color)
-        FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -1134,7 +1156,7 @@ private fun CloseDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit, onFi
     val things = list.type == ListType.SHOPPING
     val manage = ui.manageable(list)
     LuxuryPopup(onDismiss = onDismiss) {
-        Text("Zamknij listę", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Zamknij listę", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         Text(
             list.name + if (things) " · $open ${list.look.openLabel} · $done ${list.look.doneLabel}" else " · $open otwarte",
             fontSize = 12.sp, color = Muted,
@@ -1174,7 +1196,9 @@ private fun CloseDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit, onFi
             }
         }
         if (!manage) Text("Archiwizować i usuwać może twórca listy (${ui.name(list.createdBy)}) albo Admin.", fontSize = 11.sp, color = Faint)
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -1219,15 +1243,17 @@ private fun DeleteListDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit,
             Icon(AppIcons.Warning, contentDescription = null, tint = MessageKind.ERROR.color, modifier = Modifier.size(22.dp))
             LuxurySectionTitle("Nie da się cofnąć", color = MessageKind.ERROR.color)
         }
-        Text("Usunąć listę „${list.name}”?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Usunąć listę „${list.name}”?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         Text(
             "Lista zniknie u wszystkich ($people ${plural(people, "osoba", "osoby", "osób")}), razem z $items ${plural(items, "pozycją", "pozycjami", "pozycjami")} (pamięć produktów zostaje)." +
                 if (!list.archived) " Jeśli chcesz ją tylko schować, wybierz „Archiwizuj”." else "",
             fontSize = 13.sp, color = Muted, lineHeight = 19.sp,
         )
-        DangerButton("Usuń listę", onDelete)
-        if (!list.archived) FramedButton("Archiwizuj", modifier = Modifier.fillMaxWidth(), onClick = onArchive)
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            DangerButton("Usuń listę", onDelete)
+            if (!list.archived) FramedButton("Archiwizuj", modifier = Modifier.fillMaxWidth(), onClick = onArchive)
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -1236,11 +1262,11 @@ private fun DeleteListDialog(ui: ListsUi, list: ListInfo, onDismiss: () -> Unit,
 internal fun DangerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
     OutlinedButton(
         onClick = onClick,
-        border = BorderStroke(1.dp, Color(0xFFFF6B6B)),
+        border = BorderStroke(1.dp, Luxury.Error),
         shape = RoundedCornerShape(24.dp),
-        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(containerColor = Color(0x29FF5050)),
+        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(containerColor = Luxury.Error.copy(alpha = 0.16f)),
         modifier = modifier.heightIn(min = 48.dp),
-    ) { Text(label, color = MessageKind.ERROR.color, fontSize = 15.sp, fontWeight = FontWeight.Medium) }
+    ) { Text(label, color = MessageKind.ERROR.color, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
 }
 
 // --- board 6: an item ---
@@ -1304,7 +1330,9 @@ private fun ItemDialog(
                     Mode.DENIED -> Text("Twoja rola nie może dawać zadań innym osobom.", fontSize = 12.sp, color = Muted)
                     else -> Unit
                 }
-                FramedButton("Wstecz", gold = false, modifier = Modifier.fillMaxWidth()) { page = ItemPage.MAIN }
+                PopupButtons {
+                    FramedButton("Wstecz", gold = false, modifier = Modifier.fillMaxWidth()) { page = ItemPage.MAIN }
+                }
                 return@LuxuryPopup
             }
             ItemPage.REMINDER -> {
@@ -1417,21 +1445,25 @@ private fun ItemDialog(
         }
         if (!editable) {
             Text("Tę pozycję zmienia jej autor albo ktoś z dostępem „edytuje i usuwa”.", fontSize = 12.sp, color = Muted)
-            FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+            PopupButtons {
+                FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+            }
             return@LuxuryPopup
         }
         if (item?.parentId != null) {
             // Board 27: back on the list itself.
             FramedButton("Wyjmij z grupy „${ui.data.item(item.parentId)?.values?.name.orEmpty().take(24)}”", gold = false, modifier = Modifier.fillMaxWidth()) { onUngroup(item) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (item != null) DangerButton("Usuń", { confirmDelete = true }, Modifier)
-            else FramedButton("Anuluj", gold = false, onClick = onDismiss)
-            Box(modifier = Modifier.weight(1f)) {
-                GoldButton("Zapisz") {
-                    tried = true
-                    if (values.name.isNotBlank() && !(list.type.needsDate && values.dueDate == null && !values.urgent)) {
-                        onSave(values.copy(name = values.name.trim(), variant = values.variant.trim()), keepUnit)
+        PopupButtons {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (item != null) DangerButton("Usuń", { confirmDelete = true }, Modifier)
+                else FramedButton("Anuluj", gold = false, onClick = onDismiss)
+                Box(modifier = Modifier.weight(1f)) {
+                    GoldButton("Zapisz") {
+                        tried = true
+                        if (values.name.isNotBlank() && !(list.type.needsDate && values.dueDate == null && !values.urgent)) {
+                            onSave(values.copy(name = values.name.trim(), variant = values.variant.trim()), keepUnit)
+                        }
                     }
                 }
             }
@@ -1448,10 +1480,12 @@ private fun ItemDialog(
     }
     if (confirmDelete && item != null) {
         LuxuryPopup(onDismiss = { confirmDelete = false }) {
-            Text("Usunąć „${item.values.name}”?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Usunąć „${item.values.name}”?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text("Pozycja zniknie z listy u wszystkich.", fontSize = 13.sp, color = Muted)
-            DangerButton("Usuń", { confirmDelete = false; onDelete(item) })
-            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth()) { confirmDelete = false }
+            PopupButtons {
+                DangerButton("Usuń", { confirmDelete = false; onDelete(item) })
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth()) { confirmDelete = false }
+            }
         }
     }
 }
@@ -1488,14 +1522,44 @@ private fun QuantityEditor(ui: ListsUi, list: ListInfo, lists: ListsController, 
     val step = current.step
     val values = initial.copy(quantity = quantity, unit = unit, packSize = pack.takeIf { current.packUnit != null && it.isNotBlank() })
 
+    // The number can be typed too (half a loaf: 0,5), not only stepped (Michał, 25.11).
+    var typed by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Lists.number(quantity))) }
+    val setQuantity = { q: Double -> quantity = q; typed = androidx.compose.ui.text.input.TextFieldValue(Lists.number(q)) }
+    // A tap puts the cursor after the number, so deleting it is easy (Michał, 25.11): after the tap has set it.
+    var focused by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(focused) {
+        if (focused) {
+            kotlinx.coroutines.delay(60)
+            typed = typed.copy(selection = androidx.compose.ui.text.TextRange(typed.text.length))
+        }
+    }
+    val least = step.coerceAtMost(1.0)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        StepCircle(AppIcons.Minus, "Mniej") { quantity = (Math.round((quantity - step) * 10) / 10.0).coerceAtLeast(step.coerceAtMost(1.0)) }
+        StepCircle(AppIcons.Minus, "Mniej") {
+            val next = Lists.round(quantity - step)
+            setQuantity(if (next >= least) next else minOf(quantity, least))
+        }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(min = 96.dp)) {
-            Text(Lists.number(quantity), fontSize = 40.sp, fontWeight = FontWeight.Medium)
+            androidx.compose.foundation.text.BasicTextField(
+                value = typed,
+                onValueChange = { value ->
+                    val clean = value.text.filter { it.isDigit() || it == ',' || it == '.' }.take(7)
+                    typed = value.copy(text = clean, selection = androidx.compose.ui.text.TextRange(value.selection.start.coerceAtMost(clean.length), value.selection.end.coerceAtMost(clean.length)))
+                    clean.replace(',', '.').toDoubleOrNull()?.let { if (it > 0) quantity = Lists.round(it) }
+                },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Medium, color = Luxury.Text, textAlign = TextAlign.Center),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Luxury.GoldText),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.width(120.dp)
+                    .onFocusChanged { focused = it.isFocused }
+                    .semantics { contentDescription = "Ilość — stuknij, żeby wpisać" },
+            )
             Text(Lists.quantityText(values, units).substringAfter(' ', ""), fontSize = 14.sp, color = Luxury.GoldText, textAlign = TextAlign.Center)
         }
-        StepCircle(AppIcons.Plus, "Więcej") { quantity = Math.round((quantity + step) * 10) / 10.0 }
+        StepCircle(AppIcons.Plus, "Więcej") { setQuantity(Lists.round(quantity + step)) }
     }
+    Text("Stuknij liczbę, żeby wpisać dowolną, np. 0,5.", fontSize = 12.sp, color = Faint, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     LuxurySectionTitle("Jednostka")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         units.forEach { option ->
@@ -1506,8 +1570,7 @@ private fun QuantityEditor(ui: ListsUi, list: ListInfo, lists: ListsController, 
                 onLongClick = if (own) ({ forms = option }) else null,
             ) {
                 unit = option.name
-                if (option.step < 1 && quantity < option.step) quantity = 1.0
-                if (option.name == "dag" && quantity < 10) quantity = 30.0
+                if (option.name == "dag" && quantity < 10) setQuantity(30.0)
                 pack = ui.data.product(initial.name)?.takeIf { it.unit == option.name }?.packSize ?: ""
             }
         }
@@ -1544,12 +1607,14 @@ private fun QuantityEditor(ui: ListsUi, list: ListInfo, lists: ListsController, 
         ) { keep = it }
     }
     Text("Szybkie dopisywanie też rozumie jednostki: „ziemniaki 2 siatki”, „szynka 20 dag”.", fontSize = 12.sp, color = Muted)
-    FramedButton("Bez ilości", gold = false, modifier = Modifier.fillMaxWidth()) {
-        onSave(initial.copy(quantity = null, unit = null, packSize = null), false)
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onCancel)
-        Box(modifier = Modifier.weight(1f)) { GoldButton("Zapisz") { onSave(values, keep && initial.name.isNotBlank()) } }
+    PopupButtons {
+        FramedButton("Bez ilości", gold = false, modifier = Modifier.fillMaxWidth()) {
+            onSave(initial.copy(quantity = null, unit = null, packSize = null), false)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onCancel)
+            Box(modifier = Modifier.weight(1f)) { GoldButton("Zapisz") { onSave(values, keep && initial.name.isNotBlank()) } }
+        }
     }
 }
 
@@ -1594,10 +1659,12 @@ private fun ReminderEditor(ui: ListsUi, initial: List<ListReminder>, onCancel: (
         }
     }
     Text("Każda osoba dostanie przypomnienie na swoim telefonie.", fontSize = 12.sp, color = Muted)
-    if (initial.isNotEmpty()) FramedButton("Bez przypomnienia", gold = false, modifier = Modifier.fillMaxWidth()) { onSave(emptyList()) }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onCancel)
-        Box(modifier = Modifier.weight(1f)) { GoldButton("Gotowe") { onSave(who.map { ListReminder(it, kind, days, at) }) } }
+    PopupButtons {
+        if (initial.isNotEmpty()) FramedButton("Bez przypomnienia", gold = false, modifier = Modifier.fillMaxWidth()) { onSave(emptyList()) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onCancel)
+            Box(modifier = Modifier.weight(1f)) { GoldButton("Gotowe") { onSave(who.map { ListReminder(it, kind, days, at) }) } }
+        }
     }
     if (pickTime) TimeDialog("Godzina przypomnienia", LocalTime.parse(at), onDismiss = { pickTime = false }) { at = "%02d:%02d".format(it.hour, it.minute) }
 }
@@ -1632,7 +1699,7 @@ private fun ConflictDialog(
     LuxuryPopup(onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             LuxurySectionTitle("Konflikt na liście", color = MessageKind.WARNING.color)
-            Text("${item.values.name} — ${conflict.field.label}", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("${item.values.name} — ${conflict.field.label}", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text(
                 "Dwie osoby zmieniły ${conflict.field.label} w tym samym czasie. Do decyzji na liście widać wersję zapisaną później.",
                 fontSize = 12.sp, color = Muted, lineHeight = 17.sp,
@@ -1648,7 +1715,7 @@ private fun ConflictDialog(
         } else {
             val textField = conflict.field in setOf(ItemField.NAME, ItemField.QUANTITY, ItemField.NOTE, ItemField.VARIANT)
             Column(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Color(0xFF1B1B1F)).padding(14.dp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Luxury.Surface).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (textField) {
@@ -1665,16 +1732,20 @@ private fun ConflictDialog(
                     fontSize = 12.sp, color = Muted, lineHeight = 17.sp,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FramedButton("Wstecz", gold = false, modifier = Modifier.weight(1f)) { other = null }
-                Box(modifier = Modifier.weight(1f)) {
-                    GoldButton("Zapisz") { onDecide(ConflictDecision(other = otherValues(conflict.field, typed, item.values, ui))) }
+            PopupButtons {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FramedButton("Wstecz", gold = false, modifier = Modifier.weight(1f)) { other = null }
+                    Box(modifier = Modifier.weight(1f)) {
+                        GoldButton("Zapisz") { onDecide(ConflictDecision(other = otherValues(conflict.field, typed, item.values, ui))) }
+                    }
                 }
             }
             DangerButton("Usuń pozycję z listy", onRemove)
         }
         Text("Bez decyzji przez 48 h rozstrzyga Owner lub Admin.", fontSize = 12.sp, color = Muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        FramedButton("Później", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Później", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -1683,7 +1754,7 @@ private fun VersionCard(ui: ListsUi, field: ItemField, version: ConflictVersion,
     val member = ui.member(version.userId)
     val late = version.receivedAt - version.madeAt > 2 * 60_000
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Color(0xFF1B1B1F)).padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp)).background(Luxury.Surface).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -57,7 +57,7 @@ fun WidgetHeader(
         val narrow = maxWidth < 220.dp
         Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                module.uppercase(), color = Luxury.GoldText, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                module.uppercase(), color = Luxury.GoldText, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = Luxury.HeadingFont,
                 letterSpacing = if (narrow) 1.sp else 1.6.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).then(tap).padding(vertical = 8.dp),
             )

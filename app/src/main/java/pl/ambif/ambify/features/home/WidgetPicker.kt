@@ -54,11 +54,12 @@ import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val Outline = Color(0xFF3A3A40)
-private val Ok = Color(0xFF9FD3A0)
-private val Danger = Color(0xFFE79A86)
+private val Outline: androidx.compose.ui.graphics.Color get() = Luxury.Outline
+private val Ok: androidx.compose.ui.graphics.Color get() = Luxury.Ok
+private val Danger: androidx.compose.ui.graphics.Color get() = Luxury.Danger
 
 /**
  * "Widgety": only the modules switched on in the community (and with widgets), each folded. A tap opens its
@@ -131,7 +132,7 @@ internal fun WidgetPicker(
     if (general) {
         LuxuryPopup(onDismiss = { general = false }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Ogólne", fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("Ogólne", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 IconButton(onClick = { general = false }) { Icon(AppIcons.Close, contentDescription = "Zamknij", tint = Luxury.TextMuted) }
             }
             WidgetType.general.forEachIndexed { index, type ->
@@ -163,7 +164,7 @@ private fun ModuleWidgetsPopup(
     val premium = types.filter { it.premium != null }
     LuxuryPopup(onDismiss = onDismiss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(module.label, fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text(module.label, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = "Zamknij", tint = Luxury.TextMuted) }
         }
         standard.forEachIndexed { index, type ->
@@ -225,7 +226,7 @@ private fun SmallAddButton(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(AppIcons.Plus, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(14.dp))
-            Text(" Dodaj", fontSize = 13.sp, color = Luxury.GoldText)
+            Text(" Dodaj", fontSize = 13.sp, color = Luxury.GoldText, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
         }
     }
 }
@@ -264,7 +265,7 @@ internal fun LessonsSettings(
 
     LuxuryPopup(onDismiss = onDismiss) {
         Column {
-            Text(if (isNew) "Dodaj: „Lekcje”" else "Ustawienia: „Lekcje”", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text(if (isNew) "Dodaj: „Lekcje”" else "Ustawienia: „Lekcje”", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text("Plan lekcji", fontSize = 13.sp, color = Luxury.TextMuted)
         }
         LuxurySectionTitle("Czyje lekcje · można kilka")
@@ -321,7 +322,7 @@ internal fun LessonsSettings(
                         .clickable(role = Role.RadioButton) { height = option },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(option.label, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.Surface else Luxury.TextMuted)
+                    Text(option.label, fontSize = 14.sp, fontFamily = Luxury.HeadingFont, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.OnGold else Luxury.TextMuted)
                 }
             }
         }
@@ -351,20 +352,22 @@ internal fun LessonsSettings(
         WidgetPreview(half) { LessonsWidget(draft, data, now, store = null, interactive = false, onSettings = {}, onOpen = {}) }
 
         Spacer(Modifier.height(4.dp))
-        if (isNew) {
-            GoldButton("Dodaj na pulpit", enabled = people.isNotEmpty()) { onSave(draft) }
-            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
-        } else {
-            GoldButton("Zapisz") { onSave(draft) }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .border(1.dp, Danger.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
-                    .clickable(role = Role.Button, onClick = onDelete),
-                contentAlignment = Alignment.Center,
-            ) { Text("Usuń z pulpitu", color = Danger, fontSize = 14.sp) }
+        PopupButtons {
+            if (isNew) {
+                GoldButton("Dodaj na pulpit", enabled = people.isNotEmpty()) { onSave(draft) }
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+            } else {
+                GoldButton("Zapisz") { onSave(draft) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .border(1.dp, Danger.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button, onClick = onDelete),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Usuń z pulpitu", color = Danger, fontSize = 14.sp) }
+            }
         }
         Spacer(Modifier.width(1.dp))
     }
@@ -399,7 +402,7 @@ internal fun WidthSetting(half: Boolean, onChange: (Boolean) -> Unit) {
                     .clickable(role = Role.RadioButton) { onChange(value) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.Surface else Luxury.TextMuted)
+                Text(label, fontSize = 14.sp, fontFamily = Luxury.HeadingFont, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.OnGold else Luxury.TextMuted)
             }
         }
     }

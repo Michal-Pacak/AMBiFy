@@ -59,7 +59,7 @@ import pl.ambif.ambify.shared.RoleRename
 import pl.ambif.ambify.shared.RoleRequest
 import pl.ambif.ambify.shared.SetupRequest
 
-private const val AUTH = "user"
+internal const val AUTH = "user"
 
 fun Application.installAccountAuth(service: AccountService, tokens: AccessTokens) {
     install(Authentication) {
@@ -249,6 +249,7 @@ fun Route.accountRoutes(service: AccountService, photos: ProfilePhotos) {
         }
 
         get(PlatformPaths.COMMUNITIES) { call.respond(service.platformCommunities(call.session())) }
+        get(PlatformPaths.ACCOUNTS) { call.respond(service.platformAccounts(call.session())) }
         put("${PlatformPaths.COMMUNITIES}/{id}/grants/{key}") {
             val granted = call.receive<GrantRequest>().granted
             service.setGrant(call.session(), call.parameters["id"]!!, call.parameters["key"]!!, granted)

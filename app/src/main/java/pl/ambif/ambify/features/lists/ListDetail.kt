@@ -174,7 +174,7 @@ internal fun ListDetail(
                 }
             }
             Column(modifier = Modifier.padding(start = 12.dp)) {
-                Text(list.name, fontSize = 22.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(list.name, fontSize = 22.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${kindLabel(list)} · ${ui.whoSees(list)}" + if (list.archived) " · w archiwum" else "", fontSize = 13.sp, color = Muted, maxLines = 2)
             }
         }
@@ -200,7 +200,7 @@ private fun MarkingHeader(count: Int, onEnd: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onEnd) { Icon(AppIcons.Close, contentDescription = "Zakończ zaznaczanie", tint = Luxury.GoldText) }
-        Text("Zaznaczone: $count", fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text("Zaznaczone: $count", fontSize = 18.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         Text("stuknij, żeby dodać\nlub odjąć", fontSize = 11.sp, color = Muted, textAlign = TextAlign.End)
     }
 }
@@ -212,7 +212,7 @@ private fun MarkingBar(d: Detail, modifier: Modifier) {
     val list = d.list
     val items = ui.prefs.marked.mapNotNull { ui.data.item(it) }
     Row(
-        modifier = modifier.fillMaxWidth().background(Color(0xFF1B1B1F)).drawBehind {
+        modifier = modifier.fillMaxWidth().background(Luxury.Surface).drawBehind {
             drawLine(Luxury.GoldBase.copy(alpha = 0.35f), Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
         }.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -244,7 +244,7 @@ private fun MarkingBar(d: Detail, modifier: Modifier) {
 private fun BarAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, gold: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     val color = when {
-        gold -> Luxury.Surface
+        gold -> Luxury.OnGold
         danger -> MessageKind.ERROR.color
         else -> Luxury.Text
     }
@@ -255,7 +255,7 @@ private fun BarAction(label: String, icon: androidx.compose.ui.graphics.vector.I
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {
-        Icon(icon, contentDescription = null, tint = if (gold) Luxury.Surface else if (danger) color else Luxury.GoldText, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = if (gold) Luxury.OnGold else if (danger) color else Luxury.GoldText, modifier = Modifier.size(20.dp))
         Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = color)
     }
 }
@@ -308,7 +308,7 @@ private fun CloseButton(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text("Zamknij", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldText)
+        Text("Zamknij", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldText, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
         Icon(AppIcons.ExpandMore, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(14.dp))
     }
 }
@@ -347,7 +347,7 @@ private fun Things(d: Detail) {
             Box(
                 modifier = Modifier.size(52.dp).clip(CircleShape).background(Luxury.GoldFill).clickable(onClickLabel = "Dodaj pozycję", role = Role.Button) { add() },
                 contentAlignment = Alignment.Center,
-            ) { Icon(AppIcons.Plus, contentDescription = if (draft.isBlank()) "Dodaj z pamięci" else "Dodaj pozycję", tint = Luxury.Surface) }
+            ) { Icon(AppIcons.Plus, contentDescription = if (draft.isBlank()) "Dodaj z pamięci" else "Dodaj pozycję", tint = Luxury.OnGold) }
         }
     }
     val todo = d.items.filter { !it.checked }
@@ -435,7 +435,7 @@ private fun QuantityChip(text: String, enabled: Boolean, onClick: () -> Unit) {
             .clickable(enabled = enabled, onClickLabel = "Ilość i jednostka", onClick = onClick)
             .padding(horizontal = 9.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text.ifEmpty { "+ ilość" }, fontSize = 12.sp, color = if (text.isEmpty()) Faint else Luxury.GoldText, maxLines = 1) }
+    ) { Text(text.ifEmpty { "+ ilość" }, fontSize = 12.sp, fontFamily = Luxury.HeadingFont, color = if (text.isEmpty()) Faint else Luxury.GoldText, maxLines = 1) }
 }
 
 // --- tasks ---
@@ -590,7 +590,7 @@ private fun Groups(d: Detail, items: List<ListItem>, row: @Composable (ListItem)
     sorted(d.ui, d.list, items, d.sort).forEach { group ->
         group.title?.let {
             Text(
-                "${it.uppercase()} · ${group.items.size}", fontSize = 11.sp, letterSpacing = 1.2.sp, color = Muted, fontWeight = FontWeight.Medium,
+                "${it.uppercase()} · ${group.items.size}", fontSize = 11.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, letterSpacing = 1.2.sp, color = Muted, fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(top = if (first) 6.dp else 14.dp, bottom = 2.dp),
             )
         }
@@ -782,7 +782,7 @@ private fun MarkCircle(on: Boolean, enabled: Boolean, name: String, onClick: () 
             modifier = Modifier.size(24.dp).clip(CircleShape)
                 .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.6.dp, Muted, CircleShape)),
             contentAlignment = Alignment.Center,
-        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(14.dp)) }
+        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.OnGold, modifier = Modifier.size(14.dp)) }
     }
 }
 
@@ -849,7 +849,7 @@ private fun SubScreen(d: Detail, parent: ListItem) {
             IconButton(onClick = { d.onOpenSub(null) }) { Icon(AppIcons.Back, contentDescription = "Wróć do listy ${list.name}", tint = Luxury.GoldText) }
             Column(modifier = Modifier.weight(1f)) {
                 Text("${list.name} ›", fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(parent.values.name, fontSize = 22.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(parent.values.name, fontSize = 22.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
                     "grupa · ${done.size}/${subs.size}" + (other?.let { " · inny dostęp: $it" } ?: ""),
                     fontSize = 12.sp, color = Muted, maxLines = 2,
@@ -942,7 +942,7 @@ private fun SubAddField(d: Detail, parent: ListItem) {
             modifier = Modifier.size(44.dp).clip(CircleShape).background(Luxury.GoldFill)
                 .clickable(onClickLabel = "Dodaj do: ${parent.values.name}", role = Role.Button) { add() },
             contentAlignment = Alignment.Center,
-        ) { Icon(AppIcons.Plus, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(20.dp)) }
+        ) { Icon(AppIcons.Plus, contentDescription = null, tint = Luxury.OnGold, modifier = Modifier.size(20.dp)) }
     }
     LaunchedEffect(ui.prefs.focusSub) {
         if (ui.prefs.focusSub == parent.id) {
@@ -965,7 +965,7 @@ private fun CheckBox(checked: Boolean, square: Boolean, enabled: Boolean, label:
                 .clip(shape)
                 .then(if (checked) Modifier.background(Luxury.GoldFill) else Modifier.border(1.6.dp, Luxury.GoldBase, shape)),
             contentAlignment = Alignment.Center,
-        ) { if (checked) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(15.dp)) }
+        ) { if (checked) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.OnGold, modifier = Modifier.size(15.dp)) }
     }
 }
 

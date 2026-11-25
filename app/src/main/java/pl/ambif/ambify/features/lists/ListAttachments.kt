@@ -93,6 +93,7 @@ import pl.ambif.ambify.ui.components.MessageKind
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 // 0.7.3, boards 25–26: photos and files of items (premium "Linki, zdjęcia i pliki"), kept on the server, downloaded
@@ -259,7 +260,7 @@ internal fun FilesEditor(ui: ListsUi, list: ListInfo, lists: ListsController, it
 
     if (picking) {
         LuxuryPopup(onDismiss = { picking = false }) {
-            Text("Dodaj zdjęcie", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Dodaj zdjęcie", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             PickRow(AppIcons.Camera, "Zrób zdjęcie", "aparat telefonu") {
                 picking = false
                 val file = File(File(context.cacheDir, "camera").apply { mkdirs() }, "${UUID.randomUUID()}.jpg")
@@ -272,18 +273,22 @@ internal fun FilesEditor(ui: ListsUi, list: ListInfo, lists: ListsController, it
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
             MessageBar(MessageKind.INFO, "Jakość", "Wysyłamy w dobrej jakości (do ${Lists.PHOTO_SIDE} px, zwykle 1–2 MB), bez lokalizacji zapisanej przez aparat.")
-            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth()) { picking = false }
+            PopupButtons {
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth()) { picking = false }
+            }
         }
     }
     viewer?.let { start -> PhotoViewer(ui, list, lists, item.id, start) { viewer = null } }
     opening?.let { file -> FileOpener(ui, lists, file) { opening = null } }
     removing?.let { file ->
         LuxuryPopup(onDismiss = { removing = null }) {
-            Text("Usunąć plik?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Usunąć plik?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text("„${file.name}” zniknie u wszystkich i z serwera. Tego nie da się cofnąć.", fontSize = 14.sp, color = Muted)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f)) { removing = null }
-                DangerButton("Usuń", { removing = null; lists.deleteFile(file, onError = refused) }, Modifier.weight(1f))
+            PopupButtons {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f)) { removing = null }
+                    DangerButton("Usuń", { removing = null; lists.deleteFile(file, onError = refused) }, Modifier.weight(1f))
+                }
             }
         }
     }
@@ -328,7 +333,7 @@ private fun AddButton(label: String, enabled: Boolean, modifier: Modifier, onCli
             .background(if (enabled) Luxury.GoldBase.copy(alpha = 0.08f) else Color.Transparent)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (enabled) Luxury.GoldText else Faint) }
+    ) { Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (enabled) Luxury.GoldText else Faint, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
 }
 
 @Composable
@@ -418,7 +423,7 @@ internal fun PhotoViewer(ui: ListsUi, list: ListInfo, lists: ListsController, it
                 if (photos.size > 1) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         photos.indices.forEach { i ->
-                            Box(Modifier.size(7.dp).clip(CircleShape).background(if (i == pager.currentPage) Luxury.GoldText else Color(0xFF5A5A60)))
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(if (i == pager.currentPage) Luxury.GoldText else Luxury.Faint))
                         }
                     }
                 }
@@ -430,14 +435,16 @@ internal fun PhotoViewer(ui: ListsUi, list: ListInfo, lists: ListsController, it
         }
         removing?.let { photo ->
             LuxuryPopup(onDismiss = { removing = null }) {
-                Text("Usunąć zdjęcie?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text("Usunąć zdjęcie?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                 Text("Zniknie u wszystkich i z serwera. Tego nie da się cofnąć.", fontSize = 14.sp, color = Muted)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f)) { removing = null }
-                    DangerButton("Usuń", {
-                        removing = null
-                        lists.deleteFile(photo, onDone = { if (photos.size <= 1) onDismiss() }, onError = { error = it })
-                    }, Modifier.weight(1f))
+                PopupButtons {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f)) { removing = null }
+                        DangerButton("Usuń", {
+                            removing = null
+                            lists.deleteFile(photo, onDone = { if (photos.size <= 1) onDismiss() }, onError = { error = it })
+                        }, Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -602,13 +609,17 @@ internal fun FileOpener(ui: ListsUi, lists: ListsController, file: ItemFile, onD
                     modifier = Modifier.fillMaxWidth(), color = Luxury.GoldBase, trackColor = Outline,
                 )
                 Text("Potem otworzy go aplikacja z telefonu (np. podgląd PDF).", fontSize = 12.sp, color = Muted)
-                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+                PopupButtons {
+                    FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+                }
             }
             FileState.Offline -> {
                 MessageBar(MessageKind.STATUS, "Bez połączenia", "Ten plik otworzysz, gdy wróci sieć. Pliki otwierane wcześniej otwierają się też bez sieci.", icon = AppIcons.Offline)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FramedButton("Zamknij", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
-                    FramedButton("Spróbuj ponownie", modifier = Modifier.weight(1f)) { attempt++ }
+                PopupButtons {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FramedButton("Zamknij", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                        FramedButton("Spróbuj ponownie", modifier = Modifier.weight(1f)) { attempt++ }
+                    }
                 }
             }
             is FileState.NoApp -> {
@@ -617,12 +628,14 @@ internal fun FileOpener(ui: ListsUi, lists: ListsController, file: ItemFile, onD
                     MessageKind.ERROR, "Brak aplikacji",
                     "Telefon nie ma aplikacji, która otwiera pliki .$ending. Zapisz plik i otwórz go na komputerze albo zainstaluj przeglądarkę takich plików.",
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FramedButton("Zamknij", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
-                    Box(modifier = Modifier.weight(1f)) {
-                        GoldButton("Zapisz w Pobranych") {
-                            scope.launch {
-                                state = if (saveToDownloads(context, now.file, file)) FileState.Saved else FileState.Failed("Nie udało się zapisać pliku w Pobranych.")
+                PopupButtons {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FramedButton("Zamknij", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                        Box(modifier = Modifier.weight(1f)) {
+                            GoldButton("Zapisz w Pobranych") {
+                                scope.launch {
+                                    state = if (saveToDownloads(context, now.file, file)) FileState.Saved else FileState.Failed("Nie udało się zapisać pliku w Pobranych.")
+                                }
                             }
                         }
                     }
@@ -630,14 +643,18 @@ internal fun FileOpener(ui: ListsUi, lists: ListsController, file: ItemFile, onD
             }
             is FileState.Failed -> {
                 MessageBar(MessageKind.ERROR, "Nie otwarto pliku", now.message)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FramedButton("Zamknij", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
-                    FramedButton("Spróbuj ponownie", modifier = Modifier.weight(1f)) { attempt++ }
+                PopupButtons {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FramedButton("Zamknij", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                        FramedButton("Spróbuj ponownie", modifier = Modifier.weight(1f)) { attempt++ }
+                    }
                 }
             }
             FileState.Saved -> {
                 MessageBar(MessageKind.SUCCESS, "Zapisano w Pobranych", "„${file.name}” jest w folderze Pobrane telefonu.")
-                FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+                PopupButtons {
+                    FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+                }
             }
         }
     }

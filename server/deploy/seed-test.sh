@@ -12,7 +12,10 @@ F=$(id Filip); R=$(id Bartosz)
 monday=$(date -d "monday this week" +%F)
 day() { date -d "$monday +$1 day" +%F; }
 W() { echo "{\"frequency\":\"WEEKLY\",\"weekdays\":[$1],\"skipSchoolFree\":true}"; }
+existing=$(python3 -c 'import sqlite3,os;print("|".join(n for (n,) in sqlite3.connect(os.path.expanduser("~/.local/share/ambify-test/ambify.db")).execute("select name from extra_activities")))')
 add() {
+    # Run again (e.g. for newer test data below): the activities already there are not added twice.
+    case "|$existing|" in *"|$2|"*) echo "jest już: $2"; return ;; esac
     curl -s -o /dev/null -w "%{http_code} $2\n" -X POST $B/timetable/extras -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
         -d "{\"studentIds\":[\"$1\"],\"name\":\"$2\",\"place\":\"$3\",\"startDate\":\"$4\",\"startTime\":\"$5\",\"endTime\":\"$6\",\"recurrence\":$7}"
 }
@@ -58,3 +61,17 @@ ADAM=$(curl -s $B/me -H "Authorization: Bearer $TA" | python3 -c 'import sys,jso
 curl -s -o /dev/null -w "%{http_code} ukryte zdjęcie Adama\n" -X PUT "$B/family/members/$ADAM/photo-hidden" \
     -H "Authorization: Bearer $TO" -H 'Content-Type: application/json' -d '{"hidden":true}'
 rm -rf "$TMP"
+
+# Motywy (0.7.7): „Społeczność testowa” ma Premium motywów i własny motyw „Szalik TEST” (wzór na tapecie) — Ola
+# (Owner) może go ustawić i zablokować. Ola ma też Premium konta i własny motyw „Legia”; Ula i Adam bez Premium konta
+# (Ula widzi Kod/Gaming tylko dzięki Premium społeczności).
+TP=$(login platform)
+CID=$(curl -s $B/me -H "Authorization: Bearer $TO" | python3 -c 'import sys,json;print(json.load(sys.stdin)["communityId"])')
+curl -s -o /dev/null -w "%{http_code} Premium motywów dla społeczności\n" -X PUT "$B/platform/communities/$CID/grants/THEMES" \
+    -H "Authorization: Bearer $TP" -H 'Content-Type: application/json' -d '{"granted":true}'
+curl -s -o /dev/null -w "%{http_code} Premium konta: Ola\n" -X POST $B/themes/platform/premium \
+    -H "Authorization: Bearer $TP" -H 'Content-Type: application/json' -d '{"email":"owner@test.ambify","premium":true}'
+curl -s -o /dev/null -w "%{http_code} motyw Legia\n" -X PUT $B/themes/own -H "Authorization: Bearer $TO" -H 'Content-Type: application/json' \
+    -d '{"id":"legia-test-01","name":"Legia","dark":true,"bgHue":150,"bgSat":0,"colors":["#F7F7F7","#00733E","#D7142A"],"style":"STRIPES","effect":"hit","wallpaper":{"pattern":"scarf","dim":84}}'
+curl -s -o /dev/null -w "%{http_code} motyw społeczności\n" -X PUT "$B/themes/own?community=1" -H "Authorization: Bearer $TO" -H 'Content-Type: application/json' \
+    -d '{"id":"szalik-test-01","name":"Szalik TEST","dark":true,"bgHue":225,"bgSat":45,"colors":["#D4AF37","#1B3580","#F7F7F7"],"style":"METAL","effect":"sparks","wallpaper":{"pattern":"diag","dim":86}}'

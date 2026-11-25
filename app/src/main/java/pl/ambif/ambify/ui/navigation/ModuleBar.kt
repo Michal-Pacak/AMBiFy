@@ -1,5 +1,6 @@
 package pl.ambif.ambify.ui.navigation
 
+import pl.ambif.ambify.ui.theme.Luxury
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateIntOffsetAsState
@@ -86,9 +87,9 @@ import pl.ambif.ambify.core.session.LocalAppSession
 import pl.ambif.ambify.core.settings.ModuleOrderStore
 import pl.ambif.ambify.ui.branding.BrandLogo
 
-private val NavigationAccent = Color(0xFFC9A85B)
-private val NavigationBarColor = Color(0xFF29251D)
-private val NavigationGold = Color(0xFFD6B65F)
+private val NavigationAccent: androidx.compose.ui.graphics.Color get() = Luxury.palette.navAccent
+private val NavigationBarColor: androidx.compose.ui.graphics.Color get() = Luxury.palette.navBar
+private val NavigationGold: androidx.compose.ui.graphics.Color get() = Luxury.palette.navGold
 
 private val BarRowHeight = 75.dp
 private val PanelRowHeight = 64.dp

@@ -68,6 +68,7 @@ import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenButton
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** A list to open when the Lists module shows next (a tap on a Dashboard widget). */
@@ -180,7 +181,7 @@ private fun WidgetRow(
                 Box(
                     modifier = Modifier.size(18.dp).clip(shape).then(if (item.checked) Modifier.background(Luxury.GoldFill) else Modifier.border(1.5.dp, Luxury.GoldBase, shape)),
                     contentAlignment = Alignment.Center,
-                ) { if (item.checked) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(12.dp)) }
+                ) { if (item.checked) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.OnGold, modifier = Modifier.size(12.dp)) }
             }
         }
         if (half) {
@@ -425,7 +426,7 @@ fun ListsWidgetSettings(
     )
     LuxuryPopup(onDismiss = onDismiss) {
         Column {
-            Text(if (isNew) "Dodaj: „${type.label}”" else "Ustawienia: „${type.label}”", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text(if (isNew) "Dodaj: „${type.label}”" else "Ustawienia: „${type.label}”", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text("Listy", fontSize = 13.sp, color = Luxury.TextMuted)
         }
         if (type == WidgetType.LIST) {
@@ -456,7 +457,7 @@ fun ListsWidgetSettings(
                             .clickable(role = Role.RadioButton) { height = option },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("${option.label} · ${countOf(option)}", fontSize = 13.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.Surface else Luxury.TextMuted)
+                        Text("${option.label} · ${countOf(option)}", fontSize = 13.sp, fontFamily = Luxury.HeadingFont, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, color = if (on) Luxury.OnGold else Luxury.TextMuted)
                     }
                 }
             }
@@ -479,12 +480,14 @@ fun ListsWidgetSettings(
             if (ready) ListsWidget(draft, interactive = false, onSettings = {}, onOpen = {})
             else Faded("Wybierz listę, żeby zobaczyć podgląd.")
         }
-        if (isNew) {
-            GoldButton("Dodaj na pulpit", enabled = ready) { onSave(draft) }
-            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
-        } else {
-            GoldButton("Zapisz", enabled = ready) { onSave(draft) }
-            DangerButton("Usuń z pulpitu", onDelete)
+        PopupButtons {
+            if (isNew) {
+                GoldButton("Dodaj na pulpit", enabled = ready) { onSave(draft) }
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+            } else {
+                GoldButton("Zapisz", enabled = ready) { onSave(draft) }
+                DangerButton("Usuń z pulpitu", onDelete)
+            }
         }
         Spacer(Modifier.height(2.dp))
     }
@@ -500,7 +503,7 @@ private fun ListChoice(list: ListInfo, on: Boolean, onClick: () -> Unit) {
         Box(
             modifier = Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.6.dp, Luxury.GoldBase, RoundedCornerShape(6.dp))),
             contentAlignment = Alignment.Center,
-        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(13.dp)) }
+        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.OnGold, modifier = Modifier.size(13.dp)) }
         Text(list.name, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             when (list.type) {

@@ -239,7 +239,34 @@ class ServerApi(
     suspend fun sendMonitorEvents(batch: MonitorEventBatch) =
         send("POST", MonitorPaths.EVENTS, json.encodeToString(batch), auth = true)
 
+    // 0.7.7 themes
+    suspend fun themes(): pl.ambif.ambify.shared.ThemeState = get(pl.ambif.ambify.shared.Themes.PATH)
+    private suspend fun putTheme(path: String, body: String): pl.ambif.ambify.shared.ThemeState =
+        json.decodeFromString(send("PUT", path, body, auth = true))
+    suspend fun setAccountTheme(theme: String?) =
+        putTheme(pl.ambif.ambify.shared.Themes.ACCOUNT, json.encodeToString(pl.ambif.ambify.shared.ThemeChoice(theme)))
+    suspend fun setMemberTheme(theme: String?) =
+        putTheme(pl.ambif.ambify.shared.Themes.MEMBER, json.encodeToString(pl.ambif.ambify.shared.ThemeChoice(theme)))
+    suspend fun setCommunityTheme(theme: String, locked: Boolean) =
+        putTheme(pl.ambif.ambify.shared.Themes.COMMUNITY, json.encodeToString(pl.ambif.ambify.shared.CommunityThemeUpdate(theme, locked)))
+    suspend fun saveOwnTheme(theme: pl.ambif.ambify.shared.OwnTheme, community: Boolean) =
+        putTheme(pl.ambif.ambify.shared.Themes.OWN + if (community) "?community=1" else "", json.encodeToString(theme))
+    suspend fun deleteOwnTheme(id: String): pl.ambif.ambify.shared.ThemeState =
+        json.decodeFromString(send("DELETE", "${pl.ambif.ambify.shared.Themes.OWN}/$id", null, auth = true))
+    /** A wallpaper photo (JPEG) for an own theme; the answer's id goes into its [pl.ambif.ambify.shared.Wallpaper]. */
+    suspend fun uploadWallpaper(source: File, community: Boolean): String {
+        val path = pl.ambif.ambify.shared.Themes.WALLPAPERS + if (community) "?community=1" else ""
+        val body = transfer("PUT", path, emptyMap(), upload = source to "image/jpeg", download = null, onProgress = {})
+        return json.decodeFromString<pl.ambif.ambify.shared.WallpaperUploaded>(body).photoId
+    }
+    suspend fun downloadWallpaper(photoId: String, target: File) {
+        transfer("GET", "${pl.ambif.ambify.shared.Themes.WALLPAPERS}/$photoId", emptyMap(), upload = null, download = target, onProgress = {})
+    }
+    suspend fun setAccountPremium(email: String, premium: Boolean) =
+        send("POST", "${pl.ambif.ambify.shared.Themes.PATH}/platform/premium", json.encodeToString(pl.ambif.ambify.shared.AccountPremiumRequest(email, premium)), auth = true)
+
     suspend fun platformCommunities(): List<PlatformCommunity> = get(PlatformPaths.COMMUNITIES)
+    suspend fun platformAccounts(): List<pl.ambif.ambify.shared.PlatformAccount> = get(PlatformPaths.ACCOUNTS)
     suspend fun setGrant(communityId: String, key: String, granted: Boolean) =
         send("PUT", "${PlatformPaths.COMMUNITIES}/$communityId/grants/$key", json.encodeToString(GrantRequest(granted)), auth = true)
     suspend fun addFoundingCredit(email: String) = send("POST", PlatformPaths.FOUNDING_CREDITS, json.encodeToString(EmailRequest(email)), auth = true)

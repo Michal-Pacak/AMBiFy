@@ -33,10 +33,11 @@ import pl.ambif.ambify.shared.WidgetHeight
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val PartOutline = Color(0xFF3A3A40)
-private val PartDanger = Color(0xFFE79A86)
+private val PartOutline: androidx.compose.ui.graphics.Color get() = Luxury.Outline
+private val PartDanger: androidx.compose.ui.graphics.Color get() = Luxury.Danger
 
 /** Where a widget's settings window came from, and what it can do with the Dashboard. */
 internal class SettingsFrame(
@@ -71,7 +72,7 @@ internal fun WidgetSettingsWindow(
 ) {
     LuxuryPopup(onDismiss = frame.onDismiss) {
         Column {
-            Text(if (frame.isNew) "Dodaj: „$title”" else "Ustawienia: „$title”", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text(if (frame.isNew) "Dodaj: „$title”" else "Ustawienia: „$title”", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text(module, fontSize = 13.sp, color = Luxury.TextMuted)
         }
         content()
@@ -91,8 +92,8 @@ internal fun WidgetSettingsWindow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        option.label, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
-                        color = when { on -> Luxury.Surface; enabled -> Luxury.TextMuted; else -> Luxury.Disabled.copy(alpha = 0.4f) },
+                        option.label, fontSize = 14.sp, fontFamily = Luxury.HeadingFont, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
+                        color = when { on -> Luxury.OnGold; enabled -> Luxury.TextMuted; else -> Luxury.Disabled.copy(alpha = 0.4f) },
                     )
                 }
             }
@@ -112,17 +113,19 @@ internal fun WidgetSettingsWindow(
         LuxurySectionTitle("Podgląd", modifier = Modifier.padding(top = 4.dp))
         WidgetPreview(half, preview)
         Spacer(Modifier.height(4.dp))
-        if (frame.isNew) {
-            GoldButton("Dodaj na pulpit", enabled = ready, onClick = onSave)
-            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = frame.onDismiss)
-        } else {
-            GoldButton("Zapisz", enabled = ready, onClick = onSave)
-            Box(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp))
-                    .border(1.dp, PartDanger.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
-                    .clickable(role = Role.Button, onClick = frame.onDelete),
-                contentAlignment = Alignment.Center,
-            ) { Text("Usuń z pulpitu", color = PartDanger, fontSize = 14.sp) }
+        PopupButtons {
+            if (frame.isNew) {
+                GoldButton("Dodaj na pulpit", enabled = ready, onClick = onSave)
+                FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = frame.onDismiss)
+            } else {
+                GoldButton("Zapisz", enabled = ready, onClick = onSave)
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp))
+                        .border(1.dp, PartDanger.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button, onClick = frame.onDelete),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Usuń z pulpitu", color = PartDanger, fontSize = 14.sp) }
+            }
         }
     }
 }

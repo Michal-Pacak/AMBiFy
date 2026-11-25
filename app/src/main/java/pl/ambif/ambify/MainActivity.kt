@@ -44,6 +44,13 @@ class MainActivity : ComponentActivity() {
             val cardMotion = cardAnimations && !session.device.systemAnimationsOff()
             CompositionLocalProvider(LocalAppSession provides session, LocalCardMotion provides cardMotion) {
                 AMBiFyTheme {
+                    // Light theme (Perła): dark clock and battery icons; the dark themes: light ones.
+                    val light = pl.ambif.ambify.ui.theme.Luxury.palette.light
+                    androidx.compose.runtime.LaunchedEffect(light) {
+                        val clear = android.graphics.Color.TRANSPARENT
+                        val style = if (light) androidx.activity.SystemBarStyle.light(clear, clear) else androidx.activity.SystemBarStyle.dark(clear)
+                        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                    }
                     val update by updater.state.collectAsState()
                     val latest by updater.latest.collectAsState()
                     val forced = latest?.takeIf { UpdateRules.isForced(it) }

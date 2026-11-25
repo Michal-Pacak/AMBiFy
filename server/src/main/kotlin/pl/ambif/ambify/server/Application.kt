@@ -20,6 +20,7 @@ import pl.ambif.ambify.server.accounts.AccountService
 import pl.ambif.ambify.server.accounts.ApiException
 import pl.ambif.ambify.server.accounts.DemoSeed
 import pl.ambif.ambify.server.accounts.accountRoutes
+import pl.ambif.ambify.server.accounts.themeRoutes
 import pl.ambif.ambify.server.lists.ListFileStore
 import pl.ambif.ambify.server.lists.ListService
 import pl.ambif.ambify.server.lists.listRoutes
@@ -62,6 +63,7 @@ fun main() {
             MonitorService(File(config.monitorDir)),
             dataDir.resolve("lists-files"),
             dataDir.resolve("avatars"),
+            dataDir.resolve("wallpapers"),
         )
     }.start(wait = true)
 }
@@ -77,12 +79,15 @@ fun Application.module(
     listFilesDir: File = File("lists-files"),
     /** 0.7.6: profile photos, next to the database too. */
     photosDir: File = File("avatars"),
+    /** 0.7.7: wallpaper photos of own themes, next to the database too. */
+    wallpapersDir: File = File("wallpapers"),
 ) {
     val accounts = AccountService(database, tokens)
     val timetable = TimetableService(database, accounts, vault)
     val listFiles = ListFileStore(listFilesDir)
     val lists = ListService(database, accounts, files = listFiles)
     val photos = pl.ambif.ambify.server.accounts.ProfilePhotos(database, accounts, photosDir)
+    val themes = pl.ambif.ambify.server.accounts.ThemeService(database, accounts, wallpapersDir)
     install(ContentNegotiation) {
         json()
     }
@@ -95,6 +100,7 @@ fun Application.module(
     installAccountAuth(accounts, tokens)
     routing {
         accountRoutes(accounts, photos)
+        themeRoutes(themes)
         timetableRoutes(timetable)
         listRoutes(lists, listFiles)
         releaseRoutes(releases)

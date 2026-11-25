@@ -112,7 +112,7 @@ internal fun MemoryDialog(
     val missingDate = list.type == ListType.DEADLINES && picks.any { it.values.dueDate == null && !it.values.urgent }
     val title = @Composable { text: String ->
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(text, fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text(text, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             Text(list.name, fontSize = 12.sp, color = Muted)
         }
     }
@@ -226,7 +226,7 @@ internal fun MemoryDialog(
 
     forget?.let { entry ->
         LuxuryPopup(onDismiss = { forget = null }) {
-            Text("Usunąć „${nameOf(entry.values)}” z pamięci?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("Usunąć „${nameOf(entry.values)}” z pamięci?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
             Text("Zniknie z podpowiedzi u wszystkich w społeczności. Pozycje na listach zostają; dodany ponownie wróci do pamięci.", fontSize = 13.sp, color = Muted, lineHeight = 19.sp)
             DangerButton("Usuń z pamięci", {
                 lists.forget(list.id, entry.values)
@@ -283,7 +283,7 @@ private fun MemoryRow(ui: ListsUi, list: ListInfo, entry: ListMemory, on: Boolea
             modifier = Modifier.size(22.dp).clip(shape)
                 .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.6.dp, Luxury.GoldBase, shape)),
             contentAlignment = Alignment.Center,
-        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.Surface, modifier = Modifier.size(15.dp)) }
+        ) { if (on) Icon(AppIcons.Check, contentDescription = null, tint = Luxury.OnGold, modifier = Modifier.size(15.dp)) }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(nameText(entry.values), fontSize = 15.sp)
             memoryMeta(ui, list, entry).takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, color = Muted) }
@@ -336,7 +336,7 @@ private fun PickCard(ui: ListsUi, list: ListInfo, pick: Pick, open: ListItem?, d
     val quantity = list.type == ListType.SHOPPING && list.look.quantity
     Column(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Outline, RoundedCornerShape(16.dp))
-            .background(Color(0xFF1B1B1F)).padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 12.dp),
+            .background(Luxury.Surface).padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -353,7 +353,7 @@ private fun PickCard(ui: ListsUi, list: ListInfo, pick: Pick, open: ListItem?, d
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StepCircle(AppIcons.Minus, "Mniej") {
                     val q = values.quantity ?: return@StepCircle
-                    val next = Math.round((q - step) * 10) / 10.0
+                    val next = Lists.round(q - step)
                     pick.values = if (next <= 0) values.copy(quantity = null, unit = null, packSize = null) else values.copy(quantity = next)
                 }
                 Text(
@@ -362,7 +362,7 @@ private fun PickCard(ui: ListsUi, list: ListInfo, pick: Pick, open: ListItem?, d
                 )
                 StepCircle(AppIcons.Plus, "Więcej") {
                     val q = values.quantity
-                    pick.values = if (q == null) values.copy(quantity = if (step >= 1) step else 1.0, unit = values.unit ?: "szt.") else values.copy(quantity = Math.round((q + step) * 10) / 10.0)
+                    pick.values = if (q == null) values.copy(quantity = if (step >= 1) step else 1.0, unit = values.unit ?: "szt.") else values.copy(quantity = Lists.round(q + step))
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

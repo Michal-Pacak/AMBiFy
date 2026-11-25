@@ -15,6 +15,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import pl.ambif.ambify.shared.PlatformAccount
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,6 +69,7 @@ fun PlatformScreen(resetKey: Int = 0) {
     val api = session.api
     val scope = rememberCoroutineScope()
     var communities by remember { mutableStateOf<List<PlatformCommunity>>(emptyList()) }
+    var accounts by remember { mutableStateOf<List<PlatformAccount>>(emptyList()) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -74,6 +80,7 @@ fun PlatformScreen(resetKey: Int = 0) {
             try {
                 block()
                 communities = api.platformCommunities()
+                runCatching { accounts = api.platformAccounts() }
                 notice = done
             } catch (e: ServerError) {
                 notice = e.message
@@ -85,6 +92,7 @@ fun PlatformScreen(resetKey: Int = 0) {
     suspend fun grant(communityId: String, key: String, granted: Boolean) {
         api.setGrant(communityId, key, granted)
         session.showModules(api.modules())
+        runCatching { session.refreshThemes() }
     }
 
     LaunchedEffect(Unit) { act {} }
@@ -114,11 +122,25 @@ fun PlatformScreen(resetKey: Int = 0) {
                 LuxurySectionTitle("Społeczności (${shown.size})", modifier = Modifier.padding(start = 4.dp))
                 shown.forEach { community -> CommunityRow(community) { selectedId = community.id } }
                 EmailAction(
+                    accounts = accounts,
                     title = "Pozwól założyć kolejną społeczność za darmo",
                     info = "Ta osoba może bez opłaty założyć jedną kolejną społeczność.",
                     action = "Nadaj",
                 ) { email -> act("$email może założyć kolejną społeczność.") { api.addFoundingCredit(email) } }
                 EmailAction(
+                    accounts = accounts,
+                    title = "Premium konta (motywy)",
+                    info = "Kod i Gaming, edytor motywów i tapeta dla tej osoby, w każdej społeczności bez blokady motywu.",
+                    action = "Przyznaj",
+                ) { email -> act("$email ma Premium konta.") { api.setAccountPremium(email, true); runCatching { session.refreshThemes() } } }
+                EmailAction(
+                    accounts = accounts,
+                    title = "Odbierz Premium konta",
+                    info = "Wraca motyw społeczności; własne motywy tej osoby zostają zapisane.",
+                    action = "Odbierz",
+                ) { email -> act("$email nie ma już Premium konta.") { api.setAccountPremium(email, false); runCatching { session.refreshThemes() } } }
+                EmailAction(
+                    accounts = accounts,
                     title = "Kod resetu hasła dla Ownera",
                     info = "Gdy Owner zapomni hasła, nikt w jego społeczności nie może mu dać kodu.",
                     action = "Utwórz kod",
@@ -166,6 +188,12 @@ fun PlatformScreen(resetKey: Int = 0) {
                             }
                         }
                     }
+                }
+                AccountCard("Wygląd") {
+                    SwitchRow(
+                        "Premium społeczności: motywy", pl.ambif.ambify.shared.Themes.COMMUNITY_GRANT in selected.grants, enabled = true,
+                        below = { Text("Kod, Gaming, motywy społeczności i tapeta", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    ) { act { grant(selected.id, pl.ambif.ambify.shared.Themes.COMMUNITY_GRANT, it) } }
                 }
                 Text(
                     "Przełącznik nadaje albo odbiera bez opłaty. Moduły basic są zawsze w cenie, ich dodatki premium są pod linkiem.",
@@ -221,8 +249,10 @@ private fun GrantRow(label: String, key: String, community: PlatformCommunity, o
 }
 
 @Composable
-private fun EmailAction(title: String, info: String, action: String, onSubmit: (String) -> Unit) {
+private fun EmailAction(accounts: List<PlatformAccount>, title: String, info: String, action: String, onSubmit: (String) -> Unit) {
     var email by rememberSaveable(title) { mutableStateOf("") }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val hintsInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     LuxuryCard(contentPadding = PaddingValues(0.dp)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             LuxurySectionTitle(title)
@@ -235,6 +265,33 @@ private fun EmailAction(title: String, info: String, action: String, onSubmit: (
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
             )
+            // After every letter: the accounts whose e-mail or name has it (tap = fill in the e-mail).
+            val hints = if (email.isBlank()) emptyList() else accounts.filter {
+                it.email.contains(email, true) || it.name.contains(email, true)
+            }.filterNot { it.email.equals(email, true) }.take(6)
+            // The hints show up under the field: scroll so they are above the keyboard.
+            LaunchedEffect(hints.map { it.email }) { if (hints.isNotEmpty()) { kotlinx.coroutines.delay(150); hintsInView.bringIntoView() } }
+            Column(modifier = Modifier.bringIntoViewRequester(hintsInView)) {
+            hints.forEach { account ->
+                Column(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
+                        // The keyboard first finishes the word being typed (else it would write it back over the hint).
+                        focus.clearFocus()
+                        email = account.email
+                    }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    Text(account.email, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        (listOf(account.name) + account.communities).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            }
+            if (email.isNotBlank() && hints.isEmpty() && accounts.none { it.email.equals(email, true) }) {
+                Text("Brak konta pasującego do „$email”.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             ButtonsRow {
                 FilledTonalButton(onClick = { onSubmit(email) }, enabled = email.isNotBlank()) { Text(action) }
             }

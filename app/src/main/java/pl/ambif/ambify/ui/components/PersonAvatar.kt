@@ -135,12 +135,12 @@ private fun AvatarZoomDialog(name: String, avatar: Avatar?, photo: String?, onDi
             } else {
                 Initials(name, avatar, 200.dp, Modifier)
             }
-            Text(name, fontSize = 22.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+            Text(name, fontSize = 22.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
             if (photo == null && avatar?.photo != null) Text("zdjęcie ukryte w tej społeczności", fontSize = 12.sp, color = Luxury.TextMuted)
-            problem?.let { Text(it, fontSize = 13.sp, color = Color(0xFFE79A86), textAlign = TextAlign.Center) }
-            PopupButton("Zamknij", Luxury.Text, Color(0xFF3A3A40), onDismiss)
+            problem?.let { Text(it, fontSize = 13.sp, color = Luxury.Danger, textAlign = TextAlign.Center) }
+            PopupButton("Zamknij", Luxury.Text, Luxury.Outline, onDismiss)
             if (mayHide) {
-                PopupButton("Ukryj zdjęcie w tej społeczności", Color(0xFFE79A86), Color(0xFFE79A86).copy(alpha = 0.6f)) {
+                PopupButton("Ukryj zdjęcie w tej społeczności", Luxury.Danger, Luxury.Danger.copy(alpha = 0.6f)) {
                     scope.launch {
                         try {
                             session.api.setPhotoHidden(owner!!, true)
@@ -166,7 +166,7 @@ private fun PopupButton(label: String, color: Color, border: Color, onClick: () 
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp))
             .border(1.dp, border, RoundedCornerShape(24.dp)).clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, color = color, fontSize = 15.sp) }
+    ) { Text(label, color = color, fontSize = 15.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
 }
 
 @Composable
@@ -193,7 +193,7 @@ private fun Initials(name: String, avatar: Avatar?, size: Dp, modifier: Modifier
             Text(
                 initials,
                 modifier = if (triangle) Modifier.padding(bottom = size * 0.12f) else Modifier,
-                color = Luxury.CardBottom,
+                color = Luxury.OnGold,
                 fontWeight = FontWeight.Bold,
                 fontSize = letters,
                 letterSpacing = 0.3.sp,

@@ -74,10 +74,10 @@ import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val Rain = Color(0xFF8EC3F0)
-private val Warn = Color(0xFFE79A86)
-private val Dot = Color(0xFF4A4A52)
-private val FieldOutline = Color(0xFF3A3A40)
+private val Rain: androidx.compose.ui.graphics.Color get() = Luxury.Info
+private val Warn: androidx.compose.ui.graphics.Color get() = Luxury.Danger
+private val Dot: androidx.compose.ui.graphics.Color get() = Luxury.Outline
+private val FieldOutline: androidx.compose.ui.graphics.Color get() = Luxury.Outline
 
 /** "opt|nohours" in [DashboardWidget.people]: the widget shows no hours and warnings. */
 private const val NO_HOURS = "opt|nohours"

@@ -58,12 +58,13 @@ import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** What an action ended with, for the screen's bubble: kind, title, text. */
 typealias Outcome = (MessageKind, String, String) -> Unit
 
-private val Outline = Color(0xFF3A3A40)
+private val Outline: androidx.compose.ui.graphics.Color get() = Luxury.Outline
 
 /** "23.11" from a time in milliseconds. */
 internal fun shortDate(at: Long): String {
@@ -114,7 +115,7 @@ fun HandOverDialog(community: CommunitySummary, leave: Boolean, onDismiss: () ->
     var picked by remember(people.firstOrNull()?.id) { mutableStateOf(people.firstOrNull()?.id) }
     val stayRole = loaded?.roles?.firstOrNull { !it.owner }?.label() ?: "Admin"
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(if (leave) "Opuścić „${community.name}”?" else "Przekaż rolę Ownera", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(if (leave) "Opuścić „${community.name}”?" else "Przekaż rolę Ownera", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         MessageBar(
             MessageKind.INFO,
             if (leave) "Najpierw wskaż, kto przejmie społeczność" else "Kto ma zostać Ownerem „${community.name}”?",
@@ -133,16 +134,18 @@ fun HandOverDialog(community: CommunitySummary, leave: Boolean, onDismiss: () ->
             }
         }
         val who = people.firstOrNull { it.id == picked }
-        if (who != null) {
-            GoldButton("Poproś: ${who.name.substringBefore(' ')}") {
-                session.attempt(scope, outcome) {
-                    requestOwnerTransfer(community.id, who.id, leave)
-                    onDismiss()
-                    outcome(MessageKind.SUCCESS, "Wysłano prośbę", "${who.name} zobaczy ją na Pulpicie. Do zgody nadal jesteś Ownerem.")
+        PopupButtons {
+            if (who != null) {
+                GoldButton("Poproś: ${who.name.substringBefore(' ')}") {
+                    session.attempt(scope, outcome) {
+                        requestOwnerTransfer(community.id, who.id, leave)
+                        onDismiss()
+                        outcome(MessageKind.SUCCESS, "Wysłano prośbę", "${who.name} zobaczy ją na Pulpicie. Do zgody nadal jesteś Ownerem.")
+                    }
                 }
             }
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
         }
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
     }
 }
 
@@ -181,7 +184,7 @@ fun DeleteCommunityDialog(community: CommunitySummary, onDismiss: () -> Unit, ou
     var tried by remember { mutableStateOf(false) }
     val same = name.trim() == community.name.trim()
     LuxuryPopup(onDismiss = onDismiss) {
-        Text("Usunąć „${community.name}”?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Usunąć „${community.name}”?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         MessageBar(
             MessageKind.ERROR, "Jesteś tu jedyną osobą",
             "Opuszczenie usunie społeczność razem z jej listami, planami i ustawieniami. Tego nie da się cofnąć.",
@@ -195,17 +198,19 @@ fun DeleteCommunityDialog(community: CommunitySummary, onDismiss: () -> Unit, ou
             modifier = Modifier.fillMaxWidth(),
         )
         if (tried && !same) FieldError("Wpisz dokładnie: ${community.name}")
-        DangerButton("Usuń społeczność", {
-            tried = true
-            if (same) {
-                session.attempt(scope, outcome) {
-                    deleteCommunity(community.id, name)
-                    onDismiss()
-                    outcome(MessageKind.SUCCESS, "Usunięto społeczność", community.name)
+        PopupButtons {
+            DangerButton("Usuń społeczność", {
+                tried = true
+                if (same) {
+                    session.attempt(scope, outcome) {
+                        deleteCommunity(community.id, name)
+                        onDismiss()
+                        outcome(MessageKind.SUCCESS, "Usunięto społeczność", community.name)
+                    }
                 }
-            }
-        })
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+            })
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
@@ -215,20 +220,22 @@ fun LeaveCommunityDialog(community: CommunitySummary, onDismiss: () -> Unit, out
     val session = LocalAppSession.current
     val scope = rememberCoroutineScope()
     LuxuryPopup(onDismiss = onDismiss) {
-        Text("Opuścić „${community.name}”?", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Opuścić „${community.name}”?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         MessageBar(
             MessageKind.WARNING, "Stracisz dostęp",
             "Do jej list, planów i Pulpitu. Wrócisz tylko z nowym kodem zaproszenia od Ownera lub Admina.",
         )
-        DangerButton("Opuść społeczność", {
-            session.attempt(scope, outcome) {
-                leaveCommunity(community.id)
-                onDismiss()
-                val now = (state.value as? pl.ambif.ambify.core.session.SessionState.SignedIn)?.me?.familyName
-                outcome(MessageKind.SUCCESS, "Opuszczono „${community.name}”", now?.let { "Jesteś w: $it" }.orEmpty())
-            }
-        })
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            DangerButton("Opuść społeczność", {
+                session.attempt(scope, outcome) {
+                    leaveCommunity(community.id)
+                    onDismiss()
+                    val now = (state.value as? pl.ambif.ambify.core.session.SessionState.SignedIn)?.me?.familyName
+                    outcome(MessageKind.SUCCESS, "Opuszczono „${community.name}”", now?.let { "Jesteś w: $it" }.orEmpty())
+                }
+            })
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 

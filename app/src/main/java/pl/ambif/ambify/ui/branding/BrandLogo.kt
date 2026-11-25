@@ -172,11 +172,15 @@ fun BrandLogo(
         }
     }
 
-    AndroidView(
-        factory = { webView },
-        modifier = modifier,
-        update = {},
-    )
+    // A new view (e.g. the bar's color changed with the theme) replaces the old, destroyed one on the screen:
+    // without the key the screen kept showing the old one — an empty cradle (Michał, 25.11).
+    androidx.compose.runtime.key(webView) {
+        AndroidView(
+            factory = { webView },
+            modifier = modifier,
+            update = {},
+        )
+    }
 }
 
 class LogoAnimationBridge(

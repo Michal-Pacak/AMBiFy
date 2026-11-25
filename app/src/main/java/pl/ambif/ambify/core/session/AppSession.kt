@@ -12,6 +12,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import pl.ambif.ambify.shared.ThemeState
+import pl.ambif.ambify.shared.Themes
+import pl.ambif.ambify.ui.theme.Luxury
+import pl.ambif.ambify.ui.theme.OwnPalette
+import pl.ambif.ambify.ui.theme.Palette
+import pl.ambif.ambify.ui.theme.Palettes
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -65,6 +71,7 @@ class AppSession(context: Context) {
 
     init {
         pl.ambif.ambify.ui.components.AvatarImages.init(context.applicationContext, api)
+        pl.ambif.ambify.ui.theme.WallpaperImages.init(context.applicationContext, api)
     }
 
     /** Shown on the "My devices" list, e.g. "Galaxy S24 Ultra". */
@@ -84,6 +91,67 @@ class AppSession(context: Context) {
 
     val isSignedIn: Boolean get() = tokenStore.refreshToken != null
 
+    /** 0.7.7: themes of my account and communities; kept on the phone so the right colors show from the start. */
+    private val _themes = MutableStateFlow(cachedThemes())
+    val themes: StateFlow<ThemeState?> = _themes.asStateFlow()
+
+    init {
+        applyTheme()
+    }
+
+    /** The theme being edited: while set, the whole app wears it, so every change shows live. */
+    private var preview: Palette? = null
+
+    fun previewTheme(palette: Palette?) {
+        preview = palette
+        applyTheme()
+    }
+
+    /** Paints the app in the theme for the current community (or the account's, outside one). */
+    fun applyTheme() {
+        preview?.let { Luxury.palette = it; return }
+        val state = _themes.value
+        val community = (_state.value as? SessionState.SignedIn)?.me?.communityId
+        if (state == null || !isSignedIn) {
+            Luxury.palette = Palettes.LUXURY
+            return
+        }
+        val key = Themes.effective(state, community)
+        Luxury.palette = paletteOf(state, key)
+    }
+
+    /** The palette of [key]: a ready theme, or an own one (mine or a community's). */
+    fun paletteOf(state: ThemeState, key: String): Palette {
+        Palettes.of(key)?.let { return it }
+        val id = Themes.customId(key) ?: return Palettes.LUXURY
+        val own = state.own.firstOrNull { it.id == id } ?: state.communities.flatMap { it.own }.firstOrNull { it.id == id }
+        return own?.let { OwnPalette.from(it) } ?: Palettes.LUXURY
+    }
+
+    suspend fun refreshThemes() {
+        showThemes(api.themes())
+    }
+
+    fun showThemes(state: ThemeState) {
+        preferences.edit { putString(KEY_THEMES, json.encodeToString(state)) }
+        _themes.value = state
+        applyTheme()
+    }
+
+    suspend fun setAccountTheme(theme: String?) = showThemes(api.setAccountTheme(theme))
+    suspend fun setMemberTheme(communityId: String, theme: String?) = showThemes(api.forCommunity(communityId).setMemberTheme(theme))
+    suspend fun setCommunityTheme(communityId: String, theme: String, locked: Boolean) =
+        showThemes(api.forCommunity(communityId).setCommunityTheme(theme, locked))
+    /** An own theme: mine ([communityId] null) or that community's. */
+    suspend fun saveOwnTheme(theme: pl.ambif.ambify.shared.OwnTheme, communityId: String?) =
+        showThemes((communityId?.let { api.forCommunity(it) } ?: api).saveOwnTheme(theme, community = communityId != null))
+    suspend fun deleteOwnTheme(id: String, communityId: String?) = showThemes((communityId?.let { api.forCommunity(it) } ?: api).deleteOwnTheme(id))
+    suspend fun uploadWallpaper(jpeg: java.io.File, communityId: String?): String =
+        (communityId?.let { api.forCommunity(it) } ?: api).uploadWallpaper(jpeg, community = communityId != null)
+
+    private fun cachedThemes(): ThemeState? =
+        preferences.getString(KEY_THEMES, null)?.let { runCatching { json.decodeFromString<ThemeState>(it) }.getOrNull() }
+
     suspend fun signIn(tokens: Tokens) {
         tokenStore.accessToken = tokens.accessToken
         tokenStore.refreshToken = tokens.refreshToken
@@ -102,6 +170,7 @@ class AppSession(context: Context) {
             putString(KEY_COMMUNITY, me.communityId)
         }
         if (isSignedIn) _state.value = SessionState.SignedIn(me)
+        applyTheme()
     }
 
     /** On start: refresh the profile in the background (a revoked session signs out by itself). */
@@ -181,6 +250,7 @@ class AppSession(context: Context) {
     }
 
     private suspend fun refreshCommunity() {
+        runCatching { refreshThemes() }
         if ((_state.value as? SessionState.SignedIn)?.me?.communityId == null) return
         runCatching { showModules(api.modules()) }
         runCatching { syncModuleOrder() }
@@ -225,7 +295,9 @@ class AppSession(context: Context) {
         pl.ambif.ambify.features.lists.data.ListRepository.clear(appContext)
         pl.ambif.ambify.features.home.DashboardStore(appContext).clear()
         _modules.value = null
+        _themes.value = null
         _state.value = SessionState.SignedOut
+        applyTheme()
     }
 
     private fun cachedModules(): CommunityModules? =
@@ -242,6 +314,7 @@ class AppSession(context: Context) {
         const val KEY_ME = "me"
         const val KEY_COMMUNITY = "community"
         const val KEY_MODULES = "modules"
+        const val KEY_THEMES = "themes"
     }
 }
 

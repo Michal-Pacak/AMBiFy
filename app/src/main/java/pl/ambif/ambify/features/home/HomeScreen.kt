@@ -180,7 +180,7 @@ fun HomeScreen(
                 footer = {
                     if (known.isEmpty()) {
                         LuxuryCard(contentPadding = PaddingValues(20.dp)) {
-                            Text("Twój Pulpit jest pusty", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                            Text("Twój Pulpit jest pusty", fontSize = 18.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                             Text(
                                 "Ułóż tu to, na co patrzysz najczęściej, np. lekcje dzieci. Każdy moduł ma swoje widgety.",
                                 fontSize = 14.sp,
@@ -366,7 +366,7 @@ private fun AddWidgetButton(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.Center,
     ) {
         Icon(AppIcons.Plus, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(20.dp))
-        Text("  Dodaj widget", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldText)
+        Text("  Dodaj widget", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldText, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
     }
 }
 

@@ -94,9 +94,9 @@ import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-internal val Muted = Color(0xFFA9A9B1)
-internal val Faint = Color(0xFF85858D)
-internal val Outline = Color(0xFF3A3A40)
+internal val Muted: androidx.compose.ui.graphics.Color get() = Luxury.Quiet
+internal val Faint: androidx.compose.ui.graphics.Color get() = Luxury.Faint
+internal val Outline: androidx.compose.ui.graphics.Color get() = Luxury.Outline
 
 /**
  * Listy (Stage 5, canvas "AMBiFy Listy", boards 1–9): shopping, tasks and deadlines of the community. Works on the
@@ -494,7 +494,7 @@ private fun ListsOverview(ui: ListsUi, onOpen: (ListInfo) -> Unit, onDialog: (Li
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                Text("Listy", fontSize = 26.sp, fontWeight = FontWeight.Medium)
+                Text("Listy", fontSize = 26.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
                 Text("Społeczność: ${ui.me.familyName.orEmpty()}", fontSize = 13.sp, color = Muted)
             }
             SyncMark(ui.status)
@@ -621,7 +621,7 @@ internal fun summaryOf(ui: ListsUi, list: ListInfo, items: List<ListItem>): Pair
 
 @Composable
 private fun Progress(done: Float) {
-    Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x14FFFFFF))) {
+    Box(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Luxury.Text.copy(alpha = 0.08f))) {
         Box(modifier = Modifier.fillMaxWidth(done.coerceIn(0f, 1f)).height(4.dp).background(Luxury.GoldFill))
     }
 }

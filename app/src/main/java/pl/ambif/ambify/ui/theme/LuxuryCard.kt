@@ -28,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -53,7 +56,11 @@ import kotlinx.coroutines.launch
 
 private val CornerRadius = 20.dp
 
-val LuxuryCardShape = RoundedCornerShape(CornerRadius)
+private val RoundCard = RoundedCornerShape(CornerRadius)
+private val CutCard = RoundedCornerShape(topStart = 4.dp, topEnd = CornerRadius, bottomEnd = 4.dp, bottomStart = CornerRadius)
+
+/** Cards and popups: rounded, or Gaming's cut corners. */
+val LuxuryCardShape: RoundedCornerShape get() = if (Luxury.palette.cutCorners) CutCard else RoundCard
 
 /**
  * A point on the border of the card's bounding box moved onto the card's real outline: inside a corner square
@@ -122,6 +129,9 @@ fun LuxuryCard(
 
     /** Rings where the raft's edge in direction [towards] (from its center) touches the water. */
     fun splash(towards: Offset, strength: Float, rings: Int? = null) {
+        val effect = Luxury.palette.effect
+        // Gaming's hit is over the card, at the finger; the weak side dips give only rings.
+        if (effect == TouchEffect.HIT || (rings != null && effect != TouchEffect.RINGS)) return
         val layout = coordinates.value ?: return
         val (dx, dy) = towards
         // From the center along the direction to the border of the card.
@@ -130,7 +140,11 @@ fun LuxuryCard(
         val height = layout.size.height.toFloat()
         val point = onRoundedCorner(Offset((0.5f + dx * reach) * width, (0.5f + dy * reach) * height), width, height, cornerPx)
         val windowPoint = layout.localToWindow(point)
-        if (rings == null) water?.splash(windowPoint, strength) else water?.splash(windowPoint, strength, rings)
+        when {
+            effect != TouchEffect.RINGS -> if (layout.isAttached) water?.burst(windowPoint, layout.boundsInWindow(), strength, under = true)
+            rings == null -> water?.splash(windowPoint, strength)
+            else -> water?.splash(windowPoint, strength, rings)
+        }
     }
 
     val floating = if (!motion) Modifier else Modifier.pointerInput(Unit) {
@@ -156,6 +170,10 @@ fun LuxuryCard(
                     break
                 }
                 if (!change.pressed) break
+            }
+            // The other themes: their effect once, where the finger was — for a tap, not when the finger scrolled.
+            if (!scrolled && Luxury.palette.effect == TouchEffect.HIT) coordinates.value?.let { layout ->
+                if (layout.isAttached) water?.burst(layout.localToWindow(down.position), layout.boundsInWindow(), under = false)
             }
             scope.launch {
                 pressed.join()
@@ -197,8 +215,10 @@ fun LuxuryCard(
                 scaleY = scale
                 cameraDistance = 14f * density
                 shadowElevation = (14f - 9f * abs(tipped)).dp.toPx()
-                ambientShadowColor = Color.Black
-                spotShadowColor = Color.Black
+                // Neon, Kod, Gaming: the shadow glows in the theme's color.
+                val glow = Luxury.palette.glow
+                ambientShadowColor = if (glow.alpha > 0f) glow else Color.Black
+                spotShadowColor = if (glow.alpha > 0f) glow else Color.Black
                 shape = LuxuryCardShape
                 clip = true
             }
@@ -206,6 +226,14 @@ fun LuxuryCard(
             .onGloballyPositioned { coordinates.value = it }
             .background(Luxury.CardBrush)
             .border(1.dp, Luxury.BorderBrush, LuxuryCardShape)
+            // "Pasy" (own themes): a band of the three colors on top of the card, like a scarf.
+            .then(if (Luxury.palette.band) Modifier.drawWithContent {
+                drawContent()
+                val trio = Luxury.palette.trio
+                val third = size.width / 3f
+                val band = 5.dp.toPx()
+                trio.take(3).forEachIndexed { i, color -> drawRect(color, Offset(third * i, 0f), Size(third + 1f, band)) }
+            } else Modifier)
             .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(spacing),
         content = content,
@@ -251,6 +279,7 @@ fun LuxurySectionTitle(text: String, modifier: Modifier = Modifier, color: Color
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.6.sp,
+        fontFamily = Luxury.HeadingFont,
     )
 }
 

@@ -3,6 +3,8 @@ package pl.ambif.ambify.ui.navigation
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -128,10 +130,14 @@ fun AppNavHost(
                     onDestinationSelected = { route ->
                         // Tapping the module you are in goes back to its main screen (like the logo goes to the
                         // Dashboard), from any of its sub-screens. An open popup takes that tap only to close.
-                        if (moduleOf(navController.currentDestination?.route) == route) {
-                            navController.popBackStack(route, inclusive = false)
-                            moduleReselections++
-                        } else {
+                        // Any screen opened from the module counts (also new ones whose route does not start with
+                        // the module's): the module's main screen is in the back stack under them.
+                        val inModule = moduleOf(navController.currentDestination?.route) == route ||
+                            navController.currentBackStack.value.any { it.destination.route == route }
+                        // The bar is above every screen: whatever is open, its tap lands on that module's main screen
+                        // (inner steps of Listy, Plan… reset too).
+                        moduleReselections++
+                        if (!inModule || !navController.popBackStack(route, inclusive = false)) {
                             navController.navigateToBottomDestination(route)
                         }
                     },
@@ -140,10 +146,15 @@ fun AppNavHost(
         },
     ) { contentPadding ->
         // Screens are transparent: the Scaffold paints the background and the cards' rings go on this "water".
+        // An own theme's wallpaper behind the screens and their "water".
+        pl.ambif.ambify.ui.theme.WallpaperLayer()
         WaterLayer(modifier = Modifier.padding(contentPadding)) {
         NavHost(
             navController = navController,
             startDestination = AppDestination.Splash.route,
+            // Every screen makes room for the keyboard (the module bar's height is already given above), so a
+            // field low on the screen scrolls up above it instead of hiding under it.
+            modifier = Modifier.consumeWindowInsets(contentPadding).imePadding(),
         ) {
             composable(AppDestination.Splash.route) {
                 SplashScreen(
@@ -242,11 +253,42 @@ fun AppNavHost(
                     onOpenAccount = { navController.navigate(AppDestination.SettingsAccount.route) },
                     onOpenCommunities = { navController.navigate(AppDestination.SettingsCommunities.route) },
                     onOpenApp = { navController.navigate(AppDestination.SettingsApp.route) },
+                    onOpenLook = { navController.navigate(AppDestination.SettingsLook.route) },
                 )
             }
 
             composable(AppDestination.SettingsAccount.route) {
                 AccountSettingsScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(AppDestination.SettingsLook.route) {
+                pl.ambif.ambify.features.settings.AccountThemeScreen(
+                    onBack = { navController.popBackStack() },
+                    onEdit = { id -> navController.navigate(AppDestination.ThemeEditor.of(null, id)) },
+                )
+            }
+
+            composable(
+                AppDestination.CommunityLook.route,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                pl.ambif.ambify.features.settings.CommunityThemeScreen(
+                    communityId = id,
+                    onBack = { navController.popBackStack() },
+                    onEdit = { themeId -> navController.navigate(AppDestination.ThemeEditor.of(id, themeId)) },
+                )
+            }
+
+            composable(
+                AppDestination.ThemeEditor.route,
+                arguments = listOf(navArgument("community") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                pl.ambif.ambify.features.settings.ThemeEditorScreen(
+                    communityId = entry.arguments?.getString("community")?.takeIf { it != "-" },
+                    themeId = entry.arguments?.getString("id")?.takeIf { it != "new" },
+                    onBack = { navController.popBackStack() },
+                )
             }
 
             composable(AppDestination.SettingsApp.route) {
@@ -262,6 +304,7 @@ fun AppNavHost(
                                 CommunitySection.MODULES -> AppDestination.CommunityModules.of(id)
                                 CommunitySection.PERMISSIONS -> AppDestination.CommunityPermissions.of(id)
                                 CommunitySection.REQUESTS -> AppDestination.CommunityRequests.of(id)
+                                CommunitySection.LOOK -> AppDestination.CommunityLook.of(id)
                                 else -> AppDestination.CommunityPeople.of(id, section.name)
                             },
                         )
@@ -318,12 +361,13 @@ private fun moduleOf(route: String?): String? = when {
     else -> route
 }
 
+/**
+ * The module bar is above every screen: its tap always opens the main screen of that module, never the sub-screen
+ * the module was left on (no saved/restored state).
+ */
 private fun NavHostController.navigateToBottomDestination(route: String) {
     navigate(route) {
-        popUpTo(AppDestination.Home.route) {
-            saveState = true
-        }
+        popUpTo(AppDestination.Home.route)
         launchSingleTop = true
-        restoreState = true
     }
 }

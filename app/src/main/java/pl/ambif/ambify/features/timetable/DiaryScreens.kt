@@ -46,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -78,23 +79,24 @@ import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val Ok = Color(0xFF9AD7A4)
-private val Failed = Color(0xFFFF8A80)
-private val Info = Color(0xFF8EC3F0)
-private val Outline = Color(0xFF5A5A60)
+private val Ok get() = Luxury.Ok
+private val Failed get() = Luxury.Error
+private val Info get() = Luxury.Info
+private val Outline get() = Luxury.Faint
 
-/** The gold main action of a screen. */
+/** The gold main action of a screen (in the theme's colors, lettering and shape). */
 @Composable
 internal fun GoldButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
+            .then(if (enabled && Luxury.palette.glow.alpha > 0f) Modifier.shadow(12.dp, Luxury.ButtonShape, ambientColor = Luxury.palette.glow, spotColor = Luxury.palette.glow) else Modifier)
+            .clip(Luxury.ButtonShape)
             .background(if (enabled) Luxury.GoldFill else androidx.compose.ui.graphics.SolidColor(Outline))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Luxury.Surface) }
+    ) { Text(Luxury.label(label), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Luxury.OnGold, fontFamily = Luxury.HeadingFont) }
 }
 
 /** A bordered action: gold for the usual ones, grey for "Odłącz", "Anuluj". */
@@ -103,9 +105,9 @@ internal fun FramedButton(label: String, gold: Boolean = true, modifier: Modifie
     OutlinedButton(
         onClick = onClick,
         border = BorderStroke(1.dp, if (gold) Luxury.GoldLink else Outline),
-        shape = RoundedCornerShape(22.dp),
+        shape = Luxury.SmallButtonShape,
         modifier = modifier.heightIn(min = 44.dp),
-    ) { Text(label, color = if (gold) Luxury.GoldText else Luxury.TextMuted, fontSize = 14.sp) }
+    ) { Text(Luxury.label(label), color = if (gold) Luxury.GoldText else Luxury.TextMuted, fontSize = 14.sp, fontFamily = Luxury.HeadingFont) }
 }
 
 /**
@@ -293,11 +295,11 @@ private fun AccountChips(members: List<Member>, selected: String?, onPick: (Stri
                     .height(40.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(if (on) Luxury.GoldBase.copy(alpha = 0.16f) else Color.Transparent)
-                    .border(1.dp, if (on) Luxury.GoldLink else Color(0xFF4A4A50), RoundedCornerShape(20.dp))
+                    .border(1.dp, if (on) Luxury.GoldLink else Luxury.Outline, RoundedCornerShape(20.dp))
                     .clickable { if (!on) onPick(id) }
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(label, fontSize = 14.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted) }
+            ) { Text(label, fontSize = 14.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
         }
     }
 }
@@ -509,7 +511,7 @@ private fun ConnectionBox(connection: DiaryConnection, busy: Boolean, onSync: ()
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(if (failed) Failed.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.03f))
-            .border(1.dp, if (failed) Failed.copy(alpha = 0.35f) else Color(0xFF34343A), RoundedCornerShape(14.dp))
+            .border(1.dp, if (failed) Failed.copy(alpha = 0.35f) else Luxury.Outline, RoundedCornerShape(14.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -526,7 +528,7 @@ private fun ConnectionBox(connection: DiaryConnection, busy: Boolean, onSync: ()
             "Uczniowie: " + connection.pupils.joinToString { if (it.clazz.isBlank()) it.name else "${it.name} (${it.clazz})" }.ifBlank { "—" },
             fontSize = 13.sp, color = Luxury.TextMuted,
         )
-        connection.lastError?.let { Text(it, fontSize = 13.sp, color = Color(0xFFFFC9C3)) }
+        connection.lastError?.let { Text(it, fontSize = 13.sp, color = Luxury.Error) }
         Text("Ostatnia aktualizacja: ${syncTime(connection.lastSyncAt)} · następna ${nextSync()}", fontSize = 12.sp, color = Luxury.TextMuted)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (busy) CircularProgressIndicator(color = Luxury.GoldBase, modifier = Modifier.size(24.dp).padding(2.dp))

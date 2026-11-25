@@ -11,6 +11,9 @@ object Organizations : Table("organizations") {
     val createdBy = text("created_by").nullable()
     val paidFounding = bool("paid_founding")
     val photosBlocked = bool("photos_blocked").default(false)
+    val theme = text("theme").nullable()
+    val themeLocked = bool("theme_locked").default(false)
+    val themeSetBy = text("theme_set_by").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -25,6 +28,8 @@ object Users : Table("users") {
     val foundingCredits = integer("founding_credits")
     val createdAt = long("created_at")
     val photoId = text("photo_id").nullable()
+    val theme = text("theme").nullable()
+    val accountPremium = bool("account_premium").default(false)
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -39,6 +44,7 @@ object Memberships : Table("memberships") {
     val dashboard = text("dashboard").nullable()
     val photoHiddenBy = text("photo_hidden_by").nullable()
     val photoHiddenAt = long("photo_hidden_at").nullable()
+    val theme = text("theme").nullable()
     override val primaryKey = PrimaryKey(userId, organizationId)
 }
 
@@ -124,4 +130,21 @@ object OwnerTransfers : Table("owner_transfers") {
     val createdAt = long("created_at")
     val expiresAt = long("expires_at")
     override val primaryKey = PrimaryKey(organizationId)
+}
+
+object OwnThemes : Table("own_themes") {
+    val id = text("id")
+    val userId = text("user_id").nullable()
+    val organizationId = text("organization_id").nullable()
+    val spec = text("spec")
+    val createdAt = long("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object Wallpapers : Table("wallpapers") {
+    val id = text("id")
+    val userId = text("user_id").nullable()
+    val organizationId = text("organization_id").nullable()
+    val createdAt = long("created_at")
+    override val primaryKey = PrimaryKey(id)
 }

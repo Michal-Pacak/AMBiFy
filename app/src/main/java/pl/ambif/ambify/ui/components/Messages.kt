@@ -51,23 +51,34 @@ import pl.ambif.ambify.ui.theme.Luxury
  */
 
 /** Colour, border and fill of each kind; the icon goes with it, the colour is never alone. */
-enum class MessageKind(val color: Color, val border: Color, val fill: Color, val icon: ImageVector) {
+enum class MessageKind(val icon: ImageVector) {
     /** Something failed, or a conflict. Stays until its cause is gone or it is closed. */
-    ERROR(Color(0xFFFF8A8A), Color(0xB3FF6B6B), Color(0x1AFF5050), AppIcons.Alert),
+    ERROR(AppIcons.Alert),
     /** Works, but needs attention. */
-    WARNING(Color(0xFFF6B66E), Color(0x99F6B66E), Color(0x14F6B66E), AppIcons.Warning),
+    WARNING(AppIcons.Warning),
     /** How things are now (offline with a copy on the phone). */
-    STATUS(Color(0xFFE6C65C), Color(0x59E6C65C), Color(0x12D4AF37), AppIcons.Info),
+    STATUS(AppIcons.Info),
     /** An action worked: only for a moment. */
-    SUCCESS(Color(0xFF9FD3A0), Color(0x809FD3A0), Color(0x149FD3A0), AppIcons.Success),
+    SUCCESS(AppIcons.Success),
     /** For information. */
-    INFO(Color(0xFFC9C9CF), Color(0xFF3A3A40), Color(0xFF1D1D21), AppIcons.Info);
+    INFO(AppIcons.Info);
+
+    /** The kind's colour in the current theme (darker on the light Perła). */
+    val color: Color get() = when (this) {
+        ERROR -> Luxury.Error
+        WARNING -> Luxury.Warning
+        STATUS -> Luxury.GoldText
+        SUCCESS -> Luxury.Ok
+        INFO -> Luxury.TextMuted
+    }
+    val border: Color get() = if (this == INFO) Luxury.Outline else color.copy(alpha = if (this == STATUS) 0.35f else 0.6f)
+    val fill: Color get() = if (this == INFO) Luxury.Surface else color.copy(alpha = if (Luxury.palette.light) 0.10f else 0.08f)
 
     /** Status and information titles are plain text; the others take the kind's colour. */
     val titleColor: Color get() = if (this == STATUS || this == INFO) Luxury.Text else color
 }
 
-private val Muted = Color(0xFFA9A9B1)
+private val Muted: androidx.compose.ui.graphics.Color get() = Luxury.Quiet
 private val BarShape = RoundedCornerShape(16.dp)
 
 /**
@@ -171,7 +182,7 @@ fun BoxScope.BubbleHost(bubbles: Bubbles, bottomPadding: Int = 16) {
                 .fillMaxWidth()
                 .shadow(16.dp, BarShape, ambientColor = Color.Black, spotColor = Color.Black)
                 .clip(BarShape)
-                .background(if (kind == MessageKind.ERROR) Color(0xFF2A1D1F) else Color(0xFF1D1D21))
+                .background(if (kind == MessageKind.ERROR) androidx.compose.ui.graphics.lerp(Luxury.Surface, Luxury.Error, 0.08f) else Luxury.Surface)
                 .border(1.dp, kind.border, BarShape)
                 .padding(start = 14.dp, end = if (kind == MessageKind.ERROR) 2.dp else 14.dp, top = 12.dp, bottom = 12.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
@@ -219,7 +230,7 @@ fun MessageChip(kind: MessageKind, label: String, modifier: Modifier = Modifier,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         if (icon != null) Icon(icon, contentDescription = null, tint = kind.color, modifier = Modifier.size(13.dp))
-        Text(label, color = kind.color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = kind.color, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
     }
 }
 
@@ -248,7 +259,7 @@ fun FullScreenMessage(
         Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(kind.color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = kind.color, modifier = Modifier.size(32.dp))
         }
-        Text(title, color = kind.titleColor, fontSize = 20.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+        Text(title, color = kind.titleColor, fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
         Text(text, color = Muted, fontSize = 14.sp, lineHeight = 21.sp, textAlign = TextAlign.Center)
         if (action != null && onAction != null) {
             Box(
@@ -259,7 +270,7 @@ fun FullScreenMessage(
                     .clickable(onClick = onAction)
                     .padding(horizontal = 22.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(action, color = Luxury.Surface, fontSize = 15.sp, fontWeight = FontWeight.Medium) }
+            ) { Text(action, color = Luxury.OnGold, fontSize = 15.sp, fontWeight = FontWeight.Medium) }
         }
     }
 }

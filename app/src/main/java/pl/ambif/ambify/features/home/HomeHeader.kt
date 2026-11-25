@@ -44,6 +44,7 @@ import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 
 /** The phone's font makes these texts bigger only up to this much (Michał, 23.11: "Witaj" took half the screen). */
 private const val MAX_FONT_SCALE = 1.15f
@@ -65,6 +66,7 @@ internal fun HomeHeader(userName: String, communityName: String, switchable: Boo
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             "Witaj, $userName", fontSize = title, lineHeight = (title.value * 1.2f).sp, fontWeight = FontWeight.SemiBold,
+            fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont,
             maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
         Row(
@@ -101,12 +103,12 @@ internal fun CommunitySwitcher(
     val searching = all.size > SEARCH_FROM
     val shown = if (query.isBlank()) all else all.filter { it.name.contains(query.trim(), ignoreCase = true) }
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(if (searching) "Twoje społeczności · ${all.size}" else "Twoje społeczności", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(if (searching) "Twoje społeczności · ${all.size}" else "Twoje społeczności", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         if (searching) {
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 label = { Text("Szukaj społeczności") },
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Luxury.GoldBase, unfocusedBorderColor = Color(0xFF3A3A40)),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Luxury.GoldBase, unfocusedBorderColor = Luxury.Outline),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -152,9 +154,11 @@ internal fun CommunitySwitcher(
                 LuxuryOpenMark(size = 32.dp)
             }
         }
-        FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 
 private const val SEARCH_FROM = 10
-private val LeaveColor = Color(0xFFE79A86)
+private val LeaveColor: androidx.compose.ui.graphics.Color get() = Luxury.Danger

@@ -91,7 +91,7 @@ internal sealed interface AccountDialog {
     ) : AccountDialog
 }
 
-internal val Gold = Luxury.GoldText
+internal val Gold: androidx.compose.ui.graphics.Color get() = Luxury.GoldText
 
 private val dayFormat = SimpleDateFormat("dd.MM", Locale.forLanguageTag("pl-PL"))
 

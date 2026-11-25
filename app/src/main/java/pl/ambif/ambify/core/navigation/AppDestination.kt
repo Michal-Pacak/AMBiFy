@@ -33,6 +33,15 @@ sealed class AppDestination(val route: String) {
     data object CommunityRequests : AppDestination("community/{id}/requests") {
         fun of(communityId: String) = "community/$communityId/requests"
     }
+    /** 0.7.7: Ustawienia → Wygląd (the account's theme, own themes). */
+    data object SettingsLook : AppDestination("settings/look")
+    data object CommunityLook : AppDestination("community/{id}/look") {
+        fun of(communityId: String) = "community/$communityId/look"
+    }
+    /** The theme editor: [id] "new" for a new theme; [community] "-" for my own (Premium konta). */
+    data object ThemeEditor : AppDestination("theme-editor/{community}/{id}") {
+        fun of(communityId: String?, themeId: String?) = "theme-editor/${communityId ?: "-"}/${themeId ?: "new"}"
+    }
     data object Platform : AppDestination("platform")
 }
 

@@ -68,8 +68,9 @@ import pl.ambif.ambify.ui.components.MessageKind
 import pl.ambif.ambify.ui.icons.AppIcons
 import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 
-private val Danger = Color(0xFFE79A86)
+private val Danger: androidx.compose.ui.graphics.Color get() = Luxury.Danger
 
 /**
  * "Zdjęcie profilowe" in Konto (canvas "Zdjęcia profilowe", board 1 A): my photo, the same in all my
@@ -171,7 +172,7 @@ private fun PhotoCropDialog(uri: Uri, onDismiss: () -> Unit, onSave: (File) -> U
     val window = with(LocalDensity.current) { windowDp.toPx() }
 
     LuxuryPopup(onDismiss = onDismiss) {
-        Text("Ustaw zdjęcie", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text("Ustaw zdjęcie", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         val source = bitmap
         when {
             failed -> MessageBar(MessageKind.ERROR, "Nie udało się odczytać tego zdjęcia.")
@@ -213,15 +214,19 @@ private fun PhotoCropDialog(uri: Uri, onDismiss: () -> Unit, onSave: (File) -> U
                     }
                 }
                 Text("Przesuń palcem · rozsuń palce, żeby powiększyć", fontSize = 12.sp, color = Luxury.TextMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                GoldButton("Zapisz") {
-                    scope.launch {
-                        val file = withContext(Dispatchers.Default) { crop(context, source, base * zoom, offset, window) }
-                        onSave(file)
+                PopupButtons {
+                    GoldButton("Zapisz") {
+                        scope.launch {
+                            val file = withContext(Dispatchers.Default) { crop(context, source, base * zoom, offset, window) }
+                            onSave(file)
+                        }
                     }
                 }
             }
         }
-        FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        PopupButtons {
+            FramedButton("Anuluj", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
+        }
     }
 }
 

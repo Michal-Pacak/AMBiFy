@@ -75,6 +75,7 @@ import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryDivider
 import pl.ambif.ambify.ui.theme.LuxuryOpenMark
 import pl.ambif.ambify.ui.theme.LuxuryPopup
+import pl.ambif.ambify.ui.theme.PopupButtons
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
 /** The community's own calendar; Google calendars join the list in Stage 6. */
@@ -236,7 +237,7 @@ internal fun ExtraFormScreen(
                     Checkbox(
                         checked = addToCalendar,
                         onCheckedChange = { addToCalendar = it },
-                        colors = CheckboxDefaults.colors(checkedColor = Luxury.GoldButton, checkmarkColor = Luxury.Surface),
+                        colors = CheckboxDefaults.colors(checkedColor = Luxury.GoldButton, checkmarkColor = Luxury.OnGold),
                     )
                     Text("Dodaj do kalendarza", fontSize = 15.sp)
                 }
@@ -265,7 +266,7 @@ internal fun ExtraFormScreen(
                     if (activity == null && chosen.size > 1) "Zapisz dla ${chosen.size} osób" else "Zapisz",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Luxury.Surface,
+                    color = Luxury.OnGold,
                 )
             }
         }
@@ -297,7 +298,7 @@ internal fun ExtraFormScreen(
     }
 }
 
-private val Brushless = androidx.compose.ui.graphics.SolidColor(Color(0xFF5A5A60))
+private val Brushless = androidx.compose.ui.graphics.SolidColor(Luxury.Faint)
 
 /** "w 1. środę": the weekday after "w". */
 private val DayAccusative = listOf("poniedziałek", "wtorek", "środę", "czwartek", "piątek", "sobotę", "niedzielę")
@@ -338,7 +339,7 @@ internal fun PersonChip(name: String, avatar: pl.ambif.ambify.shared.Avatar?, on
         modifier = Modifier
             .height(42.dp)
             .clip(RoundedCornerShape(21.dp))
-            .border(1.dp, if (on) Luxury.GoldLink else Color(0xFF3A3A40), RoundedCornerShape(21.dp))
+            .border(1.dp, if (on) Luxury.GoldLink else Luxury.Outline, RoundedCornerShape(21.dp))
             .then(if (on) Modifier.background(Luxury.GoldBase.copy(alpha = 0.14f)) else Modifier)
             .clickable(onClick = onClick)
             .padding(start = 6.dp, end = 14.dp),
@@ -346,7 +347,7 @@ internal fun PersonChip(name: String, avatar: pl.ambif.ambify.shared.Avatar?, on
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PersonAvatar(name, avatar, size = 26.dp, zoom = AvatarZoom.HOLD)
-        Text(name, fontSize = 15.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted)
+        Text(name, fontSize = 15.sp, color = if (on) Luxury.GoldLight else Luxury.TextMuted, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
     }
 }
 
@@ -363,7 +364,7 @@ internal fun Chip(
         modifier = Modifier
             .height(34.dp)
             .clip(RoundedCornerShape(17.dp))
-            .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.dp, Color(0xFF3A3A40), RoundedCornerShape(17.dp)))
+            .then(if (on) Modifier.background(Luxury.GoldFill) else Modifier.border(1.dp, Luxury.Outline, RoundedCornerShape(17.dp)))
             .then(
                 if (onLongClick == null) Modifier.clickable(enabled = enabled, onClick = onClick)
                 else Modifier.combinedClickable(enabled = enabled, onLongClickLabel = onLongClickLabel, onLongClick = onLongClick, onClick = onClick),
@@ -374,9 +375,10 @@ internal fun Chip(
         Text(
             label,
             fontSize = 13.sp,
+            fontFamily = Luxury.HeadingFont,
             fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
             color = when {
-                on -> Luxury.Surface
+                on -> Luxury.OnGold
                 enabled -> Luxury.TextMuted
                 else -> Luxury.Disabled
             },
@@ -390,8 +392,8 @@ private fun FieldButton(text: String, modifier: Modifier, onClick: () -> Unit) {
         modifier = modifier
             .height(44.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1C1C20))
-            .border(1.dp, Color(0xFF5A5A60), RoundedCornerShape(12.dp))
+            .background(Luxury.Surface)
+            .border(1.dp, Luxury.Faint, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Text(text, fontSize = 14.sp) }
@@ -516,13 +518,15 @@ internal fun RecurrenceDialog(initial: Recurrence, start: LocalDate, onDismiss: 
             Checkbox(
                 checked = rule.skipSchoolFree,
                 onCheckedChange = { rule = rule.copy(skipSchoolFree = it) },
-                colors = CheckboxDefaults.colors(checkedColor = Luxury.GoldButton, checkmarkColor = Luxury.Surface),
+                colors = CheckboxDefaults.colors(checkedColor = Luxury.GoldButton, checkmarkColor = Luxury.OnGold),
             )
             Text("Pomijaj ferie i dni wolne (dni bez lekcji w Vulcanie)", fontSize = 14.sp)
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onDismiss) { Text("Anuluj") }
-            TextButton(onClick = { onDone(rule); onDismiss() }) { Text("Gotowe") }
+        PopupButtons {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text("Anuluj") }
+                TextButton(onClick = { onDone(rule); onDismiss() }) { Text("Gotowe") }
+            }
         }
     }
     if (picking) {
@@ -544,9 +548,9 @@ private fun Stepper(value: Int, range: IntRange, onChange: (Int) -> Unit) {
 @Composable
 private fun StepButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).border(1.dp, Color(0xFF5A5A60), RoundedCornerShape(18.dp)).clickable(enabled = enabled, onClick = onClick),
+        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).border(1.dp, Luxury.Faint, RoundedCornerShape(18.dp)).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 18.sp, color = if (enabled) Luxury.Text else Luxury.Disabled) }
+    ) { Text(label, fontSize = 18.sp, color = if (enabled) Luxury.Text else Luxury.Disabled, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
 }
 
 /**
@@ -587,7 +591,7 @@ private fun ReminderDialog(
                         .weight(1f)
                         .height(46.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .border(1.dp, if (on) Luxury.GoldLink else Color(0xFF3A3A40), RoundedCornerShape(14.dp))
+                        .border(1.dp, if (on) Luxury.GoldLink else Luxury.Outline, RoundedCornerShape(14.dp))
                         .then(if (on) Modifier.background(Luxury.GoldBase.copy(alpha = 0.14f)) else Modifier)
                         .clickable { kind = option },
                     contentAlignment = Alignment.Center,
@@ -606,14 +610,16 @@ private fun ReminderDialog(
                 Chip(if (option == 1440) "dzień wcześniej" else beforeLabel(option), minutes == option) { minutes = option }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            onDelete?.let { delete ->
-                TextButton(onClick = delete) { Text("Usuń", color = Luxury.TextMuted) }
-                Box(modifier = Modifier.weight(1f))
-            }
-            TextButton(onClick = onDismiss) { Text("Anuluj") }
-            TextButton(onClick = { if (who.isNotEmpty()) onDone(who.map { Reminder(it, kind, minutes) }) }, enabled = who.isNotEmpty()) {
-                Text(if (existing == null) "Dodaj" else "Zapisz")
+        PopupButtons {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                onDelete?.let { delete ->
+                    TextButton(onClick = delete) { Text("Usuń", color = Luxury.TextMuted) }
+                    Box(modifier = Modifier.weight(1f))
+                }
+                TextButton(onClick = onDismiss) { Text("Anuluj") }
+                TextButton(onClick = { if (who.isNotEmpty()) onDone(who.map { Reminder(it, kind, minutes) }) }, enabled = who.isNotEmpty()) {
+                    Text(if (existing == null) "Dodaj" else "Zapisz")
+                }
             }
         }
     }

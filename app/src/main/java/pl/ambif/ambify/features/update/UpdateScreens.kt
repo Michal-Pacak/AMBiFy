@@ -61,9 +61,9 @@ import pl.ambif.ambify.ui.theme.Luxury
 import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-private val Outline = Color(0xFF5A5A60)
-private val Green = Color(0xFF9AD7A4)
-private val Red = Color(0xFFFF8A80)
+private val Outline: androidx.compose.ui.graphics.Color get() = Luxury.Faint
+private val Green: androidx.compose.ui.graphics.Color get() = Luxury.Ok
+private val Red: androidx.compose.ui.graphics.Color get() = Luxury.Error
 
 /** What the update popup does; [later] closes it (the pulsing "Aktualizacja" button stays). */
 class UpdateActions(
@@ -84,7 +84,7 @@ private fun GoldPill(label: String, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Luxury.Surface) }
+    ) { Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Luxury.OnGold, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
 }
 
 @Composable
@@ -187,7 +187,7 @@ private fun ColumnScope.UpdateContent(state: UpdateState, actions: UpdateActions
                 progress = { state.progress },
                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                 color = Luxury.GoldBase,
-                trackColor = Color(0xFF2A2A30),
+                trackColor = Luxury.Outline,
             )
             Muted(
                 "Pobieram AMBiFy ${state.release.versionName} z serwera… " +
@@ -210,7 +210,7 @@ private fun ColumnScope.UpdateContent(state: UpdateState, actions: UpdateActions
         }
         is UpdateState.Failed -> {
             LuxurySectionTitle("Aktualizacja się nie udała")
-            Text(state.message, fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFFFC9C3))
+            Text(state.message, fontSize = 14.sp, lineHeight = 20.sp, color = Luxury.Error)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GoldPill("Spróbuj ponownie") { actions.installNow(state.release) }
                 if (inPopup) Framed("Później", gold = false, onClick = actions.later)
@@ -274,7 +274,7 @@ fun ForcedUpdateScreen(state: UpdateState, release: AppRelease, onUpdate: () -> 
             else -> LuxuryCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp), spacing = 14.dp) {
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     LuxurySectionTitle("Nowa wersja")
-                    Text("AMBiFy ${release.versionName} już czeka", fontSize = 19.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    Text("AMBiFy ${release.versionName} już czeka", fontSize = 19.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
                     Text(
                         "Wprowadziliśmy zmiany, które działają tylko w nowej wersji. Jedno stuknięcie i wszystko będzie gotowe. " +
                             "Twoje dane i logowanie zostają.",

@@ -1,1 +1,3 @@
-Dodano opcję zdjęcia profilowego
+Nowe opcje motywów - wybierz gotowy lub sam ustaw swój
+Poprawki na listach
+Poprawione inne błędy
