@@ -15,6 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -64,7 +67,7 @@ import pl.ambif.ambify.ui.theme.LuxurySectionTitle
  * free of charge, a free founding of one more community, a password reset code for an Owner.
  */
 @Composable
-fun PlatformScreen(resetKey: Int = 0) {
+fun PlatformScreen(resetKey: Int = 0, onOpenReports: () -> Unit = {}) {
     val session = LocalAppSession.current
     val api = session.api
     val scope = rememberCoroutineScope()
@@ -107,56 +110,78 @@ fun PlatformScreen(resetKey: Int = 0) {
         ) {
             val selected = communities.firstOrNull { it.id == selectedId }
             if (selected == null) {
-                ScreenTitle("Platform Admin", "Wszystkie społeczności na serwerze", onBack = null)
+                ScreenTitle("Platform Admin", "Wszystkie kręgi na serwerze", onBack = null, help = pl.ambif.ambify.ui.help.Help.PLATFORM)
                 notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
+                // 0.7.9: bug reports first (board 4).
+                PlatformReportsCard(onOpen = onOpenReports)
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
-                    label = { Text("Szukaj społeczności lub Ownera") },
+                    label = { Text("Szukaj kręgu lub Ownera") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 val shown = communities.filter {
                     search.isBlank() || it.name.contains(search, true) || it.ownerName.orEmpty().contains(search, true)
                 }
-                LuxurySectionTitle("Społeczności (${shown.size})", modifier = Modifier.padding(start = 4.dp))
+                LuxurySectionTitle("Kręgi (${shown.size})", modifier = Modifier.padding(start = 4.dp))
                 shown.forEach { community -> CommunityRow(community) { selectedId = community.id } }
-                EmailAction(
-                    accounts = accounts,
-                    title = "Pozwól założyć kolejną społeczność za darmo",
-                    info = "Ta osoba może bez opłaty założyć jedną kolejną społeczność.",
-                    action = "Nadaj",
-                ) { email -> act("$email może założyć kolejną społeczność.") { api.addFoundingCredit(email) } }
+                suspend fun reload() {
+                    communities = api.platformCommunities()
+                    runCatching { accounts = api.platformAccounts() }
+                }
+                // B-003: one card per matter; the hint says what the person has, the button grants or takes back.
                 EmailAction(
                     accounts = accounts,
                     title = "Premium konta (motywy)",
-                    info = "Kod i Gaming, edytor motywów i tapeta dla tej osoby, w każdej społeczności bez blokady motywu.",
-                    action = "Przyznaj",
-                ) { email -> act("$email ma Premium konta.") { api.setAccountPremium(email, true); runCatching { session.refreshThemes() } } }
+                    info = "Kod i Gaming, edytor motywów i tapeta dla tej osoby, w każdym kręgu bez blokady motywu.",
+                    badge = { if (it.accountPremium) "MA PREMIUM" to true else "BEZ PREMIUM" to false },
+                    ops = { picked ->
+                        if (picked?.accountPremium == true) listOf(EmailOp("Odbierz Premium", danger = true) { email ->
+                            api.setAccountPremium(email, false); runCatching { session.refreshThemes() }
+                            "Odebrano Premium konta: ${picked.name} ($email). Własne motywy zostają zapisane."
+                        }) else listOf(EmailOp("Przyznaj") { email ->
+                            api.setAccountPremium(email, true); runCatching { session.refreshThemes() }
+                            "Przyznano Premium konta: ${picked?.name ?: email}."
+                        })
+                    },
+                    onDone = { reload() },
+                )
                 EmailAction(
                     accounts = accounts,
-                    title = "Odbierz Premium konta",
-                    info = "Wraca motyw społeczności; własne motywy tej osoby zostają zapisane.",
-                    action = "Odbierz",
-                ) { email -> act("$email nie ma już Premium konta.") { api.setAccountPremium(email, false); runCatching { session.refreshThemes() } } }
+                    title = "Darmowy kolejny krąg",
+                    info = "Ta osoba może bez opłaty założyć jeden kolejny krąg.",
+                    badge = { if (it.foundingCredits > 0) "DARMOWE: ${it.foundingCredits}" to true else null },
+                    ops = { picked ->
+                        listOfNotNull(
+                            EmailOp("Nadaj") { email -> api.addFoundingCredit(email); "${picked?.name ?: email} może założyć kolejny krąg za darmo." },
+                            if ((picked?.foundingCredits ?: 0) > 0) EmailOp("Odbierz", danger = true) { email ->
+                                api.removeFoundingCredit(email); "Odebrano jeden darmowy krąg: ${picked?.name ?: email}."
+                            } else null,
+                        )
+                    },
+                    onDone = { reload() },
+                )
                 EmailAction(
                     accounts = accounts,
                     title = "Kod resetu hasła dla Ownera",
-                    info = "Gdy Owner zapomni hasła, nikt w jego społeczności nie może mu dać kodu.",
-                    action = "Utwórz kod",
-                ) { email ->
-                    act {
-                        val reset = api.platformResetCode(email)
-                        code = AccountDialog.Code(
-                            title = "Kod resetu: $email",
-                            text = "Wybiera na ekranie logowania „Nie pamiętam hasła” i wpisuje ten kod. Ważny 24 godziny.",
-                            code = reset.code,
-                            share = null,
-                        )
-                    }
-                }
+                    info = "Gdy Owner zapomni hasła, nikt w jego kręgu nie może mu dać kodu.",
+                    ops = {
+                        listOf(EmailOp("Utwórz kod") { email ->
+                            val reset = api.platformResetCode(email)
+                            code = AccountDialog.Code(
+                                title = "Kod resetu: $email",
+                                text = "Wybiera na ekranie logowania „Nie pamiętam hasła” i wpisuje ten kod. Ważny 24 godziny.",
+                                code = reset.code,
+                                share = null,
+                            )
+                            "Utworzono kod resetu dla $email."
+                        })
+                    },
+                    onDone = {},
+                )
             } else {
-                ScreenTitle(selected.name, "Platform Admin", onBack = { selectedId = null })
+                ScreenTitle(selected.name, "Platform Admin", onBack = { selectedId = null }, help = pl.ambif.ambify.ui.help.Help.PLATFORM)
                 notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
                 AccountCard("Informacje") {
                     Text(summary(selected), style = MaterialTheme.typography.bodyMedium)
@@ -191,15 +216,10 @@ fun PlatformScreen(resetKey: Int = 0) {
                 }
                 AccountCard("Wygląd") {
                     SwitchRow(
-                        "Premium społeczności: motywy", pl.ambif.ambify.shared.Themes.COMMUNITY_GRANT in selected.grants, enabled = true,
-                        below = { Text("Kod, Gaming, motywy społeczności i tapeta", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        "Premium kręgu: motywy", pl.ambif.ambify.shared.Themes.COMMUNITY_GRANT in selected.grants, enabled = true,
+                        below = { Text("Kod, Gaming, motywy kręgu i tapeta", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     ) { act { grant(selected.id, pl.ambif.ambify.shared.Themes.COMMUNITY_GRANT, it) } }
                 }
-                Text(
-                    "Przełącznik nadaje albo odbiera bez opłaty. Moduły basic są zawsze w cenie, ich dodatki premium są pod linkiem.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -248,18 +268,37 @@ private fun GrantRow(label: String, key: String, community: PlatformCommunity, o
     SwitchRow(label, key in community.grants, enabled = true) { onChange(key, it) }
 }
 
+/** One action on an account by e-mail; the button can run [EmailOp.run], whose text is the success message. */
+private class EmailOp(val label: String, val danger: Boolean = false, val run: suspend (String) -> String)
+
+/**
+ * A card that acts on an account by e-mail (B-003): hints after every letter (with [badge]: what the person has),
+ * the buttons from [ops] for the picked account; its own message in the card. Success clears the field; an error
+ * keeps it. The message is gone after the next letter and when the screen is left (plain remember).
+ */
 @Composable
-private fun EmailAction(accounts: List<PlatformAccount>, title: String, info: String, action: String, onSubmit: (String) -> Unit) {
-    var email by rememberSaveable(title) { mutableStateOf("") }
+private fun EmailAction(
+    accounts: List<PlatformAccount>,
+    title: String,
+    info: String,
+    badge: (PlatformAccount) -> Pair<String, Boolean>? = { null },
+    ops: (PlatformAccount?) -> List<EmailOp>,
+    onDone: suspend () -> Unit,
+) {
+    var email by remember(title) { mutableStateOf("") }
+    var result by remember(title) { mutableStateOf<Pair<pl.ambif.ambify.ui.components.MessageKind, String>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val hintsInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     LuxuryCard(contentPadding = PaddingValues(0.dp)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             LuxurySectionTitle(title)
             Text(info, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            result?.let { (kind, text) -> pl.ambif.ambify.ui.components.MessageBar(kind, text) }
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it.trim() },
+                onValueChange = { email = it.trim(); result = null },
                 label = { Text("E-mail konta") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -272,29 +311,71 @@ private fun EmailAction(accounts: List<PlatformAccount>, title: String, info: St
             // The hints show up under the field: scroll so they are above the keyboard.
             LaunchedEffect(hints.map { it.email }) { if (hints.isNotEmpty()) { kotlinx.coroutines.delay(150); hintsInView.bringIntoView() } }
             Column(modifier = Modifier.bringIntoViewRequester(hintsInView)) {
-            hints.forEach { account ->
-                Column(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
-                        // The keyboard first finishes the word being typed (else it would write it back over the hint).
-                        focus.clearFocus()
-                        email = account.email
+                hints.forEach { account ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
+                            // The keyboard first finishes the word being typed (else it would write it back over the hint).
+                            focus.clearFocus()
+                            email = account.email
+                        }.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(account.email, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                (listOf(account.name) + account.communities).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        badge(account)?.let { (text, on) -> Badge(text, on) }
                     }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                ) {
-                    Text(account.email, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        (listOf(account.name) + account.communities).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
-            }
-            if (email.isNotBlank() && hints.isEmpty() && accounts.none { it.email.equals(email, true) }) {
+            val picked = accounts.firstOrNull { it.email.equals(email, true) }
+            if (picked != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text((listOf(picked.name) + picked.communities).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    badge(picked)?.let { (text, on) -> Badge(text, on) }
+                }
+            } else if (email.isNotBlank() && hints.isEmpty()) {
                 Text("Brak konta pasującego do „$email”.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             ButtonsRow {
-                FilledTonalButton(onClick = { onSubmit(email) }, enabled = email.isNotBlank()) { Text(action) }
+                ops(picked).forEach { op ->
+                    FilledTonalButton(
+                        enabled = email.isNotBlank() && !busy,
+                        colors = if (op.danger) androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(contentColor = pl.ambif.ambify.ui.theme.Luxury.Danger) else androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(),
+                        onClick = {
+                            focus.clearFocus()
+                            busy = true
+                            scope.launch {
+                                try {
+                                    val text = op.run(email)
+                                    result = pl.ambif.ambify.ui.components.MessageKind.SUCCESS to text
+                                    email = ""
+                                    onDone()
+                                } catch (e: ServerError) {
+                                    result = pl.ambif.ambify.ui.components.MessageKind.ERROR to (e.message ?: "Nie udało się.")
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        },
+                    ) { Text(op.label) }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun Badge(text: String, on: Boolean) {
+    val shape = RoundedCornerShape(8.dp)
+    Text(
+        text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, maxLines = 1,
+        color = if (on) pl.ambif.ambify.ui.theme.Luxury.OnGold else pl.ambif.ambify.ui.theme.Luxury.TextMuted,
+        modifier = Modifier.clip(shape)
+            .then(if (on) Modifier.background(pl.ambif.ambify.ui.theme.Luxury.GoldFill) else Modifier.border(1.dp, pl.ambif.ambify.ui.theme.Luxury.Outline, shape))
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+    )
 }

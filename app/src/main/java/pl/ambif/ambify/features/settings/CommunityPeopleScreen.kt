@@ -80,7 +80,7 @@ fun CommunityPeopleScreen(communityId: String, section: CommunitySection, onBack
         CommunitySection.PHOTOS -> "Zdjęcia profilowe"
         else -> "Członkowie"
     }
-    SettingsLayout(title = title, onBack = onBack, subtitle = family?.name ?: "", notice = notice) {
+    SettingsLayout(title = title, onBack = onBack, subtitle = family?.name ?: "", notice = notice, help = pl.ambif.ambify.ui.help.Help.PEOPLE) {
         val current = family ?: return@SettingsLayout
         val myRole = me?.role ?: return@SettingsLayout
         val can = { action: Action -> me?.permissions?.get(action) == Mode.ALLOWED }
@@ -126,8 +126,8 @@ fun CommunityPeopleScreen(communityId: String, section: CommunitySection, onBack
                     }
                 },
                 onRemoveMember = { member ->
-                    dialog = AccountDialog.Confirm("Usunąć ${member.name} ze społeczności?", "Usuń") {
-                        act("${member.name} nie należy już do społeczności.") { api.removeMember(member.id) }
+                    dialog = AccountDialog.Confirm("Usunąć ${member.name} z kręgu?", "Usuń") {
+                        act("${member.name} nie należy już do kręgu.") { api.removeMember(member.id) }
                     }
                 },
             )
@@ -170,7 +170,7 @@ private fun PhotosCard(family: Family, onBlocked: (Boolean) -> Unit, onShow: (pl
         }
         Text("Ukryte zdjęcia · ${family.hiddenPhotos.size}", fontSize = 12.sp, color = Luxury.TextMuted, modifier = Modifier.padding(top = 6.dp))
         if (family.hiddenPhotos.isEmpty()) {
-            Text("Nikt. Zdjęcie jednej osoby ukrywasz stuknięciem w jej awatar → „Ukryj zdjęcie w tej społeczności”.", fontSize = 12.sp, color = Luxury.TextMuted)
+            Text("Nikt. Zdjęcie jednej osoby ukrywasz stuknięciem w jej awatar → „Ukryj zdjęcie w tym kręgu”.", fontSize = 12.sp, color = Luxury.TextMuted)
         }
         family.hiddenPhotos.forEach { hidden ->
             val member = family.members.firstOrNull { it.id == hidden.memberId }

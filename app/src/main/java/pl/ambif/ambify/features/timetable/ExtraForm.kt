@@ -161,7 +161,7 @@ internal fun ExtraFormScreen(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenTitle(if (activity == null) "Nowe zajęcia dodatkowe" else "Zmień zajęcia", "", onBack)
+            ScreenTitle(if (activity == null) "Nowe zajęcia dodatkowe" else "Zmień zajęcia", "", onBack, help = pl.ambif.ambify.ui.help.Help.EXTRAS)
             notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
 
             LuxuryCard(contentPadding = PaddingValues(14.dp), spacing = 10.dp) {
@@ -244,7 +244,7 @@ internal fun ExtraFormScreen(
                 if (addToCalendar) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         val on = COMMUNITY_CALENDAR in calendars
-                        Chip("${me.familyName ?: "Społeczność"} (AMBiFy)", on) {
+                        Chip("${me.familyName ?: "Krąg"} (AMBiFy)", on) {
                             calendars = if (on) calendars - COMMUNITY_CALENDAR else calendars + COMMUNITY_CALENDAR
                         }
                         Chip("Google — wkrótce", false, enabled = false) {}

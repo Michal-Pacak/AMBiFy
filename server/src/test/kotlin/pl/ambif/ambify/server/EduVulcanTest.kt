@@ -85,10 +85,12 @@ class EduVulcanTest {
     }
 
     @Test
-    fun nextUpdateAtEighteen() {
+    fun nextUpdateAtFourAndEighteen() {
         val warsaw = java.time.ZoneId.of("Europe/Warsaw")
         assertEquals(60L, DiarySchedule.delayToNext(ZonedDateTime.of(2026, 10, 31, 17, 0, 0, 0, warsaw)).toMinutes())
-        assertEquals(23 * 60L, DiarySchedule.delayToNext(ZonedDateTime.of(2026, 10, 31, 19, 0, 0, 0, warsaw)).toMinutes())
+        assertEquals(9 * 60L, DiarySchedule.delayToNext(ZonedDateTime.of(2026, 10, 31, 19, 0, 0, 0, warsaw)).toMinutes(), "next is 4:00")
+        assertEquals(60L, DiarySchedule.delayToNext(ZonedDateTime.of(2026, 11, 27, 3, 0, 0, 0, warsaw)).toMinutes())
+        assertEquals(13 * 60L, DiarySchedule.delayToNext(ZonedDateTime.of(2026, 11, 27, 5, 0, 0, 0, warsaw)).toMinutes(), "next is 18:00")
     }
 
     private companion object {

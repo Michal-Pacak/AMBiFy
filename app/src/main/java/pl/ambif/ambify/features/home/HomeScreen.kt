@@ -81,6 +81,7 @@ fun HomeScreen(
     userName: String = "",
     onOpenModule: (ModuleId) -> Unit = {},
     onOpenCommunities: () -> Unit = {},
+    onOpenForecast: (String) -> Unit = {},
 ) {
     val session = LocalAppSession.current
     val api = session.api
@@ -130,18 +131,41 @@ fun HomeScreen(
             }
         }
     }
+    // B-014: the timetable again whenever the app comes back to the screen, on a new day and every 15 minutes —
+    // the Dashboard may stay in memory overnight, and yesterday's plan must not pass for today's.
+    var timetableAsked by remember(communityId) { mutableStateOf(0L) }
+    var timetableRound by remember(communityId) { mutableStateOf(0) }
+    fun timetableDue(at: LocalDateTime): Boolean {
+        val asked = java.time.Instant.ofEpochMilli(timetableAsked).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+        return timetableAsked > 0 && (asked.toLocalDate() != at.toLocalDate() || java.time.Duration.between(asked, at).toMinutes() >= 15)
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                now = LocalDateTime.now()
+                if (timetableAsked > 0 && System.currentTimeMillis() - timetableAsked > 60_000) timetableRound++
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000)
             now = LocalDateTime.now()
+            if (timetableDue(now)) timetableRound++
         }
     }
 
     val known = dashboard.widgets.filter { widget -> WidgetType.of(widget.type)?.let { it.module == null || it.module in enabled } == true }
     val hidden = dashboard.widgets - known.toSet()
     val needsTimetable = ModuleId.TIMETABLE in enabled && (picker || editing != null || known.any { WidgetType.of(it.type)?.module == ModuleId.TIMETABLE })
-    LaunchedEffect(communityId, needsTimetable) {
-        if (needsTimetable && communityId.isNotEmpty()) timetable = loadTimetable(api, context, communityId)
+    LaunchedEffect(communityId, needsTimetable, timetableRound) {
+        if (needsTimetable && communityId.isNotEmpty()) {
+            timetableAsked = System.currentTimeMillis()
+            timetable = loadTimetable(api, context, communityId)
+        }
     }
 
     /** The visible widgets in a new order; the hidden ones stay below them. */
@@ -169,7 +193,7 @@ fun HomeScreen(
                 onMove = ::arrange,
                 header = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HomeHeader(userName, organizationName, switchable = communities.size > 1) {
+                        HomeHeader(userName, organizationName, me?.communities?.firstOrNull { it.id == me.communityId }?.circle, switchable = communities.size > 1) {
                             if (communities.size > 1) switcher = true else onOpenCommunities()
                         }
                         me?.dashboardTransfers().orEmpty().forEach { transfer ->
@@ -224,6 +248,7 @@ fun HomeScreen(
                     WidgetType.WEATHER -> WeatherWidget(
                         widget = widget, store = store, interactive = interactive,
                         onSettings = { editing = Editing(widget, isNew = false) }, modifier = modifier,
+                        onOpen = { onOpenForecast(widget.id) },
                     )
                     null -> Unit
                 }
@@ -274,9 +299,9 @@ fun HomeScreen(
                         session.switchCommunity(community.id)
                         bubbles.show(MessageKind.SUCCESS, "Jesteś w: ${community.name}")
                     } catch (e: ServerError) {
-                        bubbles.show(MessageKind.ERROR, "Nie udało się zmienić społeczności", e.message.orEmpty())
+                        bubbles.show(MessageKind.ERROR, "Nie udało się zmienić kręgu", e.message.orEmpty())
                     } catch (e: java.io.IOException) {
-                        bubbles.show(MessageKind.ERROR, "Brak połączenia z serwerem", "Społeczność zmienisz, gdy wróci internet.")
+                        bubbles.show(MessageKind.ERROR, "Brak połączenia z serwerem", "Krąg zmienisz, gdy wróci internet.")
                     }
                 }
             },

@@ -128,7 +128,7 @@ internal fun NoTimetable(week: TimetableWeek, canLink: Boolean, communityName: S
             LuxuryDivider()
             Step(1, "Logujesz się na stronie eduVulcan danymi rodzica — tymi samymi co w przeglądarce.")
             Step(2, "AMBiFy znajduje Twoje dzieci i pokazuje je do sprawdzenia.")
-            Step(3, "Plan pojawia się od razu u wszystkich w społeczności.")
+            Step(3, "Plan pojawia się od razu u wszystkich w kręgu.")
             GoldButton("Połącz z eduVulcan", onClick = onConnect)
             Text(
                 "Inne dzienniki (Librus, Mobidziennik) — w przygotowaniu.",
@@ -140,7 +140,7 @@ internal fun NoTimetable(week: TimetableWeek, canLink: Boolean, communityName: S
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Planu jeszcze nie ma", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Plan pojawi się tutaj, gdy Owner lub Admin połączy społeczność „$communityName” z dziennikiem eduVulcan.",
+                    "Plan pojawi się tutaj, gdy Owner lub Admin połączy krąg „$communityName” z dziennikiem eduVulcan.",
                     style = MaterialTheme.typography.bodyMedium, color = Luxury.TextMuted, textAlign = TextAlign.Center,
                 )
                 if (week.diaryLinkers.isNotEmpty()) {
@@ -222,13 +222,13 @@ internal fun DiaryConnectScreen(members: List<Member>, onBack: () -> Unit, onDon
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScreenTitle("Połącz z eduVulcan", "krok 1 z 3", onBack = onBack)
+            ScreenTitle("Połącz z eduVulcan", "krok 1 z 3", onBack = onBack, help = pl.ambif.ambify.ui.help.Help.DIARY)
             error?.let { Notice(it, Failed) }
             LuxuryCard {
                 LuxurySectionTitle("CO SIĘ STANIE")
                 Text("Otworzy się strona logowania eduvulcan.pl. Zaloguj się jako rodzic — tym samym e-mailem i hasłem co zwykle.", style = MaterialTheme.typography.bodyMedium)
                 Text("AMBiFy nie poznaje Twojego hasła. Wpisujesz je na stronie Vulcana, a AMBiFy dostaje od niego tylko dostęp do odczytu dziennika (tak jak aplikacja mobilna) i pobiera z niego plan.", style = MaterialTheme.typography.bodyMedium)
-                Text("Potem plan odświeża się sam, codziennie o 18:00 (i od razu, gdy stukniesz „Odśwież teraz”).", style = MaterialTheme.typography.bodyMedium)
+                Text("Potem plan odświeża się sam, codziennie o 4:00 i 18:00 (i od razu, gdy stukniesz „Odśwież teraz”).", style = MaterialTheme.typography.bodyMedium)
                 Text("Połączenie odłączysz w każdej chwili w Ustawieniach planu.", style = MaterialTheme.typography.bodyMedium)
             }
             Notice("Nie pamiętasz hasła? Na stronie logowania jest „Nie pamiętam hasła” — szkoła nie musi nic robić.", Info)
@@ -415,7 +415,7 @@ internal fun TimetableSettingsScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ScreenTitle("Ustawienia planu", "", onBack = onBack)
+        ScreenTitle("Ustawienia planu", "", onBack = onBack, help = pl.ambif.ambify.ui.help.Help.DIARY)
         notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
         LuxuryCard {
             LuxurySectionTitle("DZIENNIK SZKOLNY")
@@ -547,5 +547,12 @@ private fun syncTime(at: Long?): String {
     return if (time.toLocalDate() == LocalDate.now()) "dziś $clock" else "${time.toLocalDate().dayMonth()} $clock"
 }
 
-/** The server updates every connection at 18:00. */
-private fun nextSync(): String = if (LocalTime.now().isBefore(LocalTime.of(18, 0))) "dziś o 18:00" else "jutro o 18:00"
+/** The server updates every connection at 4:00 and 18:00 (B-014). */
+private fun nextSync(): String {
+    val now = LocalTime.now()
+    return when {
+        now.isBefore(LocalTime.of(4, 0)) -> "dziś o 4:00"
+        now.isBefore(LocalTime.of(18, 0)) -> "dziś o 18:00"
+        else -> "jutro o 4:00"
+    }
+}

@@ -78,6 +78,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
     var notice by remember { mutableStateOf<String?>(null) }
     // Board 16: the Owner hands the community over (true: and leaves it).
     var handOver by remember { mutableStateOf<Pair<CommunitySummary, Boolean>?>(null) }
+    var avatarFor by remember { mutableStateOf<String?>(null) }
 
     fun act(done: String?, block: suspend () -> Unit) {
         scope.launch {
@@ -90,7 +91,7 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
         }
     }
 
-    SettingsLayout(title = "Społeczności", onBack = onBack, notice = notice) {
+    SettingsLayout(title = "Kręgi", onBack = onBack, notice = notice, help = pl.ambif.ambify.ui.help.Help.CIRCLES) {
         // Each community is its own card: it only floats, the gold button opens its actions.
         me.communities.forEach { community ->
             LuxuryCard(contentPadding = PaddingValues(18.dp)) {
@@ -112,33 +113,33 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
             }
         }
         if (me.communities.isEmpty()) {
-            Text("Nie należysz do żadnej społeczności.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Nie należysz do żadnego kręgu.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Column {
             ButtonsRow {
                 FilledTonalButton(onClick = {
                     dialog = AccountDialog.Input(
-                        title = "Nowa społeczność",
-                        label = "Nazwa społeczności",
-                        info = "Zostaniesz jej Ownerem. Pierwsza własna społeczność jest za darmo, każda kolejna wymaga jednorazowej opłaty.",
+                        title = "Nowy krąg",
+                        label = "Nazwa kręgu",
+                        info = "Zostaniesz jego Ownerem. Pierwszy własny krąg jest za darmo, każdy kolejny wymaga jednorazowej opłaty.",
                         action = "Załóż",
                         code = false,
                     ) { name ->
                         session.createCommunity(name)
-                        notice = "Założono społeczność $name."
+                        notice = "Założono krąg $name."
                         dialog = null
                     }
                 }) { Text("+ Załóż nową") }
                 FilledTonalButton(onClick = {
                     dialog = AccountDialog.Input(
-                        title = "Dołącz do społeczności",
+                        title = "Dołącz do kręgu",
                         label = "Kod zaproszenia",
-                        info = "Kod dostajesz od Ownera lub Admina społeczności.",
+                        info = "Kod dostajesz od Ownera lub Admina kręgu.",
                         action = "Dołącz",
                         code = true,
                     ) { code ->
                         session.joinCommunity(code)
-                        notice = "Dołączono do społeczności ${(session.state.value as? SessionState.SignedIn)?.me?.familyName ?: ""}."
+                        notice = "Dołączono do kręgu ${(session.state.value as? SessionState.SignedIn)?.me?.familyName ?: ""}."
                         dialog = null
                     }
                 }) { Text("+ Dołącz z kodem") }
@@ -169,20 +170,24 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
             },
             onGoogle = {
                 selectedId = null
-                notice = "Łączenie kalendarza Google ze społecznością będzie dostępne wkrótce."
+                notice = "Łączenie kalendarza Google z kręgiem będzie dostępne wkrótce."
             },
             onMakeCurrent = {
                 selectedId = null
-                act("Bieżąca społeczność: ${community.name}.") { session.switchCommunity(community.id) }
+                act("Bieżący krąg: ${community.name}.") { session.switchCommunity(community.id) }
             },
             onHandOver = {
                 selectedId = null
                 handOver = community to false
             },
+            onAvatar = {
+                selectedId = null
+                avatarFor = community.id
+            },
             onRename = {
                 selectedId = null
                 dialog = AccountDialog.Input(
-                    title = "Zmień nazwę społeczności",
+                    title = "Zmień nazwę kręgu",
                     label = "Nowa nazwa",
                     info = null,
                     action = "Zapisz",
@@ -200,13 +205,17 @@ fun CommunitiesScreen(onBack: () -> Unit, onOpen: (communityId: String, Communit
                     handOver = community to true
                     return@CommunityPopup
                 }
-                dialog = AccountDialog.Confirm("Opuścić społeczność ${community.name}?", "Opuść") {
-                    act("Nie należysz już do społeczności ${community.name}.") { session.leaveCommunity(community.id) }
+                dialog = AccountDialog.Confirm("Opuścić krąg ${community.name}?", "Opuść") {
+                    act("Nie należysz już do kręgu ${community.name}.") { session.leaveCommunity(community.id) }
                 }
             },
         )
     }
 
+    avatarFor?.let { id ->
+        val community = me.communities.firstOrNull { it.id == id }
+        if (community != null) CircleAvatarDialog(community, session, onNotice = { notice = it }) { avatarFor = null }
+    }
     handOver?.let { (community, leave) ->
         HandOverDialog(community, leave, onDismiss = { handOver = null }, outcome = { _, title, text -> notice = listOf(title, text).filter { it.isNotBlank() }.joinToString(". ") })
     }
@@ -230,6 +239,7 @@ private fun CommunityPopup(
     onGoogle: () -> Unit,
     onMakeCurrent: () -> Unit,
     onRename: () -> Unit,
+    onAvatar: () -> Unit,
     onHandOver: () -> Unit,
     onLeave: () -> Unit,
 ) {
@@ -268,28 +278,30 @@ private fun CommunityPopup(
             LuxuryDivider()
             PopupAction(if (owner) "Role i uprawnienia" else "Uprawnienia ról (podgląd)") { onOpen(CommunitySection.PERMISSIONS) }
             LuxuryDivider()
-            PopupAction("Wygląd", detail = "motyw tej społeczności i Twój wybór") { onOpen(CommunitySection.LOOK) }
+            PopupAction("Wygląd", detail = "motyw tego kręgu i Twój wybór") { onOpen(CommunitySection.LOOK) }
             if (can(Action.PHOTOS_MODERATE)) {
                 LuxuryDivider()
                 PopupAction("Zdjęcia profilowe", detail = if (community.photosBlocked) "wyłączone — wszyscy na inicjałach" else "włączone") { onOpen(CommunitySection.PHOTOS) }
             }
             if (can(Action.RENAME_COMMUNITY)) {
                 LuxuryDivider()
-                PopupAction("Zmień nazwę społeczności", onClick = onRename)
+                PopupAction("Zmień nazwę kręgu", onClick = onRename)
+                LuxuryDivider()
+                PopupAction("Awatar kręgu", detail = "zdjęcie albo litery na kolorze", onClick = onAvatar)
             }
             LuxuryDivider()
-            PopupAction("Kalendarz Google", detail = "który Twój kalendarz łączyć z tą społecznością", trailing = "wkrótce", onClick = onGoogle)
+            PopupAction("Kalendarz Google", detail = "który Twój kalendarz łączyć z tym kręgiem", trailing = "wkrótce", onClick = onGoogle)
             if (community.id != me.communityId) {
                 LuxuryDivider()
                 PopupAction("Ustaw jako bieżącą", color = Luxury.GoldText, arrow = false, onClick = onMakeCurrent)
             }
             if (owner) {
                 LuxuryDivider()
-                PopupAction("Przekaż rolę Ownera", detail = "ktoś inny przejmie społeczność, Ty zostaniesz", onClick = onHandOver)
+                PopupAction("Przekaż rolę Ownera", detail = "ktoś inny przejmie krąg, Ty zostaniesz", onClick = onHandOver)
             }
             // The Owner first picks who takes the community over (board 16).
             LuxuryDivider()
-            PopupAction("Opuść społeczność", color = Luxury.Error, arrow = false, onClick = onLeave)
+            PopupAction("Opuść krąg", color = Luxury.Error, arrow = false, onClick = onLeave)
         }
     }
 }

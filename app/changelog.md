@@ -2,6 +2,53 @@
 <!-- Pełna lista zmian dla domowników (strona /zmiany). Najnowsza wersja na górze.
      Format: "## wersja · data", "### dział", "- punkt", "  - podpunkt". Okienko „Co nowego” = app/whatsnew.txt (3–4 krótkie punkty). -->
 
+## 0.7.9 · 27 listopada 2026
+
+### Zgłaszanie błędów
+- Coś nie działa? Stuknij „?” na tym ekranie, a potem **„Zgłoś błąd”** — zrzut ekranu dołączy się sam (możesz go usunąć).
+- Zgłoszenie bez internetu poczeka w telefonie i wyśle się samo.
+- **Ustawienia → Aplikacja → Moje zgłoszenia**: stan każdego zgłoszenia, historia zgłoszenia, dołączone dane (wersja, telefon) i odpowiedzi zespołu AMBiFy.
+- Niebieskie kółko z **„!”** = coś naprawiliśmy albo odpowiedzieliśmy.
+- Gdy aktualizacja naprawia Twój błąd, okienko „Co nowego” powie to wprost.
+
+### Plan lekcji
+- Dziennik sprawdzamy codziennie o **4:00** i 18:00 — rano są już zastępstwa z wieczora.
+- Pulpit pobiera plan przy każdym otwarciu aplikacji, także gdy była w tle przez noc.
+- Telefon odświeża swoją kopię planu w nocy, więc rano jest aktualny nawet bez internetu.
+
+### Wygląd
+- Logowanie, zakładanie konta, nowe hasło i ekran powitalny dla osoby bez kręgu — w tym samym złotym stylu co cała aplikacja.
+- Długa nazwa kręgu na Pulpicie zmniejsza się, zamiast łamać się w środku słowa.
+
+### Bezpieczeństwo
+- Owner lub Admin kręgu ustawi nowe hasło tylko osobie, która nie należy do innych kręgów.
+
+### Poprawki
+- Mniej przypadkowych wylogowań: zgubiona odpowiedź serwera (np. przy przejściu z Wi-Fi na LTE) nie kończy już sesji.
+- W formularzu zgłoszenia przyciski są zawsze nad klawiaturą.
+
+## 0.7.8 · 26 listopada 2026
+
+### Pomoc
+- Na każdym ekranie jest „?” — stuknij, żeby zobaczyć instrukcję: tematy, a w nich kroki z obrazkami.
+- Drobne podpowiedzi pod ekranami przeniesione do pomocy.
+
+### Kręgi i Pulpit
+- „Społeczność” to teraz **krąg**.
+- Na Pulpicie duża nazwa kręgu z jego awatarem, pod nią „Witaj”.
+- Owner może ustawić awatar kręgu: zdjęcie albo litery na kolorze (Kręgi → krąg → Awatar kręgu).
+- Ustawienia ułożone od A do Z: Aplikacja (z Wyglądem), Konto, Kręgi.
+
+### Pogoda
+- Kolorowe ikony pogody, temperatury w kolorach (od lodowato do upału); przy mrozie i upale widget dostaje efekt.
+- Średnia: godziny i jutro; Duża: także wilgotność, ciśnienie, wschód i zachód słońca i 3 kolejne dni.
+- Stuknięcie widgetu otwiera **prognozę na 16 dni**.
+
+### Poprawki
+- Plan lekcji na pół szerokości: dzieci przełączasz strzałkami, imię nie wychodzi poza widget.
+- Wygląd: zamiast kafelka „Jak w społeczności” — pole „Używaj motywu kręgu”.
+- Edytor motywu: po „Anuluj” poprzedni motyw i tapeta wracają od razu.
+
 ## 0.7.7 · 25 listopada 2026
 
 ### Motywy

@@ -55,14 +55,14 @@ class AvatarsTest {
         val before = service.shapes(owner)
 
         assertEquals(AvatarShape.CIRCLE, before["Michał Pacak"])
-        assertEquals(AvatarShape.SQUARE, before["Maria Pacak"])
+        assertEquals(AvatarShape.TRIANGLE, before["Maria Pacak"])
         assertEquals(AvatarShape.CIRCLE, before["Ula Nowak"])
-        assertEquals(AvatarShape.TRIANGLE, before["Marek Pawlak"])
+        assertEquals(AvatarShape.STAR, before["Marek Pawlak"])
 
         service.register(RegisterRequest(service.createInvitation(owner).code, "Mateusz Pyrka", "m@pacak.waw.pl", "haslo1234", "X"))
         val after = service.shapes(owner)
         assertEquals(before, after - "Mateusz Pyrka")
-        assertEquals(AvatarShape.STAR, after["Mateusz Pyrka"])
+        assertEquals(AvatarShape.HEXAGON, after["Mateusz Pyrka"])
         // Members get the colors least used so far, so the first ones all differ.
         val colors = service.family(owner).members.map { it.avatar!!.color }
         assertEquals(colors.size, colors.toSet().size)
@@ -124,7 +124,7 @@ class AvatarsTest {
         val service = AccountService(Db.open(path), tokens)
         val members = service.family(UserSession("u1", "s")).members
 
-        assertEquals(listOf("Owner" to AvatarShape.CIRCLE, "User" to AvatarShape.SQUARE), members.map { it.role.name to it.avatar!!.shape })
+        assertEquals(listOf("Owner" to AvatarShape.CIRCLE, "User" to AvatarShape.TRIANGLE), members.map { it.role.name to it.avatar!!.shape })
         assertNotEquals(members[0].avatar!!.color, members[1].avatar!!.color)
     }
 }

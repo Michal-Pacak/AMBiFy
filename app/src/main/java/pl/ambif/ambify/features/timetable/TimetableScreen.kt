@@ -257,7 +257,7 @@ fun TimetableScreen(resetKey: Int = 0) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.weight(1f)) { ScreenTitle("Plan lekcji", "", onBack = null) }
+                    Box(modifier = Modifier.weight(1f)) { ScreenTitle("Plan lekcji", "", onBack = null, help = pl.ambif.ambify.ui.help.Help.TIMETABLE) }
                     if (current?.diaryConnected == true) ViewSwitch(view) { view = it }
                     if (canLink) {
                         IconButton(onClick = { page = Page.Settings }) {
@@ -749,7 +749,7 @@ private fun LessonPopup(student: Student, lesson: Lesson, onDismiss: () -> Unit)
             }
         }
         Text(
-            "Plan i zastępstwa z dziennika eduVulcan, odświeżane codziennie o 18:00. Sprawdziany i zadania — moduł Szkoła.",
+            "Plan i zastępstwa z dziennika eduVulcan, odświeżane codziennie o 4:00 i 18:00. Sprawdziany i zadania — moduł Szkoła.",
             fontSize = 11.sp,
             color = Luxury.Disabled,
         )
@@ -802,7 +802,7 @@ private fun ExtrasScreen(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ScreenTitle("Zajęcia dodatkowe", "kto może dodawać — wg uprawnień społeczności", onBack)
+            ScreenTitle("Zajęcia dodatkowe", "", onBack, help = pl.ambif.ambify.ui.help.Help.EXTRAS)
             notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
             val current = week ?: return@Column
             current.students.forEachIndexed { index, student ->

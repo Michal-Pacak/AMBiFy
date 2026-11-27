@@ -247,10 +247,10 @@ class ListService(
                 val itemId = change.itemId ?: throw invalid()
                 if (ListItems.selectAll().where { ListItems.id eq itemId }.any()) throw invalid()
                 val values = validValues(membership, type, change.values ?: throw invalid())
-                if (values.links.isNotEmpty()) requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
+                if (values.links.isNotEmpty()) requireFeature(membership.user[Users.id], organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
                 val parentId = change.parentId
                 if (parentId != null) {
-                    requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Grupy są w pakiecie premium.")
+                    requireFeature(membership.user[Users.id], organizationId, Feature.LISTS_SUBITEMS, "Grupy są w pakiecie premium.")
                     val parent = ListItems.selectAll().where { (ListItems.id eq parentId) and (ListItems.listId eq change.listId) }
                         .singleOrNull() ?: throw notFound()
                     if (parent[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
@@ -401,7 +401,7 @@ class ListService(
                     throw ApiException(HttpStatusCode.BadRequest, "sub_item", "Inny dostęp ustawia się dla całej grupy.")
                 }
                 val access = validAccess(membership, change.access)
-                if (access.isNotEmpty()) requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Inny dostęp do zadania jest w pakiecie premium.")
+                if (access.isNotEmpty()) requireFeature(membership.user[Users.id], organizationId, Feature.LISTS_SUBITEMS, "Inny dostęp do zadania jest w pakiecie premium.")
                 val rev = nextRev(organizationId)
                 ListItems.update({ ListItems.id eq item[ListItems.id] }) {
                     it[ListItems.access] = json.encodeToString(access)
@@ -417,7 +417,7 @@ class ListService(
                 if (item[ListItems.parentId] == target) return ChangeResult(change.id, ok = true)
                 val children = ListItems.selectAll().where { (ListItems.parentId eq item[ListItems.id]) and (ListItems.deleted eq false) }.count()
                 if (target != null) {
-                    requireFeature(organizationId, Feature.LISTS_SUBITEMS, "Grupy są w pakiecie premium.")
+                    requireFeature(membership.user[Users.id], organizationId, Feature.LISTS_SUBITEMS, "Grupy są w pakiecie premium.")
                     if (children > 0) throw ApiException(HttpStatusCode.BadRequest, "nested", "Grupy nie wkłada się do innej grupy.")
                     if (target == item[ListItems.id]) throw invalid()
                     val group = ListItems.selectAll().where { (ListItems.id eq target) and (ListItems.listId eq change.listId) }
@@ -466,7 +466,7 @@ class ListService(
         val fields = change.fields.distinct()
         if (fields.isEmpty()) return ChangeResult(change.id, ok = true)
         if (ItemField.LINKS in fields && wanted.links.any { it !in current.links }) {
-            requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
+            requireFeature(membership.user[Users.id], organizationId, Feature.LISTS_ATTACHMENTS, "Linki są w pakiecie premium.")
         }
 
         var queued: ChangeResult? = null
@@ -622,7 +622,7 @@ class ListService(
                     return@transaction toFile(done)
                 }
                 if (fileId.isBlank() || fileId.length > 64 || !fileId.all { it.isLetterOrDigit() || it == '-' }) throw invalid()
-                requireFeature(organizationId, Feature.LISTS_ATTACHMENTS, "Zdjęcia i pliki są w pakiecie premium.")
+                requireFeature(session.userId, organizationId, Feature.LISTS_ATTACHMENTS, "Zdjęcia i pliki są w pakiecie premium.")
                 val list = editable(membership, item[ListItems.listId], AccessLevel.ADD)
                 if (item[ListItems.deleted]) throw ApiException(HttpStatusCode.Gone, "deleted", "Ktoś usunął już tę pozycję.")
                 requireItemLevel(membership, list, item, AccessLevel.ADD)
@@ -643,7 +643,7 @@ class ListService(
                     .where { (ListFilesTable.organizationId eq organizationId) and (ListFilesTable.deleted eq false) }
                     .sumOf { it[ListFilesTable.size] }
                 if (used + size > Lists.COMMUNITY_FILE_BYTES) {
-                    throw ApiException(HttpStatusCode.Conflict, "full", "Miejsce na zdjęcia i pliki społeczności (${Lists.sizeText(Lists.COMMUNITY_FILE_BYTES)}) jest pełne. Usuń stare zdjęcia albo pliki.")
+                    throw ApiException(HttpStatusCode.Conflict, "full", "Miejsce na zdjęcia i pliki kręgu (${Lists.sizeText(Lists.COMMUNITY_FILE_BYTES)}) jest pełne. Usuń stare zdjęcia albo pliki.")
                 }
                 val now = clock()
                 files.keep(organizationId, fileId, upload)
@@ -788,8 +788,8 @@ class ListService(
         }
     }
 
-    private fun requireFeature(organizationId: String, feature: Feature, message: String) {
-        if (feature !in accounts.communityFeatures(organizationId)) throw ApiException(HttpStatusCode.Forbidden, "premium", message)
+    private fun requireFeature(userId: String, organizationId: String, feature: Feature, message: String) {
+        if (feature !in accounts.communityFeatures(organizationId, userId)) throw ApiException(HttpStatusCode.Forbidden, "premium", message)
     }
 
     /** The list's creator, or someone whose role may delete others' lists, may rename, share, archive and delete it. */
@@ -825,7 +825,7 @@ class ListService(
         if (variant.length > Lists.MAX_VARIANT) throw ApiException(HttpStatusCode.BadRequest, "invalid_variant", "Rodzaj jest za długi.")
         val members = accounts.membersOf(membership.organizationId).map { it[Users.id] }.toSet()
         val assignee = values.assigneeId?.takeIf { type.hasAssignee }
-        if (assignee != null && assignee !in members) throw ApiException(HttpStatusCode.BadRequest, "no_member", "Tej osoby nie ma w społeczności.")
+        if (assignee != null && assignee !in members) throw ApiException(HttpStatusCode.BadRequest, "no_member", "Tej osoby nie ma w kręgu.")
         val quantity = values.quantity?.takeIf { type.hasQuantity }
         if (quantity != null && (quantity <= 0 || quantity >= 100_000)) {
             throw ApiException(HttpStatusCode.BadRequest, "invalid_quantity", "Nieprawidłowa ilość.")
@@ -838,7 +838,7 @@ class ListService(
             throw ApiException(HttpStatusCode.BadRequest, "invalid_link", "Linki: do ${Lists.MAX_LINKS} adresów zaczynających się od http:// lub https://.")
         }
         if (values.reminders.isNotEmpty()) {
-            if (Feature.LISTS_REMINDERS !in accounts.communityFeatures(membership.organizationId)) {
+            if (Feature.LISTS_REMINDERS !in accounts.communityFeatures(membership.organizationId, membership.user[Users.id])) {
                 throw ApiException(HttpStatusCode.Forbidden, "premium", "Przypomnienia są w pakiecie premium.")
             }
             if (values.reminders.size > 10 || values.reminders.any {

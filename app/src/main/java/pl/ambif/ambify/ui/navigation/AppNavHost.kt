@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import pl.ambif.ambify.ui.components.BubbleHost
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,7 +71,8 @@ fun AppNavHost(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val showNavigationBar =
-        currentDestination != null && currentDestination.route !in NoBarRoutes
+        currentDestination != null && currentDestination.route !in NoBarRoutes &&
+            !((sessionState as? SessionState.SignedIn)?.me?.communityId == null && currentDestination.route in pl.ambif.ambify.core.navigation.NoCircleRoutes)
     var loginNotice by rememberSaveable { mutableStateOf<String?>(null) }
     // Bumped when the current module is tapped again on the bar: screens with inner steps go back to their start.
     var moduleReselections by remember { mutableIntStateOf(0) }
@@ -89,7 +94,7 @@ fun AppNavHost(
         val next = when (val state = sessionState) {
             SessionState.SignedOut -> AppDestination.Login.takeIf { route !in SignedOutRoutes }
             is SessionState.SignedIn -> when {
-                state.me.communityId == null -> AppDestination.Start.takeIf { route !in NoBarRoutes }
+                state.me.communityId == null -> AppDestination.Start.takeIf { route !in NoBarRoutes && route !in pl.ambif.ambify.core.navigation.NoCircleRoutes }
                 else -> AppDestination.Home.takeIf { route == AppDestination.Start.route }
             }
         }
@@ -120,6 +125,17 @@ fun AppNavHost(
         })
     }
 
+    val appBubbles = remember { pl.ambif.ambify.ui.components.Bubbles() }
+    // 0.7.9: my reports (the gold dot in Ustawienia, the line in "Co nowego"); waiting ones go out.
+    LaunchedEffect(sessionState is SessionState.SignedIn) {
+        if (sessionState is SessionState.SignedIn) {
+            // B-014: the timetable's copy fresh every morning (after the server's 4:00 diary update).
+            runCatching { pl.ambif.ambify.modules.timetable.TimetableRefreshWorker.schedule(context) }
+            pl.ambif.ambify.features.reports.ReportsStore.refresh(context, session.api)
+        }
+        else pl.ambif.ambify.features.reports.ReportsStore.clear()
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = { if (pastSplash) UpdateBadge(update, onClick = updater::openPopup) },
@@ -137,6 +153,7 @@ fun AppNavHost(
                         // The bar is above every screen: whatever is open, its tap lands on that module's main screen
                         // (inner steps of Listy, Plan… reset too).
                         moduleReselections++
+                        session.previewTheme(null)
                         if (!inModule || !navController.popBackStack(route, inclusive = false)) {
                             navController.navigateToBottomDestination(route)
                         }
@@ -149,6 +166,13 @@ fun AppNavHost(
         // An own theme's wallpaper behind the screens and their "water".
         pl.ambif.ambify.ui.theme.WallpaperLayer()
         WaterLayer(modifier = Modifier.padding(contentPadding)) {
+        // 0.7.9: "Zgłoś błąd" from any help (signed in only) and the app-wide bubble for its result.
+        val signedIn = sessionState is SessionState.SignedIn
+        CompositionLocalProvider(
+            pl.ambif.ambify.ui.help.LocalReportBug provides (if (signedIn) { _: String -> navController.navigate(AppDestination.ReportBug.route) } else null),
+            pl.ambif.ambify.features.reports.LocalAppBubbles provides appBubbles,
+        ) {
+        Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = AppDestination.Splash.route,
@@ -205,6 +229,7 @@ fun AppNavHost(
                     userName = me?.name ?: "",
                     onOpenModule = { module -> navController.navigateToBottomDestination(module.route) },
                     onOpenCommunities = { navController.navigate(AppDestination.SettingsCommunities.route) },
+                    onOpenForecast = { id -> navController.navigate(AppDestination.Forecast.of(id)) },
                 )
             }
 
@@ -253,7 +278,6 @@ fun AppNavHost(
                     onOpenAccount = { navController.navigate(AppDestination.SettingsAccount.route) },
                     onOpenCommunities = { navController.navigate(AppDestination.SettingsCommunities.route) },
                     onOpenApp = { navController.navigate(AppDestination.SettingsApp.route) },
-                    onOpenLook = { navController.navigate(AppDestination.SettingsLook.route) },
                 )
             }
 
@@ -287,12 +311,20 @@ fun AppNavHost(
                 pl.ambif.ambify.features.settings.ThemeEditorScreen(
                     communityId = entry.arguments?.getString("community")?.takeIf { it != "-" },
                     themeId = entry.arguments?.getString("id")?.takeIf { it != "new" },
-                    onBack = { navController.popBackStack() },
+                    onExit = { navController.popBackStack() },
                 )
             }
 
             composable(AppDestination.SettingsApp.route) {
-                AppSettingsScreen(onBack = { navController.popBackStack() })
+                AppSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenLook = { navController.navigate(AppDestination.SettingsLook.route) },
+                    onReportBug = {
+                        pl.ambif.ambify.features.reports.ReportDraft.set(null, null)
+                        navController.navigate(AppDestination.ReportBug.route)
+                    },
+                    onMyReports = { navController.navigate(AppDestination.MyReports.route) },
+                )
             }
 
             composable(AppDestination.SettingsCommunities.route) {
@@ -346,9 +378,45 @@ fun AppNavHost(
                 RequestsScreen(communityId = entry.arguments?.getString("id").orEmpty(), onBack = { navController.popBackStack() })
             }
 
-            composable(AppDestination.Platform.route) {
-                PlatformScreen(resetKey = moduleReselections)
+            composable(
+                AppDestination.Forecast.route,
+                arguments = listOf(navArgument("widget") { type = NavType.StringType }),
+            ) { entry ->
+                pl.ambif.ambify.features.home.ForecastScreen(
+                    widgetId = entry.arguments?.getString("widget").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                )
             }
+
+            composable(AppDestination.Platform.route) {
+                PlatformScreen(resetKey = moduleReselections, onOpenReports = { navController.navigate(AppDestination.PlatformReports.route) })
+            }
+
+            // 0.7.9: bug reports.
+            composable(AppDestination.ReportBug.route) {
+                pl.ambif.ambify.features.reports.ReportBugScreen(onBack = { navController.popBackStack() })
+            }
+            composable(AppDestination.MyReports.route) {
+                pl.ambif.ambify.features.reports.MyReportsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { id -> navController.navigate(AppDestination.MyReport.of(id)) },
+                )
+            }
+            composable(AppDestination.MyReport.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                pl.ambif.ambify.features.reports.MyReportScreen(entry.arguments?.getString("id").orEmpty(), onBack = { navController.popBackStack() })
+            }
+            composable(AppDestination.PlatformReports.route) {
+                pl.ambif.ambify.features.platform.PlatformReportsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { id -> navController.navigate(AppDestination.PlatformReport.of(id)) },
+                )
+            }
+            composable(AppDestination.PlatformReport.route, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                pl.ambif.ambify.features.platform.PlatformReportScreen(entry.arguments?.getString("id").orEmpty(), onBack = { navController.popBackStack() })
+            }
+        }
+        BubbleHost(appBubbles)
+        }
         }
         }
     }
@@ -358,6 +426,7 @@ fun AppNavHost(
 private fun moduleOf(route: String?): String? = when {
     route == null -> null
     route.startsWith("settings") || route.startsWith("community/") -> AppDestination.Settings.route
+    route.startsWith("platform/") -> AppDestination.Platform.route
     else -> route
 }
 

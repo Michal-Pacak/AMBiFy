@@ -166,4 +166,27 @@ class ProfilePhotosTest {
         assertTrue(blocked.hiddenPhotos.isEmpty(), "only for those who may")
         assertNotNull(client.me(ania).photo, "the account keeps its photo")
     }
+
+    @Test
+    fun ownerSetsTheCirclesIcon() = app {
+        val michal = client.michal()
+        val ania = client.join(michal, "ania@pacak.waw.pl", "Ania")
+        assertEquals(pl.ambif.ambify.shared.CircleAvatar("PA"), client.me(ania).communities.single().circle, "gold initials by default")
+
+        assertEquals(HttpStatusCode.Forbidden, client.send("PUT", AccountPaths.FAMILY_AVATAR_COLOR, pl.ambif.ambify.shared.CircleColor("#8EC3F0"), ania.accessToken).status)
+        client.send("PUT", AccountPaths.FAMILY_AVATAR_COLOR, pl.ambif.ambify.shared.CircleColor("#8ec3f0"), michal.accessToken)
+        assertEquals("#8EC3F0", client.me(ania).communities.single().circle?.color)
+
+        val photo = client.put(AccountPaths.FAMILY_AVATAR) {
+            bearerAuth(michal.accessToken)
+            contentType(ContentType.Image.JPEG)
+            setBody(picture())
+        }.body<Me>().communities.single().circle?.photo
+        assertNotNull(photo)
+        assertEquals(HttpStatusCode.OK, client.send<Unit>("GET", "$photo?size=s", token = ania.accessToken).status)
+        val stranger: Tokens = client.send("POST", pl.ambif.ambify.shared.AuthPaths.REGISTER, pl.ambif.ambify.shared.RegisterRequest(null, "Obcy", "obcy@x.pl", "haslo1234", "Pixel")).body()
+        assertEquals(HttpStatusCode.NotFound, client.send<Unit>("GET", photo, token = stranger.accessToken).status)
+
+        assertNull(client.send<Unit>("DELETE", AccountPaths.FAMILY_AVATAR, token = michal.accessToken).body<Me>().communities.single().circle?.photo)
+    }
 }

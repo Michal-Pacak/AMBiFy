@@ -38,6 +38,13 @@ object AccountPaths {
     const val FAMILY_PHOTOS = "/family/photos"
 
     fun photo(userId: String, photoId: String) = "$PEOPLE/$userId/photo/$photoId"
+    /** PUT a JPEG: the current circle's photo; DELETE goes back to initials (the Owner only, 0.7.8). */
+    const val FAMILY_AVATAR = "/family/avatar"
+    /** PUT [CircleColor]. */
+    const val FAMILY_AVATAR_COLOR = "/family/avatar/color"
+    const val CIRCLES = "/circles"
+    /** GET a circle's photo, for its members; `?size=s` the small one. */
+    fun circlePhoto(circleId: String, photoId: String) = "$CIRCLES/$circleId/photo/$photoId"
 
     /** PUT [PhotoHidden] on `MEMBERS/{id}/photo-hidden`: one person's photo hidden in the current community. */
     const val PHOTO_HIDDEN = "photo-hidden"
@@ -64,6 +71,7 @@ data class HiddenPhoto(val memberId: String, val name: String, val byName: Strin
 object PlatformPaths {
     const val COMMUNITIES = "/platform/communities"
     const val FOUNDING_CREDITS = "/platform/founding-credits"
+    const val FOUNDING_CREDITS_REVOKE = "/platform/founding-credits/revoke"
     const val RESET_CODES = "/platform/reset-codes"
     const val ACCOUNTS = "/platform/accounts"
 }
@@ -184,7 +192,17 @@ data class CommunitySummary(
     val photosBlocked: Boolean = false,
     /** My photo hidden there by someone allowed to. */
     val myPhotoHidden: Boolean = false,
+    /** The circle's own icon (0.7.8): a rounded square, bigger than people's. */
+    val circle: CircleAvatar? = null,
 )
+
+/** A circle's icon: [initials] on [color] (null = gold), or its [photo] (path, [AccountPaths.circlePhoto]). */
+@Serializable
+data class CircleAvatar(val initials: String, val color: String? = null, val photo: String? = null)
+
+/** PUT on [AccountPaths.FAMILY_AVATAR_COLOR]: the circle's color (null = gold); the Owner only. */
+@Serializable
+data class CircleColor(val color: String? = null)
 
 /** New name, and a new e-mail address only together with the current password. */
 @Serializable
@@ -198,7 +216,15 @@ data class JoinRequest(val code: String)
 
 /** An account on the server, for the Platform Admin's e-mail hints. */
 @Serializable
-data class PlatformAccount(val name: String, val email: String, val communities: List<String> = emptyList())
+data class PlatformAccount(
+    val name: String,
+    val email: String,
+    val communities: List<String> = emptyList(),
+    /** Premium konta (themes) — the hint says whether to grant or take it back. */
+    val accountPremium: Boolean = false,
+    /** Free extra communities still to use. */
+    val foundingCredits: Int = 0,
+)
 
 /** One community on the Platform Admin's list. */
 @Serializable

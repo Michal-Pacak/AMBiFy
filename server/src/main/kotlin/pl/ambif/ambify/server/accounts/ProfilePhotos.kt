@@ -104,6 +104,70 @@ class ProfilePhotos(private val database: Database, private val accounts: Accoun
         }
     }
 
+    // --- the circle's own icon (0.7.8): [root]/circle-<id>/<photo>.jpg; only the Owner changes it ---
+
+    /** The current circle's new photo from [upload]; the old one goes away. */
+    fun setCircle(session: UserSession, upload: File) {
+        try {
+            val owner = transaction(database) { accounts.requireAction(session, Action.RENAME_COMMUNITY) }
+            val image = runCatching { ImageIO.read(upload) }.getOrNull()
+                ?: throw ApiException(HttpStatusCode.BadRequest, "bad_photo", "To nie jest zdjęcie, które umiemy odczytać.")
+            val photoId = UUID.randomUUID().toString()
+            val dir = circleDir(owner.organizationId).apply { mkdirs() }
+            val square = square(image, PhotoRules.SIDE)
+            write(square, dir.resolve("$photoId.jpg"))
+            write(scaled(square, PhotoRules.SMALL_SIDE), dir.resolve("$photoId-s.jpg"))
+            val old = transaction(database) {
+                val old = Organizations.select(Organizations.avatarPhotoId).where { Organizations.id eq owner.organizationId }.single()[Organizations.avatarPhotoId]
+                Organizations.update({ Organizations.id eq owner.organizationId }) { it[avatarPhotoId] = photoId }
+                old
+            }
+            old?.let { removeCircle(owner.organizationId, it) }
+        } finally {
+            upload.delete()
+        }
+    }
+
+    /** Back to the initials. */
+    fun deleteCircle(session: UserSession) {
+        val (organizationId, old) = transaction(database) {
+            val owner = accounts.requireAction(session, Action.RENAME_COMMUNITY)
+            val old = Organizations.select(Organizations.avatarPhotoId).where { Organizations.id eq owner.organizationId }.single()[Organizations.avatarPhotoId]
+            Organizations.update({ Organizations.id eq owner.organizationId }) { it[avatarPhotoId] = null }
+            owner.organizationId to old
+        }
+        old?.let { removeCircle(organizationId, it) }
+    }
+
+    /** The initials' color: one of [Avatars.PALETTE]-like "#RRGGBB", or null = gold. */
+    fun setCircleColor(session: UserSession, color: String?) {
+        if (color != null && !Regex("#[0-9A-Fa-f]{6}").matches(color)) {
+            throw ApiException(HttpStatusCode.BadRequest, "bad_color", "Nieznany kolor.")
+        }
+        transaction(database) {
+            val owner = accounts.requireAction(session, Action.RENAME_COMMUNITY)
+            Organizations.update({ Organizations.id eq owner.organizationId }) { it[avatarColor] = color?.uppercase() }
+        }
+    }
+
+    /** A circle's photo, for its members only. */
+    fun circleFile(session: UserSession, circleId: String, photoId: String, small: Boolean): File = transaction(database) {
+        val member = Memberships.selectAll().where { (Memberships.userId eq session.userId) and (Memberships.organizationId eq circleId) }.any()
+        val current = Organizations.select(Organizations.avatarPhotoId).where { Organizations.id eq circleId }.singleOrNull()?.get(Organizations.avatarPhotoId)
+        if (!member || current != photoId) throw notFound()
+        circleDir(circleId).resolve(if (small) "$photoId-s.jpg" else "$photoId.jpg").takeIf { it.isFile } ?: throw notFound()
+    }
+
+    private fun circleDir(circleId: String): File {
+        require(circleId.isNotBlank() && circleId.all { it.isLetterOrDigit() || it == '-' }) { "bad id" }
+        return root.resolve("circle-$circleId")
+    }
+
+    private fun removeCircle(circleId: String, photoId: String) {
+        circleDir(circleId).resolve("$photoId.jpg").delete()
+        circleDir(circleId).resolve("$photoId-s.jpg").delete()
+    }
+
     private fun userDir(userId: String): File {
         require(userId.isNotBlank() && userId.all { it.isLetterOrDigit() || it == '-' }) { "bad id" }
         return root.resolve(userId)

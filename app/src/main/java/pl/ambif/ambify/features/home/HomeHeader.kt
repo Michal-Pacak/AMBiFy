@@ -1,10 +1,13 @@
 package pl.ambif.ambify.features.home
 
+import pl.ambif.ambify.ui.components.CircleBadge
+import pl.ambif.ambify.shared.CircleAvatar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,7 +31,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -60,28 +66,58 @@ private fun capped(size: Float): TextUnit {
  * switcher; with one community it goes straight to "Społeczności" in the settings.
  */
 @Composable
-internal fun HomeHeader(userName: String, communityName: String, switchable: Boolean, onCommunity: () -> Unit) {
+internal fun HomeHeader(userName: String, communityName: String, circle: CircleAvatar?, switchable: Boolean, onCommunity: () -> Unit) {
+    // 0.7.8 (board 1 A): the circle's name big on top with its icon, "Witaj, <first name>" small under it.
     val title = capped(28f)
-    val sub = capped(16f)
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            "Witaj, $userName", fontSize = title, lineHeight = (title.value * 1.2f).sp, fontWeight = FontWeight.SemiBold,
-            fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont,
-            maxLines = 2, overflow = TextOverflow.Ellipsis,
-        )
-        Row(
-            modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                .clickable(role = Role.Button, onClickLabel = if (switchable) "Zmień społeczność" else "Społeczności", onClick = onCommunity)
-                .heightIn(min = 40.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                communityName, fontSize = sub, lineHeight = (sub.value * 1.25f).sp, color = Luxury.GoldText,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
-            )
-            if (switchable) Icon(AppIcons.ExpandMore, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(20.dp))
+    val sub = capped(15f)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        CircleBadge(communityName, circle, size = 60.dp)
+        Column(modifier = Modifier.weight(1f)) {
+            val headingFont = pl.ambif.ambify.ui.theme.Luxury.HeadingFont
+            val minTitle = capped(20f)
+            val measurer = rememberTextMeasurer()
+            val baseStyle = androidx.compose.material3.LocalTextStyle.current
+            val density = LocalDensity.current
+            BoxWithConstraints {
+            // B-010: shrink 28 → 20 sp until every word fits on a line and the name fits in 2 lines; only then "…".
+            val room = with(density) { (maxWidth - if (switchable) 26.dp else 0.dp).roundToPx() }.coerceAtLeast(1)
+            val fitted = remember(communityName, room, title, minTitle, baseStyle) {
+                fun fits(size: TextUnit): Boolean {
+                    // B-010 (2nd try): measure with the theme's style (its letter spacing), like the Text below.
+                    val style = baseStyle.merge(TextStyle(fontSize = size, lineHeight = (size.value * 1.15f).sp, fontWeight = FontWeight.SemiBold, fontFamily = headingFont))
+                    val wordsFit = communityName.split(' ').filter { it.isNotBlank() }.all { word ->
+                        measurer.measure(word, style, softWrap = false, maxLines = 1).size.width <= room
+                    }
+                    if (!wordsFit) return false
+                    val all = measurer.measure(communityName, style, maxLines = 2, constraints = Constraints(maxWidth = room))
+                    return !all.hasVisualOverflow
+                }
+                var size = title.value
+                while (size > minTitle.value && !fits(size.sp)) size -= 1f
+                maxOf(size, minTitle.value).sp
+            }
+            // Safety net: if the real layout still overflows, step down 1 sp at a time (never below the minimum).
+            var shown by remember(fitted) { mutableStateOf(fitted) }
+            Row(
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable(role = Role.Button, onClickLabel = if (switchable) "Zmień krąg" else "Kręgi", onClick = onCommunity)
+                    .heightIn(min = 44.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    communityName, fontSize = shown, lineHeight = (shown.value * 1.15f).sp, fontWeight = FontWeight.SemiBold,
+                    fontFamily = headingFont,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                    onTextLayout = { if (it.hasVisualOverflow && shown.value > minTitle.value) shown = (shown.value - 1f).sp },
+                )
+                if (switchable) Icon(AppIcons.ExpandMore, contentDescription = null, tint = Luxury.GoldText, modifier = Modifier.size(22.dp))
+            }
+            }
+            Text("Witaj, ${userName.trim().substringBefore(' ')}", fontSize = sub, color = Luxury.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        // The Dashboard's "?" carries the one-time "Pomoc" bubble for the whole app (0.7.8).
+        pl.ambif.ambify.ui.help.HelpButton(pl.ambif.ambify.ui.help.Help.DASHBOARD, firstRun = true)
     }
 }
 
@@ -103,11 +139,11 @@ internal fun CommunitySwitcher(
     val searching = all.size > SEARCH_FROM
     val shown = if (query.isBlank()) all else all.filter { it.name.contains(query.trim(), ignoreCase = true) }
     LuxuryPopup(onDismiss = onDismiss) {
-        Text(if (searching) "Twoje społeczności · ${all.size}" else "Twoje społeczności", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
+        Text(if (searching) "Twoje kręgi · ${all.size}" else "Twoje kręgi", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         if (searching) {
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
-                label = { Text("Szukaj społeczności") },
+                label = { Text("Szukaj kręgu") },
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Luxury.GoldBase, unfocusedBorderColor = Luxury.Outline),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -122,10 +158,7 @@ internal fun CommunitySwitcher(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(
-                        modifier = Modifier.size(20.dp).clip(CircleShape).border(1.6.dp, Luxury.GoldBase, CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { if (current) Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Luxury.GoldLight)) }
+                    CircleBadge(community.name, community.circle, size = 40.dp)
                     Column(modifier = Modifier.weight(1f)) {
                         Text(community.name, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(community.role.label() + if (current) " · teraz tutaj" else "", fontSize = 12.sp, color = Luxury.TextMuted)
@@ -148,7 +181,7 @@ internal fun CommunitySwitcher(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Zarządzaj społecznościami", fontSize = 16.sp)
+                    Text("Zarządzaj kręgami", fontSize = 16.sp)
                     Text("załóż nową, dołącz z kodem, przekaż rolę Ownera", fontSize = 12.sp, color = Luxury.TextMuted)
                 }
                 LuxuryOpenMark(size = 32.dp)

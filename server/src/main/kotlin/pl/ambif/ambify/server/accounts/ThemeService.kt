@@ -49,7 +49,7 @@ class ThemeService(private val database: Database, private val accounts: Account
         val names = if (setters.isEmpty()) emptyMap() else Users.selectAll().where { Users.id inList setters }.associate { it[Users.id] to it[Users.name] }
         ThemeState(
             accountTheme = user[Users.theme],
-            accountPremium = user[Users.accountPremium],
+            accountPremium = user[Users.accountPremium] || user[Users.platformAdmin],
             own = OwnThemes.selectAll().where { OwnThemes.userId eq session.userId }.orderBy(OwnThemes.createdAt).map { decode(it) },
             communities = rows.map { row ->
                 val organizationId = row[Memberships.organizationId]
@@ -59,7 +59,7 @@ class ThemeService(private val database: Database, private val accounts: Account
                     communityId = organizationId,
                     theme = organization[Organizations.theme] ?: Themes.LUXURY,
                     locked = organization[Organizations.themeLocked],
-                    premium = Themes.COMMUNITY_GRANT in accounts.grants(organizationId),
+                    premium = Themes.COMMUNITY_GRANT in accounts.grantsFor(organizationId, session.userId),
                     own = communityOwn[organizationId].orEmpty(),
                     myChoice = row[Memberships.theme],
                     canSet = accounts.can(membership, Action.THEME_SET) == Mode.ALLOWED,
@@ -203,10 +203,10 @@ class ThemeService(private val database: Database, private val accounts: Account
     private fun owner(session: UserSession, community: Boolean, premiumNeeded: Boolean = true): Pair<String?, String?> {
         if (community) {
             val manager = accounts.requireAction(session, Action.THEME_EDIT)
-            if (premiumNeeded && Themes.COMMUNITY_GRANT !in accounts.grants(manager.organizationId)) throw premium()
+            if (premiumNeeded && Themes.COMMUNITY_GRANT !in accounts.grantsFor(manager.organizationId, session.userId)) throw premium()
             return null to manager.organizationId
         }
-        if (premiumNeeded && !Users.selectAll().where { Users.id eq session.userId }.single()[Users.accountPremium]) throw premium()
+        if (premiumNeeded && Users.selectAll().where { Users.id eq session.userId }.single().let { !it[Users.accountPremium] && !it[Users.platformAdmin] }) throw premium()
         return session.userId to null
     }
 

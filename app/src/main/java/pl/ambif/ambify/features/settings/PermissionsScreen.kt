@@ -91,7 +91,7 @@ fun PermissionsScreen(communityId: String, onBack: () -> Unit) {
     LaunchedEffect(communityId) { act { reload() } }
 
     val owner = me?.role?.owner == true
-    SettingsLayout(title = if (owner) "Role i uprawnienia" else "Uprawnienia ról", onBack = onBack, subtitle = me?.familyName ?: "", notice = notice) {
+    SettingsLayout(title = if (owner) "Role i uprawnienia" else "Uprawnienia ról", onBack = onBack, subtitle = me?.familyName ?: "", notice = notice, help = pl.ambif.ambify.ui.help.Help.PERMISSIONS) {
         val current = table ?: return@SettingsLayout
         val roles = current.roles.filterNot { it.owner }
 
@@ -136,7 +136,7 @@ fun PermissionsScreen(communityId: String, onBack: () -> Unit) {
         }
 
         AccountCard("Co może każda rola") {
-            val tabs = listOf<Pair<String?, String>>(null to "Społeczność") + ModuleId.entries
+            val tabs = listOf<Pair<String?, String>>(null to "Krąg") + ModuleId.entries
                 .filter { m -> Action.of(m).isNotEmpty() }
                 .map { it.name to it.label }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -175,11 +175,6 @@ fun PermissionsScreen(communityId: String, onBack: () -> Unit) {
                     }
                 }
             }
-            Text(
-                "Owner może wszystko. " + if (owner) "Stuknij ustawienie, żeby je zmienić." else "Zmienia je tylko Owner.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Luxury.TextMuted,
-            )
         }
     }
 
@@ -270,7 +265,7 @@ fun RequestsScreen(communityId: String, onBack: () -> Unit) {
 
     LaunchedEffect(communityId) { act(null) {} }
 
-    SettingsLayout(title = "Prośby do zatwierdzenia", onBack = onBack, notice = notice) {
+    SettingsLayout(title = "Prośby do zatwierdzenia", onBack = onBack, notice = notice, help = pl.ambif.ambify.ui.help.Help.REQUESTS) {
         val current = requests ?: return@SettingsLayout
         if (current.isEmpty()) {
             Text("Nic nie czeka na zatwierdzenie.", style = MaterialTheme.typography.bodyMedium, color = Luxury.TextMuted)

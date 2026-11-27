@@ -80,7 +80,7 @@ internal fun WidgetPicker(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ScreenTitle("Widgety", "wybierz moduł", onBack)
+        ScreenTitle("Widgety", "wybierz moduł", onBack, help = pl.ambif.ambify.ui.help.Help.WIDGETS)
         // Widgets of no module (the weather), always offered.
         LuxuryCard(contentPadding = PaddingValues(vertical = 4.dp), spacing = 0.dp) {
             Row(
@@ -121,7 +121,7 @@ internal fun WidgetPicker(
             }
         }
         Text(
-            "Widać tylko moduły włączone w społeczności.",
+            "Widać tylko moduły włączone w kręgu.",
             fontSize = 12.sp,
             color = Luxury.TextMuted,
             textAlign = TextAlign.Center,
@@ -270,7 +270,7 @@ internal fun LessonsSettings(
         }
         LuxurySectionTitle("Czyje lekcje · można kilka")
         if (data == null) Text("Wczytywanie…", fontSize = 13.sp, color = Luxury.TextMuted)
-        else if (students.isEmpty()) Text("Nikt w społeczności nie ma jeszcze planu lekcji (dziennik podłącza się w module Plan lekcji).", fontSize = 13.sp, color = Luxury.TextMuted)
+        else if (students.isEmpty()) Text("Nikt w kręgu nie ma jeszcze planu lekcji (dziennik podłącza się w module Plan lekcji).", fontSize = 13.sp, color = Luxury.TextMuted)
         students.forEach { student ->
             val on = student.id in people
             val shape = RoundedCornerShape(14.dp)

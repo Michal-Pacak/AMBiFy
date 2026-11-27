@@ -43,6 +43,21 @@ sealed class AppDestination(val route: String) {
         fun of(communityId: String?, themeId: String?) = "theme-editor/${communityId ?: "-"}/${themeId ?: "new"}"
     }
     data object Platform : AppDestination("platform")
+    /** 0.7.9: bug reports — "Zgłoś błąd", my reports, one of them (in Ustawienia → Aplikacja). */
+    data object ReportBug : AppDestination("settings/report")
+    data object MyReports : AppDestination("settings/reports")
+    data object MyReport : AppDestination("settings/reports/{id}") {
+        fun of(reportId: String) = "settings/reports/$reportId"
+    }
+    /** The Platform Admin's panel of all reports. */
+    data object PlatformReports : AppDestination("platform/reports")
+    data object PlatformReport : AppDestination("platform/reports/{id}") {
+        fun of(reportId: String) = "platform/reports/$reportId"
+    }
+    /** 0.7.8: the 16-day forecast of a Pogoda widget (a part of the Dashboard). */
+    data object Forecast : AppDestination("forecast/{widget}") {
+        fun of(widgetId: String) = "forecast/$widgetId"
+    }
 }
 
 /** Screens shown before signing in. */
@@ -55,3 +70,6 @@ val SignedOutRoutes = setOf(
 
 /** No module bar there. */
 val NoBarRoutes = SignedOutRoutes + AppDestination.Start.route
+
+/** 0.7.9: someone without a circle may report a bug and see their reports too (no module bar for them there). */
+val NoCircleRoutes = setOf(AppDestination.Start.route, AppDestination.ReportBug.route, AppDestination.MyReports.route, AppDestination.MyReport.route)

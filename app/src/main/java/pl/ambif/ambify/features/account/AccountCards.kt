@@ -101,7 +101,7 @@ internal fun formatDay(millis: Long): String = dayFormat.format(Date(millis))
 internal val downloadLink = BuildConfig.SERVER_URL + AppPaths.DOWNLOAD
 
 internal fun invitationText(communityName: String, code: String, expiresAt: Long) =
-    "Dołącz do społeczności $communityName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)}). " +
+    "Dołącz do kręgu $communityName w AMBiFy. Kod zaproszenia: $code (ważny do ${formatDay(expiresAt)}). " +
         "Aplikację pobierzesz tutaj (w domowym Wi‑Fi): $downloadLink"
 
 internal fun Role.label() = name
@@ -129,7 +129,7 @@ internal fun MembersCard(
                     if (can(Action.REMOVE_MEMBERS)) {
                         add("Wyloguj urządzenia" to { onSignOutMember(member) })
                         add("Resetuj hasło" to { onResetPassword(member) })
-                        add("Usuń ze społeczności" to { onRemoveMember(member) })
+                        add("Usuń z kręgu" to { onRemoveMember(member) })
                     }
                 }
             } else {

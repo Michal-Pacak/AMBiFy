@@ -30,9 +30,12 @@ object Avatars {
         return letters.uppercase()
     }
 
-    /** The first shape nobody with the same initials uses yet; when all are taken the color tells them apart. */
+    /**
+     * The first shape nobody with the same initials uses yet; when all are taken the color tells them apart.
+     * Never [AvatarShape.SQUARE]: the rounded square belongs to circles (0.7.8).
+     */
     fun freeShape(taken: Collection<AvatarShape>): AvatarShape =
-        AvatarShape.entries.firstOrNull { it !in taken } ?: AvatarShape.CIRCLE
+        AvatarShape.entries.firstOrNull { it != AvatarShape.SQUARE && it !in taken } ?: AvatarShape.CIRCLE
 
     /** The palette color used the fewest times so far (the earliest one on a tie). */
     fun freeColor(used: Collection<String>): String =

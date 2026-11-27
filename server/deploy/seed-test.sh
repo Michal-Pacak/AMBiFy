@@ -75,3 +75,29 @@ curl -s -o /dev/null -w "%{http_code} motyw Legia\n" -X PUT $B/themes/own -H "Au
     -d '{"id":"legia-test-01","name":"Legia","dark":true,"bgHue":150,"bgSat":0,"colors":["#F7F7F7","#00733E","#D7142A"],"style":"STRIPES","effect":"hit","wallpaper":{"pattern":"scarf","dim":84}}'
 curl -s -o /dev/null -w "%{http_code} motyw społeczności\n" -X PUT "$B/themes/own?community=1" -H "Authorization: Bearer $TO" -H 'Content-Type: application/json' \
     -d '{"id":"szalik-test-01","name":"Szalik TEST","dark":true,"bgHue":225,"bgSat":45,"colors":["#D4AF37","#1B3580","#F7F7F7"],"style":"METAL","effect":"sparks","wallpaper":{"pattern":"diag","dim":86}}'
+
+# Zgłoszenia błędów (0.7.9): po jednym w każdym stanie, żeby było co oglądać w „Moje zgłoszenia” (Ola) i w panelu
+# Platform Admina. „W naprawie w 0.7.92” zmieni się samo w „Naprawione”, gdy na TEST wyjdzie 0.7.92 — wtedy
+# Ola zobaczy linijkę w „Co nowego”. Ula zgłasza z wersji dla dzieci (znaczek tylko w panelu).
+TO=$(login owner); TA=$(login admin); TU=$(login user); TP=$(login platform)
+report() { # token clientId kids shots "tekst" "ekran" → id
+    curl -s -X POST $B/reports -H "Authorization: Bearer $1" -H 'Content-Type: application/json' \
+        -d "{\"clientId\":\"$2\",\"text\":\"$5\",\"screen\":\"$6\",\"appVersion\":\"0.7.91\",\"appCode\":91,\"phone\":\"Samsung SM-G975F\",\"android\":\"12\",\"kids\":$3,\"network\":\"Wi-Fi\",\"createdAt\":$(( ($(date +%s) - RANDOM % 200000) * 1000 )),\"shots\":$4}" \
+        | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])'
+}
+state() { curl -s -o /dev/null -w "%{http_code} zgłoszenie → $2\n" -X PUT "$B/platform/reports/$1" -H "Authorization: Bearer $TP" -H 'Content-Type: application/json' -d "$3"; }
+TMP=$(mktemp -d)
+"$HERE/seed-portrait.py" 2B2B30 D4AF37 121214 F7E08A "$TMP/shot.png"
+R1=$(report "$TO" seed-r1 false 1 "Dodałem zdjęcie do mleka na liście Zakupy i po zapisaniu go nie widać." "Lista")
+curl -s -o /dev/null -w "%{http_code} zrzut do zgłoszenia\n" -X PUT "$B/reports/$R1/shots/0" -H "Authorization: Bearer $TO" -H 'Content-Type: image/png' --data-binary "@$TMP/shot.png"
+R2=$(report "$TU" seed-r2 true 0 "nie dziala plan jak sie przesune w bok" "Pulpit")
+R3=$(report "$TA" seed-r3 false 0 "Pogoda pokazuje wczorajszą prognozę." "Prognoza")
+state "$R3" przyjęte '{"status":"ACCEPTED","number":"B-101"}'
+R4=$(report "$TO" seed-r4 false 0 "Po anulowaniu nowego motywu tapeta znika z opóźnieniem." "Edytor motywu")
+state "$R4" przyjęte '{"status":"ACCEPTED","number":"B-102"}'
+state "$R4" "w naprawie 0.7.92" '{"status":"IN_FIX","fixedIn":"0.7.92"}'
+R5=$(report "$TO" seed-r5 false 0 "Plan lekcji ucina nazwisko na połówce." "Pulpit")
+state "$R5" "naprawione (0.7.80 już wyszła)" '{"status":"IN_FIX","fixedIn":"0.7.80"}'
+R6=$(report "$TO" seed-r6 false 0 "Na liście przy pozycji jest tylko spinacz zamiast zdjęcia." "Lista")
+state "$R6" wyjaśnione '{"status":"EXPLAINED","explanation":"Tak ma działać: na liście widać spinacz, a zdjęcie otwiera się po stuknięciu w pozycję."}'
+rm -rf "$TMP"

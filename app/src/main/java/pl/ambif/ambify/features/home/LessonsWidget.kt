@@ -20,6 +20,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import pl.ambif.ambify.shared.WidgetSlot
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -115,7 +119,15 @@ internal fun LessonsWidget(
             module = "Lekcje", name = name, interactive = interactive, onSettings = onSettings, onOpen = onOpen, openLabel = "Otwórz Plan lekcji",
             leading = single?.let { s -> { PersonAvatar(s.name, s.avatar, size = 22.dp) } },
         )
-        if (people.size > 1) {
+        if (people.size > 1 && widget.slot != WidgetSlot.FULL) {
+            // B-001: at half width the chips did not fit; "‹ child ›" like the places in Pogoda, and a swipe.
+            PersonArrows(people, student?.id, interactive) { id ->
+                picked = id
+                expanded = false
+                store?.savePerson(widget.id, id)
+            }
+            Spacer(Modifier.height(4.dp))
+        } else if (people.size > 1) {
             PersonSwitch(people, student?.id, interactive) { id ->
                 picked = id
                 expanded = false
@@ -157,6 +169,44 @@ internal fun LessonsWidget(
         }
         data?.offlineSince?.let { since ->
             Muted("Bez połączenia z serwerem · plan z ${savedAt(since)}", inner.padding(top = 6.dp), size = 11)
+        }
+    }
+}
+
+/** Half width: one child at a time between arrows; first name over surname, so "Antoni Szarkowski" fits too. */
+@Composable
+private fun PersonArrows(people: List<Student>, selected: String?, interactive: Boolean, onPick: (String) -> Unit) {
+    val index = people.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+    val person = people[index]
+    fun step(by: Int) = onPick(people[(index + by + people.size) % people.size].id)
+    var drag by remember { mutableStateOf(0f) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(end = 10.dp)
+            .pointerInput(index, interactive) {
+                if (!interactive) return@pointerInput
+                detectHorizontalDragGestures(onDragEnd = {
+                    if (drag > 40f) step(-1) else if (drag < -40f) step(1)
+                    drag = 0f
+                }) { change, dx -> change.consume(); drag += dx }
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = { step(-1) }, enabled = interactive) {
+            Icon(AppIcons.Back, contentDescription = "Poprzednie dziecko", tint = Luxury.GoldText, modifier = Modifier.size(18.dp))
+        }
+        Column(
+            modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { contentDescription = "Lekcje: ${person.name}, ${index + 1} z ${people.size}" },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            PersonAvatar(person.name, person.avatar, size = 24.dp, zoom = AvatarZoom.HOLD)
+            val parts = person.name.trim().split(' ', limit = 2)
+            parts.forEach { part ->
+                Text(part, fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            }
+        }
+        IconButton(onClick = { step(1) }, enabled = interactive) {
+            Icon(AppIcons.Forward, contentDescription = "Następne dziecko: ${people[(index + 1) % people.size].name}", tint = Luxury.GoldText, modifier = Modifier.size(18.dp))
         }
     }
 }

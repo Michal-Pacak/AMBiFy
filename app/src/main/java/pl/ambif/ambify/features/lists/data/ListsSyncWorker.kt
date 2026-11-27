@@ -104,10 +104,10 @@ class ListsSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val store = object : TokenStore {
                 override var accessToken: String?
                     get() = prefs.getString("access_token", null)
-                    set(value) { prefs.edit { putString("access_token", value) } }
+                    set(value) { prefs.edit(commit = true) { putString("access_token", value) } }
                 override var refreshToken: String?
                     get() = prefs.getString("refresh_token", null)
-                    set(value) { prefs.edit { putString("refresh_token", value) } }
+                    set(value) { prefs.edit(commit = true) { putString("refresh_token", value) } }
 
                 // The app ends the session itself the next time it is opened.
                 override fun onSessionExpired() {}

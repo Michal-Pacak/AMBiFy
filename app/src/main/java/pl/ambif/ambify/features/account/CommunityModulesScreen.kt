@@ -110,7 +110,7 @@ fun CommunityModulesScreen(communityId: String, onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            ScreenTitle("Moduły", community?.name ?: "", onBack)
+            ScreenTitle("Moduły", community?.name ?: "", onBack, help = pl.ambif.ambify.ui.help.Help.MODULES)
             notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
             val current = modules ?: return@Column
 
@@ -144,31 +144,24 @@ fun CommunityModulesScreen(communityId: String, onBack: () -> Unit) {
                     }
                 }
             }
-            Text(
-                when {
-                    owner -> "Wyłączony moduł znika z paska u wszystkich członków społeczności. Moduły i dodatki premium kupuje Owner."
-                    manager -> "Wyłączony moduł znika z paska u wszystkich członków społeczności. Moduły premium kupuje Owner."
-                    else -> "Moduły włączają i wyłączają Owner i Admin."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
 
 /** Screen title; without [onBack] (a screen opened from the module bar) there is no back arrow. */
 @Composable
-internal fun ScreenTitle(title: String, subtitle: String, onBack: (() -> Unit)?) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 48.dp)) {
+internal fun ScreenTitle(title: String, subtitle: String, onBack: (() -> Unit)?, help: pl.ambif.ambify.ui.help.HelpScreen? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
         if (onBack != null) IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = "Wróć") }
         else Spacer(Modifier.width(4.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             if (subtitle.isNotEmpty()) {
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        // 0.7.8: help on every screen, always on the right of the title (board 3).
+        help?.let { pl.ambif.ambify.ui.help.HelpButton(it) }
     }
 }
 

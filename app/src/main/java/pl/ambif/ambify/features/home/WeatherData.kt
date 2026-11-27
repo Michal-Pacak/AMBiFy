@@ -33,6 +33,8 @@ data class Forecast(
         @SerialName("apparent_temperature") val feelsLike: Double,
         @SerialName("weather_code") val code: Int,
         @SerialName("wind_speed_10m") val wind: Double,
+        @SerialName("relative_humidity_2m") val humidity: Int? = null,
+        @SerialName("pressure_msl") val pressure: Double? = null,
     )
 
     @Serializable
@@ -42,6 +44,7 @@ data class Forecast(
         @SerialName("precipitation_probability") val rain: List<Int?>,
         @SerialName("weather_code") val code: List<Int?>,
         @SerialName("wind_gusts_10m") val gusts: List<Double?> = emptyList(),
+        @SerialName("wind_speed_10m") val wind: List<Double?> = emptyList(),
     )
 
     @Serializable
@@ -51,7 +54,44 @@ data class Forecast(
         @SerialName("temperature_2m_min") val min: List<Double?>,
         @SerialName("precipitation_probability_max") val rain: List<Int?>,
         @SerialName("weather_code") val code: List<Int?>,
+        val sunrise: List<String> = emptyList(),
+        val sunset: List<String> = emptyList(),
+        @SerialName("precipitation_sum") val precipitation: List<Double?> = emptyList(),
+        @SerialName("wind_speed_10m_max") val windMax: List<Double?> = emptyList(),
     )
+
+    /** One day of the 16 (0.7.8, board 5). */
+    data class FullDay(
+        val date: java.time.LocalDate, val min: Double?, val max: Double?, val rain: Int?, val code: Int?,
+        val sunrise: String?, val sunset: String?, val precipitation: Double?, val windMax: Double?,
+    )
+
+    fun days(): List<FullDay> = daily.time.indices.mapNotNull { i ->
+        val date = runCatching { java.time.LocalDate.parse(daily.time[i]) }.getOrNull() ?: return@mapNotNull null
+        FullDay(
+            date, daily.min.getOrNull(i), daily.max.getOrNull(i), daily.rain.getOrNull(i), daily.code.getOrNull(i),
+            daily.sunrise.getOrNull(i)?.substringAfter('T'), daily.sunset.getOrNull(i)?.substringAfter('T'),
+            daily.precipitation.getOrNull(i), daily.windMax.getOrNull(i),
+        )
+    }
+
+    /** "7:21–15:31" today (or on [index]). */
+    fun sun(index: Int = 0): String? {
+        val up = daily.sunrise.getOrNull(index)?.substringAfter('T')?.trimStart('0') ?: return null
+        val down = daily.sunset.getOrNull(index)?.substringAfter('T') ?: return null
+        return "$up–$down"
+    }
+
+    /** All hours of [date] every [step] hours. */
+    fun hoursOn(date: java.time.LocalDate, step: Int = 3): List<Hour> = allHours().filter { it.time.toLocalDate() == date && it.time.hour % step == 0 }
+
+    /** The next [count] whole hours from now. */
+    fun nextHours(now: LocalDateTime, count: Int = 24): List<Hour> = allHours().filter { it.time.isAfter(now.minusHours(1)) }.take(count)
+
+    private fun allHours(): List<Hour> = hourly.time.indices.mapNotNull { i ->
+        val t = runCatching { LocalDateTime.parse(hourly.time[i]) }.getOrNull() ?: return@mapNotNull null
+        Hour(t, hourly.temperature.getOrNull(i) ?: return@mapNotNull null, hourly.rain.getOrNull(i) ?: 0, hourly.code.getOrNull(i) ?: 0)
+    }
 
     /** One of the next hours. */
     data class Hour(val time: LocalDateTime, val temperature: Double, val rain: Int, val code: Int)
@@ -138,7 +178,8 @@ class WeatherSource(context: Context) {
     private val preferences = context.getSharedPreferences("weather", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun key(place: WeatherPlace) = "%.2f,%.2f".format(Locale.ROOT, place.latitude, place.longitude)
+    // "v2": 0.7.8 asks for 16 days and more fields; older copies on the phone are skipped.
+    private fun key(place: WeatherPlace) = "v2:%.2f,%.2f".format(Locale.ROOT, place.latitude, place.longitude)
 
     /** The forecast kept on the phone (maybe old), for showing at once. */
     fun cached(place: WeatherPlace): Forecast? =
@@ -148,10 +189,10 @@ class WeatherSource(context: Context) {
     suspend fun forecast(place: WeatherPlace, now: Long = System.currentTimeMillis()): Forecast? {
         cached(place)?.takeIf { now - it.fetchedAt < FRESH_MS }?.let { return it }
         val url = "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f".format(Locale.ROOT, place.latitude, place.longitude) +
-            "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m" +
-            "&hourly=temperature_2m,precipitation_probability,weather_code,wind_gusts_10m" +
-            "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code" +
-            "&timezone=auto&forecast_days=3"
+            "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m,pressure_msl" +
+            "&hourly=temperature_2m,precipitation_probability,weather_code,wind_gusts_10m,wind_speed_10m" +
+            "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset,precipitation_sum,wind_speed_10m_max" +
+            "&timezone=auto&forecast_days=16"
         val text = fetch(url) ?: return null
         val forecast = runCatching { json.decodeFromString<Forecast>(text) }.getOrNull()?.copy(fetchedAt = now) ?: return null
         preferences.edit().putString(key(place), json.encodeToString(Forecast.serializer(), forecast)).apply()

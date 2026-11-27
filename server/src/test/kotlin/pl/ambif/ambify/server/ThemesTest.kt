@@ -130,7 +130,9 @@ class ThemesTest {
         client.send("PUT", Themes.MEMBER, ThemeChoice(Themes.NEON), ania.accessToken)
 
         assertEquals(HttpStatusCode.Forbidden, client.send("PUT", Themes.COMMUNITY, CommunityThemeUpdate(Themes.PEARL, true), ania.accessToken).status)
-        assertEquals(HttpStatusCode.Forbidden, client.send("PUT", Themes.COMMUNITY, CommunityThemeUpdate(Themes.GAMING, false), michal.accessToken).status, "Premium needs the grant")
+        // Michał set the server up: the Platform Admin has every premium, also without the community's grant (26.11).
+        assertEquals(HttpStatusCode.OK, client.send("PUT", Themes.COMMUNITY, CommunityThemeUpdate(Themes.GAMING, false), michal.accessToken).status, "the Platform Admin has it all")
+        assertEquals(false, client.state(ania).communities.single().premium, "the community itself still has no Premium")
         client.send("PUT", Themes.COMMUNITY, CommunityThemeUpdate(Themes.PEARL, false), michal.accessToken)
         val open = client.state(ania)
         val id = open.communities.single().communityId

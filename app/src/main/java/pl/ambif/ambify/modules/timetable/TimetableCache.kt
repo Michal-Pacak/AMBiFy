@@ -43,6 +43,10 @@ object TimetableCache {
         File(context.filesDir, DIR).deleteRecursively()
     }
 
+    /** The communities whose timetable this phone keeps a copy of (refreshed at night, B-014). */
+    fun communities(context: Context): List<String> =
+        File(context.filesDir, DIR).listFiles()?.filter { it.isDirectory }?.map { it.name }.orEmpty()
+
     /** The Mondays the copy should hold, from a week back to four weeks ahead of [today]. */
     fun range(today: LocalDate = LocalDate.now()): List<LocalDate> {
         val monday = Recurrences.mondayOf(today)

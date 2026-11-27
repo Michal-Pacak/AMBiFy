@@ -21,6 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,14 +68,35 @@ import pl.ambif.ambify.ui.theme.LuxuryCard
 import pl.ambif.ambify.ui.theme.LuxuryOpenButton
 import pl.ambif.ambify.ui.theme.LuxurySectionTitle
 
-/** Ustawienia from the module bar: Konto, Społeczności and Aplikacja (settings of this phone). */
+/** Ustawienia from the module bar: Aplikacja (with Wygląd), Konto and Kręgi — A to Z. */
 @Composable
-fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onOpenApp: () -> Unit, onOpenLook: () -> Unit) {
+fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onOpenApp: () -> Unit) {
     val session = LocalAppSession.current
     val state by session.state.collectAsState()
     val me = (state as? SessionState.SignedIn)?.me ?: return
+    val reports by pl.ambif.ambify.features.reports.ReportsStore.mine.collectAsState()
+    val seenAt by session.device.reportsSeenAt.collectAsState()
+    val reportNews = pl.ambif.ambify.features.reports.ReportsStore.news(reports, seenAt)
+    // B-011: fetch my reports each time Ustawienia opens, so a new answer shows its "!" without signing in again.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { pl.ambif.ambify.features.reports.ReportsStore.refresh(context, session.api) }
 
-    SettingsLayout(title = "Ustawienia", onBack = null) {
+    SettingsLayout(title = "Ustawienia", onBack = null, help = pl.ambif.ambify.ui.help.Help.SETTINGS) {
+        // A–Z (Michał, 26.11): Aplikacja (with Wygląd inside), Konto, Kręgi.
+        val themes by session.themes.collectAsState()
+        HubCard(onClick = onOpenApp, title = "Aplikacja") {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("AMBiFy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
+                // 0.7.9: an answer to my report is waiting (board 3: the dot climbs up to here, not to the bar).
+                if (reportNews) pl.ambif.ambify.features.reports.NewsDot()
+            }
+            val look = themes?.accountTheme?.let { key -> themeName(themes!!, key) } ?: "motyw kręgu"
+            Text(
+                "Wygląd: $look · animacje, aktualizacje",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         HubCard(onClick = onOpenAccount, title = "Konto") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PersonAvatar(me.name, me.myAvatar(), size = 52.dp, zoom = AvatarZoom.HOLD)
@@ -82,36 +106,11 @@ fun SettingsScreen(onOpenAccount: () -> Unit, onOpenCommunities: () -> Unit, onO
                 }
             }
         }
-        HubCard(onClick = onOpenCommunities, title = "Społeczności") {
-            Text(me.familyName ?: "Brak społeczności", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Dostępne: ${me.communities.size}",
+        HubCard(onClick = onOpenCommunities, title = "Kręgi") {
+            Text(me.familyName ?: "Brak kręgu", style = MaterialTheme.typography.titleMedium)
+            if (me.communities.size > 1) Text(
+                "i ${me.communities.size - 1} ${if (me.communities.size - 1 == 1) "inny" else "inne"}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        val themes by session.themes.collectAsState()
-        HubCard(onClick = onOpenLook, title = "Wygląd") {
-            val name = themes?.accountTheme?.let { key -> themeName(themes!!, key) } ?: "jak w społeczności"
-            Text("Mój motyw: $name", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Własne motywy i tapeta — Premium konta",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HubCard(onClick = onOpenApp, title = "Aplikacja") {
-            Text("AMBiFy ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Ustawienia konta i aplikacji",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (me.platformAdmin) {
-            Text(
-                "Panel Platform Admina jest osobną pozycją na pasku.",
-                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -145,7 +144,7 @@ fun AccountSettingsScreen(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) { act {} }
 
-    SettingsLayout(title = "Konto", onBack = onBack, notice = notice) {
+    SettingsLayout(title = "Konto", onBack = onBack, notice = notice, help = pl.ambif.ambify.ui.help.Help.ACCOUNT) {
         LuxuryCard(contentPadding = PaddingValues(20.dp), spacing = 8.dp) {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // My photo here even where a community switched photos off.
@@ -164,7 +163,7 @@ fun AccountSettingsScreen(onBack: () -> Unit) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Google", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "kalendarze do synchronizacji ze społecznościami",
+                        "kalendarze do synchronizacji z kręgami",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -204,7 +203,7 @@ fun AccountSettingsScreen(onBack: () -> Unit) {
 
 /** Aplikacja: settings of this phone — the server connection and the card animations. */
 @Composable
-fun AppSettingsScreen(onBack: () -> Unit) {
+fun AppSettingsScreen(onBack: () -> Unit, onOpenLook: () -> Unit, onReportBug: () -> Unit = {}, onMyReports: () -> Unit = {}) {
     val session = LocalAppSession.current
     val api = session.api
     val scope = rememberCoroutineScope()
@@ -220,14 +219,35 @@ fun AppSettingsScreen(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) { serverStatus = api.status() }
 
-    SettingsLayout(title = "Aplikacja", onBack = onBack) {
+    SettingsLayout(title = "Aplikacja", onBack = onBack, help = pl.ambif.ambify.ui.help.Help.APP) {
         AccountCard("Wygląd") {
+            // Wygląd lives here now (Michał, 26.11): my theme first, then the cards' animations.
+            val themes by session.themes.collectAsState()
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = "Otwórz Wygląd", onClick = onOpenLook).heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Mój motyw", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text((themes?.accountTheme?.let { key -> themeName(themes!!, key) } ?: "motyw kręgu") + "  ›", color = Luxury.GoldText)
+            }
             SwitchRow("Animacje kart", cardAnimations, enabled = true) { session.device.setCardAnimations(it) }
-            Text(
-                if (session.device.systemAnimationsOff()) "Animacje są wyłączone w ustawieniach Androida, więc karty stoją nieruchomo."
-                else "Karty lekko uginają się pod palcem i puszczają złote kręgi. Ustawienie dotyczy tylko tego telefonu.",
+            if (session.device.systemAnimationsOff()) Text(
+                "Animacje są wyłączone w ustawieniach Androida, więc karty stoją nieruchomo.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // 0.7.9 (board 1): reporting a bug without "?" and my reports with their answers.
+        AccountCard("Błędy") {
+            val reports by pl.ambif.ambify.features.reports.ReportsStore.mine.collectAsState()
+            val waiting by pl.ambif.ambify.features.reports.ReportsStore.waiting.collectAsState()
+            val seenAt by session.device.reportsSeenAt.collectAsState()
+            SettingsRow("Zgłoś błąd", "›", onReportBug)
+            SettingsRow(
+                "Moje zgłoszenia",
+                "${reports.orEmpty().size + waiting.size}  ›",
+                onMyReports,
+                dot = pl.ambif.ambify.features.reports.ReportsStore.news(reports, seenAt),
             )
         }
         ServerCard(
@@ -264,6 +284,19 @@ fun AppSettingsScreen(onBack: () -> Unit) {
     diagnostics?.let { DiagnosticsDialog(state = it, onDismiss = { diagnostics = null }) }
 }
 
+@Composable
+private fun SettingsRow(label: String, value: String, onClick: () -> Unit, dot: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = label, onClick = onClick).heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        if (dot) pl.ambif.ambify.features.reports.NewsDot()
+        Text(value, color = Luxury.GoldText)
+    }
+}
+
 /** The person's own icon in the current community. */
 internal fun Me.myAvatar() = communities.firstOrNull { it.id == communityId }?.avatar
 
@@ -274,16 +307,22 @@ internal fun SettingsLayout(
     onBack: (() -> Unit)?,
     subtitle: String = "",
     notice: String? = null,
+    help: pl.ambif.ambify.ui.help.HelpScreen? = null,
+    /** Buttons pinned under the scrolling part (forms): always on screen, right above the keyboard when it is up. */
+    footer: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            ScreenTitle(title, subtitle, onBack)
-            notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
-            content()
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                ScreenTitle(title, subtitle, onBack, help)
+                notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.INFO, it) }
+                content()
+            }
+            if (footer != null) androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) { footer() }
         }
     }
 }

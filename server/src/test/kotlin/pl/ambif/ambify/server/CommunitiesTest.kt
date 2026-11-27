@@ -140,6 +140,12 @@ class CommunitiesTest {
         // E-mail hints: every account with its communities, only for the Platform Admin.
         val accounts: List<PlatformAccount> = client.send<Unit>("GET", PlatformPaths.ACCOUNTS, token = michal.accessToken).body()
         assertEquals(listOf("Dziadkowie", "Klasa 3b"), accounts.single { it.email == "ania@pacak.waw.pl" }.communities)
+        assertEquals(0, accounts.single { it.email == "ania@pacak.waw.pl" }.foundingCredits, "the credit was used up")
+        client.send("POST", PlatformPaths.FOUNDING_CREDITS, EmailRequest("ania@pacak.waw.pl"), michal.accessToken)
+        client.send("POST", PlatformPaths.FOUNDING_CREDITS_REVOKE, EmailRequest("ania@pacak.waw.pl"), michal.accessToken)
+        client.send("POST", PlatformPaths.FOUNDING_CREDITS_REVOKE, EmailRequest("ania@pacak.waw.pl"), michal.accessToken)
+        val after: List<PlatformAccount> = client.send<Unit>("GET", PlatformPaths.ACCOUNTS, token = michal.accessToken).body()
+        assertEquals(0, after.single { it.email == "ania@pacak.waw.pl" }.foundingCredits, "taken back, never below zero")
         assertEquals(2, accounts.size)
         assertEquals(HttpStatusCode.Forbidden, client.send<Unit>("GET", PlatformPaths.ACCOUNTS, token = ania.accessToken).status)
     }
@@ -190,7 +196,11 @@ class CommunitiesTest {
 
     @Test
     fun basicModulesOnByDefaultAndOnlyManagersSwitchThem() = app {
-        val michal = client.michal()
+        val admin = client.michal()
+        // The Platform Admin (the server's first account) has every module — the rules below are for everyone else.
+        assertEquals(ModuleId.entries.size, client.send<Unit>("GET", ModulePaths.MODULES, token = admin.accessToken).body<CommunityModules>().owned.size)
+        val michal = client.newAccount("ola@pacak.waw.pl")
+        client.send("POST", AccountPaths.COMMUNITIES, CreateCommunityRequest("Dom"), michal.accessToken)
         val ania = client.newAccount("ania@pacak.waw.pl", client.invitation(michal))
         val modules: CommunityModules = client.send<Unit>("GET", ModulePaths.MODULES, token = ania.accessToken).body()
         assertEquals(listOf(ModuleId.CALENDAR, ModuleId.LISTS, ModuleId.COMMUNICATION), modules.enabled)
@@ -230,6 +240,24 @@ class CommunitiesTest {
         client.send("PUT", "$grant/TIMETABLE", GrantRequest(false), michal.accessToken)
         val after: CommunityModules = client.send<Unit>("GET", ModulePaths.MODULES, token = ania.accessToken).body()
         assertFalse(ModuleId.TIMETABLE in after.owned)
+    }
+
+    @Test
+    fun ownerResetsOnlySomeoneWhoBelongsToNoOtherCircle() = app {
+        val michal = client.michal()
+        val ania = client.newAccount("ania@pacak.waw.pl")
+        client.send("POST", AccountPaths.JOIN, JoinRequest(client.invitation(michal)), ania.accessToken)
+        val aniaId = client.me(ania).id
+        val alone = client.send<Unit>("POST", "${AccountPaths.MEMBERS}/$aniaId/password-reset", token = michal.accessToken)
+        assertEquals(HttpStatusCode.OK, alone.status, "only in Pacakowie: the Owner may help")
+
+        val praca = client.send("POST", AccountPaths.COMMUNITIES, CreateCommunityRequest("Praca"), michal.accessToken)
+            .body<pl.ambif.ambify.shared.CommunitySummary>().id
+        client.send("POST", AccountPaths.JOIN, JoinRequest(client.invitation(michal, praca)), ania.accessToken)
+        val twoCircles = client.send<Unit>("POST", "${AccountPaths.MEMBERS}/$aniaId/password-reset", token = michal.accessToken)
+        assertEquals(HttpStatusCode.Conflict, twoCircles.status, "a code would open her other circles too")
+        assertEquals("other_circles", twoCircles.body<ApiError>().code)
+        assertEquals(HttpStatusCode.OK, client.send<Unit>("POST", "${AccountPaths.MEMBERS}/$aniaId/password-reset", token = ania.accessToken).status, "for oneself it still works")
     }
 
     @Test

@@ -28,6 +28,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -83,8 +87,6 @@ import pl.ambif.ambify.ui.theme.TouchEffect
 import pl.ambif.ambify.ui.theme.WallpaperImages
 import pl.ambif.ambify.ui.theme.WallpaperView
 import pl.ambif.ambify.ui.theme.drawPattern
-
-private const val AS_COMMUNITY = "-"
 
 private val ReadyNames = mapOf(
     Themes.LUXURY to "Luxury", Themes.PEARL to "Perła", Themes.NEON to "Neon", Themes.CODE to "Kod", Themes.GAMING to "Gaming",
@@ -157,43 +159,56 @@ fun AccountThemeScreen(onBack: () -> Unit, onEdit: (themeId: String?) -> Unit) {
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { runCatching { session.refreshThemes() } }
 
-    SettingsLayout(title = "Wygląd", onBack = onBack, notice = notice) {
+    SettingsLayout(title = "Wygląd", onBack = onBack, notice = notice, help = pl.ambif.ambify.ui.help.Help.LOOK) {
         val state = themes ?: run {
             Text("Wczytuję motywy…", color = Luxury.TextMuted)
             return@SettingsLayout
         }
         LuxuryCard {
             LuxurySectionTitle("Mój motyw")
-            Text("W całej aplikacji. W wybranej społeczności możesz mieć inny (Społeczności → Wygląd). Gdy Owner zablokuje motyw, widzisz motyw społeczności.", fontSize = 13.sp, color = Luxury.TextMuted, lineHeight = 18.sp)
             val current = state.communities.firstOrNull { it.communityId == (session.state.value as? pl.ambif.ambify.core.session.SessionState.SignedIn)?.me?.communityId }
-            val asCommunity = current?.let { session.paletteOf(state, it.theme) } ?: Palettes.LUXURY
-            val items = listOf(TileItem(AS_COMMUNITY, "Jak w społeczności", asCommunity, locked = false)) + (Themes.BASIC + Themes.PREMIUM).map { key ->
+            // B-004: "the circle's theme" is a checkbox, not a tile that looked like Luxury. Picking a theme unticks it;
+            // ticking it again goes back to the circle's theme.
+            val followCircle = state.accountTheme == null
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .toggleable(value = followCircle, role = Role.Checkbox) { on ->
+                        if (on) scope.launch { try { session.setAccountTheme(null); notice = null } catch (e: ServerError) { notice = e.message } }
+                        else notice = "Wybierz motyw poniżej — pole odznaczy się samo."
+                    }
+                    .heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Checkbox(
+                    checked = followCircle, onCheckedChange = null,
+                    colors = CheckboxDefaults.colors(checkedColor = Luxury.GoldButton, checkmarkColor = Luxury.OnGold, uncheckedColor = Luxury.Outline),
+                )
+                Text("Używaj motywu kręgu", fontSize = 15.sp)
+            }
+            val items = (Themes.BASIC + Themes.PREMIUM).map { key ->
                 TileItem(key, ReadyNames.getValue(key), Palettes.of(key)!!, locked = !Themes.allowedForMe(state, null, key))
             } + state.own.map { TileItem(Themes.custom(it.id), it.name, OwnPalette.from(it), locked = !state.accountPremium) }
-            TileGrid(items, state.accountTheme ?: AS_COMMUNITY) { item ->
+            TileGrid(items, state.accountTheme) { item ->
                 if (item.locked) notice = "„${item.name}” jest w Premium konta."
                 else scope.launch {
-                    try { session.setAccountTheme(item.key.takeIf { it != AS_COMMUNITY }); notice = null } catch (e: ServerError) { notice = e.message }
+                    try { session.setAccountTheme(item.key); notice = null } catch (e: ServerError) { notice = e.message }
                 }
             }
             val me = (session.state.value as? pl.ambif.ambify.core.session.SessionState.SignedIn)?.me
-            val communityName = me?.familyName ?: "tej społeczności"
+            val communityName = me?.familyName ?: "tego kręgu"
             if (current?.locked == true) {
-                MessageBar(MessageKind.STATUS, "W „$communityName” motyw jest zablokowany", "Owner ustalił: ${themeName(state, current.theme)}. Twój motyw widać w społecznościach bez blokady.")
+                MessageBar(MessageKind.STATUS, "W „$communityName” motyw jest zablokowany", "Owner ustalił: ${themeName(state, current.theme)}. Twój motyw widać w kręgach bez blokady.")
             } else if (current?.myChoice != null) {
                 // A pick in the community wins over my theme: say so, and let it go with one tap (Michał, 25.11).
                 MessageBar(
                     MessageKind.INFO, "W „$communityName” masz osobno: ${themeName(state, current.myChoice!!)}",
-                    "Wybór w społeczności ma pierwszeństwo przed Twoim motywem.",
+                    "Wybór w kręgu ma pierwszeństwo przed Twoim motywem.",
                 )
                 FramedButton("Używaj tam mojego motywu", modifier = Modifier.fillMaxWidth()) {
                     scope.launch { try { session.setMemberTheme(current.communityId, null) } catch (e: ServerError) { notice = e.message } }
                 }
             }
-            Text(
-                "Efekt dotknięcia przychodzi z motywem: Luxury — fale, Perła — iskry, Neon — laser, Kod — spadające znaki, Gaming — trafienie.",
-                fontSize = 12.sp, color = Luxury.TextMuted, lineHeight = 17.sp,
-            )
         }
         LuxuryCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -212,8 +227,8 @@ fun AccountThemeScreen(onBack: () -> Unit, onEdit: (themeId: String?) -> Unit) {
                 }
                 if (state.own.size < Themes.MAX_OWN) FramedButton("+ Nowy motyw", modifier = Modifier.fillMaxWidth()) { onEdit(null) }
             } else {
-                Text("Kod i Gaming, edytor własnych motywów (do 3 kolorów) i tapeta. Działa w każdej społeczności, w której Owner nie zablokował motywu.", fontSize = 13.sp, color = Luxury.TextMuted, lineHeight = 18.sp)
-                MessageBar(MessageKind.INFO, "Premium konta", "Do czasu płatności przyznaje je Owner platformy.")
+                Text("Kod i Gaming, edytor własnych motywów (do 3 kolorów) i tapeta. Działa w każdym kręgu, w którym Owner nie zablokował motywu.", fontSize = 13.sp, color = Luxury.TextMuted, lineHeight = 18.sp)
+                MessageBar(MessageKind.INFO, "Premium konta", "Wkrótce będzie można je kupić.")
             }
         }
     }
@@ -241,7 +256,7 @@ fun CommunityThemeScreen(communityId: String, onBack: () -> Unit, onEdit: (theme
         }
     }
 
-    SettingsLayout(title = "Wygląd", onBack = onBack, notice = notice) {
+    SettingsLayout(title = "Wygląd", onBack = onBack, notice = notice, help = pl.ambif.ambify.ui.help.Help.CIRCLE_LOOK) {
         val state = themes ?: return@SettingsLayout
         val community = state.communities.firstOrNull { it.communityId == communityId } ?: return@SettingsLayout
         val shared = themeName(state, community.theme)
@@ -251,7 +266,7 @@ fun CommunityThemeScreen(communityId: String, onBack: () -> Unit, onEdit: (theme
                 if (community.myChoice != null) "Twój wybór („${themeName(state, community.myChoice!!)}”) wróci, gdy motyw zostanie odblokowany." else "Wszyscy tutaj widzą ten sam motyw.",
             )
         } else {
-            MessageBar(MessageKind.INFO, "Motyw społeczności: $shared", "Możesz mieć tu inny — widzisz go tylko Ty.")
+            MessageBar(MessageKind.INFO, "Motyw kręgu: $shared", "Możesz mieć tu inny — widzisz go tylko Ty.")
         }
         MyPick(state, community, enabled = !community.locked) { key -> act { session.setMemberTheme(communityId, key) } }
         if (community.canSet) CommunityPick(state, community, onPick = { key, locked -> act { session.setCommunityTheme(communityId, key, locked) } }, onEdit = onEdit)
@@ -261,10 +276,10 @@ fun CommunityThemeScreen(communityId: String, onBack: () -> Unit, onEdit: (theme
 @Composable
 private fun MyPick(state: ThemeState, community: CommunityTheme, enabled: Boolean, onPick: (String?) -> Unit) {
     LuxuryCard(modifier = if (enabled) Modifier else Modifier.graphicsLayer { alpha = 0.45f }) {
-        LuxurySectionTitle("Mój motyw w tej społeczności")
+        LuxurySectionTitle("Mój motyw w tym kręgu")
         val options = buildList {
             add(null to (state.accountTheme?.takeIf { Themes.allowedForMe(state, community, it) }?.let { "Jak mój motyw (${themeName(state, it)})" }
-                ?: "Motyw społeczności (${themeName(state, community.theme)})"))
+                ?: "Motyw kręgu (${themeName(state, community.theme)})"))
             (Themes.BASIC + Themes.PREMIUM).forEach { add(it to ReadyNames.getValue(it)) }
             state.own.forEach { add(Themes.custom(it.id) to it.name) }
         }
@@ -304,7 +319,7 @@ private fun session(state: ThemeState, key: String): Palette? =
 private fun CommunityPick(state: ThemeState, community: CommunityTheme, onPick: (String, Boolean) -> Unit, onEdit: (String?) -> Unit) {
     LuxuryCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LuxurySectionTitle("Motyw społeczności")
+            LuxurySectionTitle("Motyw kręgu")
             if (community.premium) PremiumBadge("PREMIUM")
         }
         Text("Dla wszystkich, którzy nie wybrali u siebie innego.", fontSize = 13.sp, color = Luxury.TextMuted)
@@ -322,16 +337,16 @@ private fun CommunityPick(state: ThemeState, community: CommunityTheme, onPick: 
                     Text("Edytuj", color = Luxury.GoldText, fontSize = 14.sp)
                 }
             }
-            if (community.own.size < Themes.MAX_OWN) FramedButton("+ Nowy motyw społeczności", modifier = Modifier.fillMaxWidth()) { onEdit(null) }
+            if (community.own.size < Themes.MAX_OWN) FramedButton("+ Nowy motyw kręgu", modifier = Modifier.fillMaxWidth()) { onEdit(null) }
         }
         SwitchRow(
             label = "Zablokuj motyw",
             checked = community.locked,
             enabled = true,
-            below = { Text("wszyscy widzą motyw społeczności, także osoby z Premium konta", fontSize = 12.sp, color = Luxury.TextMuted) },
+            below = { Text("wszyscy widzą motyw kręgu, także osoby z Premium konta", fontSize = 12.sp, color = Luxury.TextMuted) },
         ) { onPick(community.theme, it) }
         if (!community.premium) {
-            Text("Społeczność bez Premium: Luxury, Perła i Neon. Kod, Gaming, własne motywy i tapeta — z Premium społeczności.", fontSize = 12.sp, color = Luxury.TextMuted, lineHeight = 17.sp)
+            Text("Krąg bez Premium: Luxury, Perła i Neon. Kod, Gaming, własne motywy i tapeta — z Premium kręgu.", fontSize = 12.sp, color = Luxury.TextMuted, lineHeight = 17.sp)
         }
     }
 }
@@ -353,8 +368,12 @@ private val PatternNames = mapOf(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ThemeEditorScreen(communityId: String?, themeId: String?, onBack: () -> Unit) {
+fun ThemeEditorScreen(communityId: String?, themeId: String?, onExit: () -> Unit) {
     val session = LocalAppSession.current
+    // Leaving puts the real theme (wallpaper first, the most visible) back at once, not after the screen's exit
+    // animation (B-005); the dispose below stays as a safety net.
+    val onBack: () -> Unit = { session.previewTheme(null); onExit() }
+    androidx.activity.compose.BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val themes by session.themes.collectAsState()
@@ -406,7 +425,7 @@ fun ThemeEditorScreen(communityId: String?, themeId: String?, onBack: () -> Unit
         }
     }
 
-    SettingsLayout(title = if (existing == null) "Nowy motyw" else "Edytuj motyw", onBack = onBack, subtitle = if (communityId != null) "motyw społeczności" else "", notice = notice) {
+    SettingsLayout(title = if (existing == null) "Nowy motyw" else "Edytuj motyw", onBack = onBack, subtitle = if (communityId != null) "motyw kręgu" else "", notice = notice, help = pl.ambif.ambify.ui.help.Help.THEME_EDITOR) {
         LuxuryCard {
             OutlinedTextField(
                 value = theme.name, onValueChange = { theme = theme.copy(name = it.take(Themes.MAX_NAME)) },

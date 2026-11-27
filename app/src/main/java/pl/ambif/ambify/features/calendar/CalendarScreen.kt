@@ -41,7 +41,7 @@ fun CalendarScreen() {
 
             CalendarInfoCard(
                 title = "Kalendarz organizacji",
-                description = "Owner społeczności połączy konto Google i wybierze kalendarz albo poda identyfikator istniejącego kalendarza.",
+                description = "Owner kręgu połączy konto Google i wybierze kalendarz albo poda identyfikator istniejącego kalendarza.",
             )
 
             CalendarInfoCard(

@@ -1,3 +1,4 @@
-Nowe opcje motywów - wybierz gotowy lub sam ustaw swój
-Poprawki na listach
-Poprawione inne błędy
+Zgłaszanie błędów prosto z aplikacji
+Plan lekcji rano zawsze aktualny
+Nowy wygląd logowania i ekranu powitalnego
+Mniej przypadkowych wylogowań

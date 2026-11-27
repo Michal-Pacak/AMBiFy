@@ -164,6 +164,12 @@ class ServerApi(
     suspend fun uploadMyPhoto(source: File): Me =
         json.decodeFromString(transfer("PUT", AccountPaths.MY_PHOTO, emptyMap(), upload = source to "image/jpeg", download = null, onProgress = {}))
     suspend fun deleteMyPhoto(): Me = json.decodeFromString(send("DELETE", AccountPaths.MY_PHOTO, null, auth = true))
+    /** 0.7.8: the current circle's icon (the Owner only). */
+    suspend fun uploadCirclePhoto(source: File): Me =
+        json.decodeFromString(transfer("PUT", AccountPaths.FAMILY_AVATAR, emptyMap(), upload = source to "image/jpeg", download = null, onProgress = {}))
+    suspend fun deleteCirclePhoto(): Me = json.decodeFromString(send("DELETE", AccountPaths.FAMILY_AVATAR, null, auth = true))
+    suspend fun setCircleColor(color: String?): Me =
+        json.decodeFromString(send("PUT", AccountPaths.FAMILY_AVATAR_COLOR, json.encodeToString(pl.ambif.ambify.shared.CircleColor(color)), auth = true))
     /** Saves a person's photo ([path] from their avatar) into [target]; [small]: the 256 px one. */
     suspend fun downloadPhoto(path: String, small: Boolean, target: File) {
         transfer("GET", if (small) "$path?size=s" else path, emptyMap(), upload = null, download = target, onProgress = {})
@@ -270,7 +276,23 @@ class ServerApi(
     suspend fun setGrant(communityId: String, key: String, granted: Boolean) =
         send("PUT", "${PlatformPaths.COMMUNITIES}/$communityId/grants/$key", json.encodeToString(GrantRequest(granted)), auth = true)
     suspend fun addFoundingCredit(email: String) = send("POST", PlatformPaths.FOUNDING_CREDITS, json.encodeToString(EmailRequest(email)), auth = true)
+    suspend fun removeFoundingCredit(email: String) = send("POST", PlatformPaths.FOUNDING_CREDITS_REVOKE, json.encodeToString(EmailRequest(email)), auth = true)
     suspend fun platformResetCode(email: String): PasswordResetCode = post(PlatformPaths.RESET_CODES, EmailRequest(email))
+
+    // 0.7.9 bug reports
+    suspend fun sendReport(report: pl.ambif.ambify.shared.NewReport): pl.ambif.ambify.shared.MyReport =
+        post(pl.ambif.ambify.shared.ReportPaths.REPORTS, report)
+    suspend fun uploadReportShot(reportId: String, index: Int, source: File) {
+        transfer("PUT", pl.ambif.ambify.shared.ReportPaths.shot(reportId, index), emptyMap(), upload = source to "image/jpeg", download = null, onProgress = {})
+    }
+    suspend fun myReports(): List<pl.ambif.ambify.shared.MyReport> = get(pl.ambif.ambify.shared.ReportPaths.REPORTS)
+    suspend fun platformReports(): List<pl.ambif.ambify.shared.PlatformReport> = get(pl.ambif.ambify.shared.ReportPaths.PLATFORM)
+    suspend fun updateReport(reportId: String, change: pl.ambif.ambify.shared.ReportUpdate) =
+        send("PUT", pl.ambif.ambify.shared.ReportPaths.platform(reportId), json.encodeToString(change), auth = true)
+    /** A screenshot ([path] from the report) into [target]. */
+    suspend fun downloadReportShot(path: String, target: File) {
+        transfer("GET", path, emptyMap(), upload = null, download = target, onProgress = {})
+    }
 
     private suspend inline fun <reified T> get(path: String, auth: Boolean = true): T =
         json.decodeFromString(send("GET", path, null, auth))

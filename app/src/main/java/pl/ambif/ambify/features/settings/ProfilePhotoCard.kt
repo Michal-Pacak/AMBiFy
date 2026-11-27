@@ -105,7 +105,7 @@ internal fun ProfilePhotoPart(me: Me, session: AppSession, onNotice: (String) ->
     }
 
     Text(
-        if (me.photo != null) "Widzą je osoby ze wszystkich Twoich społeczności." else "Dodaj zdjęcie — zobaczą je osoby ze wszystkich Twoich społeczności.",
+        if (me.photo != null) "Widzą je osoby ze wszystkich Twoich kręgów." else "Dodaj zdjęcie — zobaczą je osoby ze wszystkich Twoich kręgów.",
         fontSize = 12.sp, color = Luxury.TextMuted,
     )
     PhotoAction(AppIcons.Camera, "Zrób zdjęcie", enabled = !busy) {
@@ -125,10 +125,10 @@ internal fun ProfilePhotoPart(me: Me, session: AppSession, onNotice: (String) ->
             contentAlignment = Alignment.Center,
         ) { Text("Usuń zdjęcie", color = Danger, fontSize = 14.sp) }
         me.communities.filter { it.photosBlocked }.forEach {
-            MessageBar(MessageKind.STATUS, "W społeczności „${it.name}” zdjęcia są wyłączone — tam widać Twoje inicjały.")
+            MessageBar(MessageKind.STATUS, "W kręgu „${it.name}” zdjęcia są wyłączone — tam widać Twoje inicjały.")
         }
         me.communities.filter { !it.photosBlocked && it.myPhotoHidden }.forEach {
-            MessageBar(MessageKind.STATUS, "W społeczności „${it.name}” Twoje zdjęcie jest ukryte.")
+            MessageBar(MessageKind.STATUS, "W kręgu „${it.name}” Twoje zdjęcie jest ukryte.")
         }
     }
 
@@ -157,7 +157,7 @@ private fun PhotoAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
  * in the window as a JPEG (written again, so nothing the camera stored in the file goes along).
  */
 @Composable
-private fun PhotoCropDialog(uri: Uri, onDismiss: () -> Unit, onSave: (File) -> Unit) {
+internal fun PhotoCropDialog(uri: Uri, onDismiss: () -> Unit, onSave: (File) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var bitmap by remember(uri) { mutableStateOf<Bitmap?>(null) }

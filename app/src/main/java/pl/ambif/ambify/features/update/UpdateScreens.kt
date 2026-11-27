@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import pl.ambif.ambify.shared.AppPaths
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalUriHandler
@@ -170,6 +171,19 @@ private fun ColumnScope.UpdateContent(state: UpdateState, actions: UpdateActions
             }
             Text("AMBiFy ${state.release.versionName} jest gotowa", fontSize = 17.sp, fontWeight = FontWeight.Medium)
             state.release.notes.forEach { Text("• $it", fontSize = 14.sp, lineHeight = 20.sp, color = Luxury.TextMuted) }
+            // 0.7.9 (board 3): the only "notification" about my report — a line here, nothing else.
+            val reports by pl.ambif.ambify.features.reports.ReportsStore.mine.collectAsState()
+            reports.orEmpty().filter {
+                it.fixedIn == state.release.versionName &&
+                    (it.status == pl.ambif.ambify.shared.ReportStatus.IN_FIX || it.status == pl.ambif.ambify.shared.ReportStatus.FIXED)
+            }.forEach { fixed ->
+                val quote = fixed.text.lineSequence().first().let { if (it.length > 60) it.take(57).trimEnd() + "…" else it }
+                pl.ambif.ambify.ui.components.MessageBar(
+                    pl.ambif.ambify.ui.components.MessageKind.SUCCESS,
+                    "Naprawiamy też błąd, który zgłosiłeś",
+                    "„$quote”",
+                )
+            }
             ChangelogLink()
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GoldPill("Zaktualizuj") { actions.installNow(state.release) }

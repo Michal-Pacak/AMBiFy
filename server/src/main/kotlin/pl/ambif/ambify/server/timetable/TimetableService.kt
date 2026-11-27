@@ -142,7 +142,7 @@ class TimetableService(
         runCatching { diaries.getValue(DiaryKind.valueOf(row[DiaryConnections.kind])).disconnect(vault.open(row[DiaryConnections.credential])) }
     }
 
-    /** The daily update of every connection (18:00). */
+    /** The update of every connection (4:00 and 18:00, [DiarySchedule]). */
     fun syncAllDiaries() {
         val ids = transaction(database) { DiaryConnections.selectAll().map { it[DiaryConnections.id] } }
         ids.forEach { runCatching { sync(it) }.onFailure { e -> log.warn("Diary update of {} failed", it, e) } }
@@ -330,7 +330,7 @@ class TimetableService(
             throw ApiException(HttpStatusCode.NotFound, "not_found", "Nie znaleziono.")
         }
         if (memberId != null && accounts.membersOf(membership.organizationId).none { it[Users.id] == memberId }) {
-            throw ApiException(HttpStatusCode.BadRequest, "not_member", "Ta osoba nie należy do społeczności.")
+            throw ApiException(HttpStatusCode.BadRequest, "not_member", "Ta osoba nie należy do kręgu.")
         }
         Students.update({ Students.id eq studentId }) { it[Students.memberId] = memberId }
         students(membership.organizationId)

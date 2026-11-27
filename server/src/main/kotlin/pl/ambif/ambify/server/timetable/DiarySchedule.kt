@@ -7,10 +7,13 @@ import java.time.ZonedDateTime
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** The daily update of the timetables from the school diaries, at 18:00 Polish time (Michał's choice: once a day is enough). */
+/**
+ * The updates of the timetables from the school diaries, Polish time: 18:00 (Michał's first choice) and 4:00
+ * (B-014: substitutions entered in the evening must be there in the morning; nobody adds them between 4 and 6).
+ */
 object DiarySchedule {
     private val WARSAW: ZoneId = ZoneId.of("Europe/Warsaw")
-    private val AT: LocalTime = LocalTime.of(18, 0)
+    private val AT: List<LocalTime> = listOf(LocalTime.of(4, 0), LocalTime.of(18, 0))
 
     fun start(timetable: TimetableService) {
         val executor = Executors.newSingleThreadScheduledExecutor { Thread(it, "diary-sync").apply { isDaemon = true } }
@@ -24,8 +27,10 @@ object DiarySchedule {
     }
 
     internal fun delayToNext(now: ZonedDateTime): Duration {
-        var next = now.with(AT).withSecond(0).withNano(0)
-        if (!next.isAfter(now)) next = next.plusDays(1)
+        val next = AT.map { at ->
+            val today = now.with(at).withSecond(0).withNano(0)
+            if (today.isAfter(now)) today else today.plusDays(1)
+        }.minOf { it }
         return Duration.between(now, next)
     }
 }

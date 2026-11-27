@@ -362,7 +362,7 @@ internal fun TimetableWidgetSettings(
     ) {
         LuxurySectionTitle(if (tomorrow) "Czyj dzień · jedna osoba" else "Czyje zajęcia · można kilka")
         if (data == null) Text("Wczytywanie…", fontSize = 13.sp, color = Luxury.TextMuted)
-        else if (students.isEmpty()) Text("Nikt w społeczności nie ma jeszcze planu lekcji.", fontSize = 13.sp, color = Luxury.TextMuted)
+        else if (students.isEmpty()) Text("Nikt w kręgu nie ma jeszcze planu lekcji.", fontSize = 13.sp, color = Luxury.TextMuted)
         students.forEach { student ->
             val on = student.id in people
             val shape = RoundedCornerShape(14.dp)

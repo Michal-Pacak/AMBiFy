@@ -59,12 +59,21 @@ class AppSession(context: Context) {
     private val tokenStore = object : TokenStore {
         override var accessToken: String?
             get() = preferences.getString(KEY_ACCESS, null)
-            set(value) = preferences.edit { putString(KEY_ACCESS, value) }
+            set(value) = preferences.edit(commit = true) { putString(KEY_ACCESS, value) }
         override var refreshToken: String?
             get() = preferences.getString(KEY_REFRESH, null)
-            set(value) = preferences.edit { putString(KEY_REFRESH, value) }
+            set(value) = preferences.edit(commit = true) { putString(KEY_REFRESH, value) }
 
-        override fun onSessionExpired() = clear()
+        override fun onSessionExpired() {
+            // B-007: on the kids' phone the log says when and why it was signed out (it goes out after signing in).
+            if (pl.ambif.ambify.BuildConfig.KIDS) {
+                pl.ambif.ambify.modules.monitor.MonitorQueue.of(appContext).add(listOf(
+                    pl.ambif.ambify.shared.MonitorEvent(pl.ambif.ambify.shared.MonitorEventType.OTHER, System.currentTimeMillis(),
+                        "wylogowanie: serwer odrzucił odświeżenie sesji (wersja ${pl.ambif.ambify.BuildConfig.VERSION_NAME})"),
+                ))
+            }
+            clear()
+        }
     }
 
     val api = ServerApi(tokens = tokenStore, community = { preferences.getString(KEY_COMMUNITY, null) })
@@ -190,6 +199,18 @@ class AppSession(context: Context) {
 
     suspend fun createCommunity(name: String) = switchCommunity(api.createCommunity(name).id)
 
+    /** 0.7.8: the current circle's photo ([jpeg]: the cropped square) or none, or its color — the Owner only. */
+    suspend fun setCirclePhoto(circleId: String, jpeg: java.io.File?) {
+        val circle = api.forCommunity(circleId)
+        if (jpeg != null) circle.uploadCirclePhoto(jpeg) else circle.deleteCirclePhoto()
+        refreshProfile()
+    }
+
+    suspend fun setCircleColor(circleId: String, color: String?) {
+        api.forCommunity(circleId).setCircleColor(color)
+        refreshProfile()
+    }
+
     /** 0.7.6: my new profile photo ([jpeg]: the cropped square), or none. */
     suspend fun setMyPhoto(jpeg: java.io.File?) {
         val me = if (jpeg != null) api.uploadMyPhoto(jpeg) else api.deleteMyPhoto()
@@ -292,6 +313,7 @@ class AppSession(context: Context) {
     private fun clear() {
         preferences.edit { clear() }
         TimetableCache.clear(appContext)
+        pl.ambif.ambify.modules.timetable.TimetableRefreshWorker.cancel(appContext)
         pl.ambif.ambify.features.lists.data.ListRepository.clear(appContext)
         pl.ambif.ambify.features.home.DashboardStore(appContext).clear()
         _modules.value = null

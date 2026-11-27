@@ -230,7 +230,7 @@ fun MessageChip(kind: MessageKind, label: String, modifier: Modifier = Modifier,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         if (icon != null) Icon(icon, contentDescription = null, tint = kind.color, modifier = Modifier.size(13.dp))
-        Text(label, color = kind.color, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
+        Text(label, color = kind.color, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, maxLines = 1, softWrap = false)
     }
 }
 

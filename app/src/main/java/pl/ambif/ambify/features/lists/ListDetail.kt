@@ -172,6 +172,7 @@ internal fun ListDetail(
                 if (ui.manageable(list)) {
                     IconButton(onClick = { onDialog(ListDialog.Menu(list)) }) { Icon(AppIcons.More, contentDescription = "Opcje listy", tint = Muted) }
                 }
+                pl.ambif.ambify.ui.help.HelpButton(pl.ambif.ambify.ui.help.Help.LIST)
             }
             Column(modifier = Modifier.padding(start = 12.dp)) {
                 Text(list.name, fontSize = 22.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)

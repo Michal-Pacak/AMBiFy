@@ -14,6 +14,8 @@ object Organizations : Table("organizations") {
     val theme = text("theme").nullable()
     val themeLocked = bool("theme_locked").default(false)
     val themeSetBy = text("theme_set_by").nullable()
+    val avatarColor = text("avatar_color").nullable()
+    val avatarPhotoId = text("avatar_photo_id").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -111,6 +113,9 @@ object Sessions : Table("sessions") {
     val deviceName = text("device_name")
     val createdAt = long("created_at")
     val lastUsedAt = long("last_used_at")
+    /** B-007 (V017): the refresh token before the last renewal, until the phone uses the new one. */
+    val previousTokenHash = text("previous_token_hash").nullable()
+    val renewedAt = long("renewed_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 

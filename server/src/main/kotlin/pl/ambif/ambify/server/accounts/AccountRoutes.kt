@@ -144,6 +144,47 @@ fun Route.accountRoutes(service: AccountService, photos: ProfilePhotos) {
             withContext(Dispatchers.IO) { photos.set(session, upload) }
             call.respond(service.me(session))
         }
+        put(AccountPaths.FAMILY_AVATAR) {
+            val session = call.session()
+            val upload = photos.incoming()
+            val size = withContext(Dispatchers.IO) {
+                call.receiveChannel().toInputStream().use { input ->
+                    upload.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (total <= PhotoRules.MAX_BYTES) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            total += read
+                        }
+                        total
+                    }
+                }
+            }
+            if (size > PhotoRules.MAX_BYTES) {
+                upload.delete()
+                throw ApiException(HttpStatusCode.PayloadTooLarge, "photo_too_big", "Zdjęcie jest za duże (najwyżej 5 MB).")
+            }
+            withContext(Dispatchers.IO) { photos.setCircle(session, upload) }
+            call.respond(service.me(session))
+        }
+        delete(AccountPaths.FAMILY_AVATAR) {
+            photos.deleteCircle(call.session())
+            call.respond(service.me(call.session()))
+        }
+        put(AccountPaths.FAMILY_AVATAR_COLOR) {
+            photos.setCircleColor(call.session(), call.receive<pl.ambif.ambify.shared.CircleColor>().color)
+            call.respond(service.me(call.session()))
+        }
+        get("${AccountPaths.CIRCLES}/{circleId}/photo/{photoId}") {
+            val file = photos.circleFile(
+                call.session(), call.parameters["circleId"]!!, call.parameters["photoId"]!!,
+                small = call.request.queryParameters["size"] == "s",
+            )
+            call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
+            call.respond(LocalFileContent(file, ContentType.Image.JPEG))
+        }
         delete(AccountPaths.MY_PHOTO) {
             photos.delete(call.session())
             call.respond(service.me(call.session()))
@@ -257,6 +298,10 @@ fun Route.accountRoutes(service: AccountService, photos: ProfilePhotos) {
         }
         post(PlatformPaths.FOUNDING_CREDITS) {
             service.addFoundingCredit(call.session(), call.receive<EmailRequest>().email)
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(PlatformPaths.FOUNDING_CREDITS_REVOKE) {
+            service.removeFoundingCredit(call.session(), call.receive<EmailRequest>().email)
             call.respond(HttpStatusCode.NoContent)
         }
         post(PlatformPaths.RESET_CODES) {

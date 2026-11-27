@@ -136,11 +136,11 @@ private fun AvatarZoomDialog(name: String, avatar: Avatar?, photo: String?, onDi
                 Initials(name, avatar, 200.dp, Modifier)
             }
             Text(name, fontSize = 22.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-            if (photo == null && avatar?.photo != null) Text("zdjęcie ukryte w tej społeczności", fontSize = 12.sp, color = Luxury.TextMuted)
+            if (photo == null && avatar?.photo != null) Text("zdjęcie ukryte w tym kręgu", fontSize = 12.sp, color = Luxury.TextMuted)
             problem?.let { Text(it, fontSize = 13.sp, color = Luxury.Danger, textAlign = TextAlign.Center) }
             PopupButton("Zamknij", Luxury.Text, Luxury.Outline, onDismiss)
             if (mayHide) {
-                PopupButton("Ukryj zdjęcie w tej społeczności", Luxury.Danger, Luxury.Danger.copy(alpha = 0.6f)) {
+                PopupButton("Ukryj zdjęcie w tym kręgu", Luxury.Danger, Luxury.Danger.copy(alpha = 0.6f)) {
                     scope.launch {
                         try {
                             session.api.setPhotoHidden(owner!!, true)
@@ -152,7 +152,7 @@ private fun AvatarZoomDialog(name: String, avatar: Avatar?, photo: String?, onDi
                     }
                 }
                 Text(
-                    "Tutaj ta osoba będzie na inicjałach; w innych społecznościach zdjęcie zostaje. Przywrócisz je w ustawieniach społeczności.",
+                    "Tutaj ta osoba będzie na inicjałach; w innych kręgach zdjęcie zostaje. Przywrócisz je w ustawieniach kręgu.",
                     fontSize = 12.sp, color = Luxury.TextMuted, textAlign = TextAlign.Center,
                 )
             }

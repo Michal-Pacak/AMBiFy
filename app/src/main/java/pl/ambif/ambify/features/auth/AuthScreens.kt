@@ -2,6 +2,11 @@ package pl.ambif.ambify.features.auth
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,8 +75,6 @@ internal object AuthColors {
     val Muted get() = Luxury.TextMuted
     val Field get() = Luxury.Surface
     val FieldBorder get() = Luxury.Faint
-    val Tonal = Color(0xFF3B4258)
-    val OnTonal = Color(0xFFC9D3F2)
     val Error get() = Luxury.Error
 }
 
@@ -89,14 +92,16 @@ fun RegisterScreen(onSignedIn: () -> Unit, onBack: () -> Unit) {
         onSignedIn()
     }
 
-    AuthLayout(top = 16.dp) {
-        BackButton(onBack)
-        AuthHeader("Załóż konto", "Społeczność założysz albo dołączysz do niej z kodem w następnym kroku.")
-        AuthField("Twoje imię", name, { name = it }, capitalize = true)
-        AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
-        PasswordField("Hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
-        PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
-        SubmitButton("Załóż konto", submit)
+    AuthLayout {
+        AuthTopBar(onBack, pl.ambif.ambify.ui.help.Help.LOGIN)
+        AuthHeader("Załóż konto", "Krąg założysz albo dołączysz do niego z kodem w następnym kroku.")
+        AuthCard {
+            AuthField("Twoje imię", name, { name = it }, capitalize = true)
+            AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
+            PasswordField("Hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
+            PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
+            SubmitButton("Załóż konto", submit)
+        }
     }
 }
 
@@ -117,30 +122,34 @@ fun StartScreen(name: String, onReady: () -> Unit) {
         onReady()
     }
 
+    // B-006 (canvas 0.7.9, board 5): the theme's background, two gold cards; the tapped one opens in place.
+    val modules = ModuleId.entries.filter { it.tier == Tier.BASIC }.joinToString(", ") { it.label }
     AuthLayout {
-        AuthHeader("Witaj, $name!", "Nie należysz jeszcze do żadnej społeczności. Załóż własną albo dołącz do istniejącej z kodem zaproszenia.")
+        AuthTopBar(onBack = null, help = pl.ambif.ambify.ui.help.Help.START)
+        AuthHeader("Witaj, $name!", "Krąg to Twoja rodzina albo paczka bliskich: wspólne listy, plan lekcji, pogoda.")
         StartChoice(
-            title = "Załóż społeczność",
-            text = "Zostaniesz jej Ownerem. Pierwsza społeczność jest za darmo, z modułami " +
-                ModuleId.entries.filter { it.tier == Tier.BASIC }.joinToString(", ") { it.label } + ".",
+            title = "Załóż krąg",
+            text = if (choice == FOUND) "Moduły na start: $modules." else "Zostaniesz jego Ownerem i zaprosisz bliskich.",
+            badge = "PIERWSZY ZA DARMO".takeIf { choice == null },
             primary = true,
+            folded = choice == JOIN,
             onClick = { choice = FOUND },
-        )
-        if (choice == FOUND) {
-            AuthField("Nazwa społeczności", communityName, { communityName = it }, capitalize = true, last = true, onDone = found.run)
-            SubmitButton("Załóż społeczność", found)
+        ) {
+            AuthField("Nazwa kręgu", communityName, { communityName = it }, capitalize = true, last = true, onDone = found.run)
+            SubmitButton("Załóż krąg", found)
         }
         StartChoice(
             title = "Mam kod zaproszenia",
-            text = "Kod dostajesz od Ownera lub Admina społeczności. Jest jednorazowy i ważny ${AccountRules.INVITATION_DAYS} dni.",
+            text = "Kod dostajesz od Ownera lub Admina kręgu. Jest jednorazowy i ważny ${AccountRules.INVITATION_DAYS} dni.",
+            badge = null,
             primary = false,
+            folded = choice == FOUND,
             onClick = { choice = JOIN },
-        )
-        if (choice == JOIN) {
+        ) {
             CodeField("Kod zaproszenia", code, { code = it })
-            SubmitButton("Dołącz do społeczności", join)
+            SubmitButton("Dołącz do kręgu", join)
         }
-        TextButton(onClick = { scope.launch { session.logout() } }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+        TextButton(onClick = { scope.launch { session.logout() } }, modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(min = 48.dp)) {
             Text("Wyloguj", color = AuthColors.Muted, fontSize = 15.sp)
         }
     }
@@ -149,29 +158,50 @@ fun StartScreen(name: String, onReady: () -> Unit) {
 private const val FOUND = "found"
 private const val JOIN = "join"
 
+/**
+ * One choice of the start screen: a gold card with an icon (filled = the usual choice). Tapped, it shows its field
+ * and button inside; the other one folds to a single row.
+ */
 @Composable
-private fun StartChoice(title: String, text: String, primary: Boolean, onClick: () -> Unit) {
-    val content: @Composable () -> Unit = {
-        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, fontSize = 19.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold)
-            Text(text, fontSize = 14.sp, lineHeight = 19.sp)
+private fun StartChoice(
+    title: String,
+    text: String,
+    badge: String?,
+    primary: Boolean,
+    folded: Boolean,
+    onClick: () -> Unit,
+    form: @Composable ColumnScope.() -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val opened = open && !folded
+    pl.ambif.ambify.ui.theme.LuxuryCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(if (folded) 14.dp else 18.dp), spacing = 12.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                .clickable(enabled = !opened, onClickLabel = title) { open = true; onClick() },
+            verticalAlignment = if (folded) Alignment.CenterVertically else Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            val side = if (folded) 36.dp else 48.dp
+            Box(
+                modifier = Modifier.size(side).clip(RoundedCornerShape(if (folded) 11.dp else 14.dp))
+                    .then(if (primary) Modifier.background(Luxury.GoldFill) else Modifier.border(1.5.dp, Luxury.GoldBase, RoundedCornerShape(if (folded) 11.dp else 14.dp))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (primary) AppIcons.Plus else AppIcons.GroupAdd, contentDescription = null,
+                    tint = if (primary) Luxury.OnGold else Luxury.GoldText, modifier = Modifier.size(side / 2),
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(title, fontSize = if (folded) 16.sp else 19.sp, fontFamily = Luxury.HeadingFont, fontWeight = FontWeight.SemiBold, color = Luxury.Text)
+                if (!folded) Text(text, fontSize = 14.sp, lineHeight = 19.sp, color = Luxury.TextMuted)
+                if (badge != null && !folded) Text(
+                    badge, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Luxury.GoldText,
+                    modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(Luxury.GoldBase.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
         }
-    }
-    if (primary) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AuthColors.Gold, contentColor = AuthColors.OnGold),
-        ) { content() }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(1.5.dp, AuthColors.Gold),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AuthColors.Gold),
-        ) { content() }
+        if (opened) form()
     }
 }
 
@@ -185,32 +215,39 @@ fun LoginScreen(onSignedIn: () -> Unit, onCreateAccount: () -> Unit, onForgotPas
         onSignedIn()
     }
 
-    AuthLayout(top = 40.dp) {
-        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            BrandLogo(modifier = Modifier.size(76.dp), animated = false, cropToLogo = true)
-            Text("AMBiFy", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+    // B-006 (board 6): the big gold AMBiFy, the form in a gold card, "Załóż konto" framed under it.
+    AuthLayout {
+        AuthTopBar(onBack = null, help = pl.ambif.ambify.ui.help.Help.LOGIN, wordmark = false)
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Spacer(Modifier.height(28.dp))
+            Text(
+                "AMBiFy", fontSize = 40.sp, fontWeight = FontWeight.Bold, letterSpacing = 5.sp, fontFamily = Luxury.HeadingFont,
+                style = TextStyle(brush = Luxury.GoldFill),
+            )
+            Text("Twój krąg w jednym miejscu", color = AuthColors.Muted, fontSize = 15.sp)
         }
-        notice?.let { Text(it, color = AuthColors.Muted, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-        AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
-        PasswordField("Hasło", password, { password = it }, last = true, onDone = submit.run)
-        SubmitButton("Zaloguj", submit)
-        TextButton(onClick = onForgotPassword, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Nie pamiętam hasła", color = AuthColors.Gold, fontSize = 15.sp)
+        notice?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.SUCCESS, it) }
+        AuthCard {
+            AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
+            PasswordField("Hasło", password, { password = it }, last = true, onDone = submit.run)
+            SubmitButton("Zaloguj", submit)
+            TextButton(onClick = onForgotPassword, modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(min = 48.dp)) {
+                Text("Nie pamiętam hasła", color = Luxury.GoldText, fontSize = 15.sp)
+            }
         }
-        Spacer(Modifier.height(8.dp))
         if (BuildConfig.TEST_LOGIN) TestLogin(onSignedIn)
         Text("Nie masz konta?", color = AuthColors.Muted, fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
         OutlinedButton(
             onClick = onCreateAccount,
             modifier = Modifier.fillMaxWidth().height(54.dp),
-            shape = RoundedCornerShape(27.dp),
-            border = BorderStroke(1.5.dp, AuthColors.Gold),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AuthColors.Gold),
+            shape = Luxury.ButtonShape,
+            border = BorderStroke(1.5.dp, Luxury.GoldBase),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Luxury.Text),
         ) {
-            Text("Załóż konto", fontSize = 16.sp)
+            Text("Załóż konto", fontSize = 16.sp, fontFamily = Luxury.HeadingFont)
         }
         Text(
-            "Konto zakładasz bez kodu. Społeczność wybierasz w następnym kroku.",
+            "Konto zakładasz bez kodu. Krąg wybierasz w następnym kroku.",
             color = AuthColors.Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -230,15 +267,17 @@ fun JoinScreen(onSignedIn: () -> Unit, onBack: () -> Unit) {
         onSignedIn()
     }
 
-    AuthLayout(top = 16.dp) {
-        BackButton(onBack)
-        AuthHeader("Dołącz do społeczności", "Kod dostaniesz od Ownera lub Admina. Jest jednorazowy i ważny ${AccountRules.INVITATION_DAYS} dni.")
-        CodeField("Kod zaproszenia", code, { code = it })
-        AuthField("Twoje imię", name, { name = it }, capitalize = true)
-        AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
-        PasswordField("Hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
-        PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
-        SubmitButton("Dołącz do społeczności", submit)
+    AuthLayout {
+        AuthTopBar(onBack, pl.ambif.ambify.ui.help.Help.START)
+        AuthHeader("Dołącz do kręgu", "Kod dostaniesz od Ownera lub Admina. Jest jednorazowy i ważny ${AccountRules.INVITATION_DAYS} dni.")
+        AuthCard {
+            CodeField("Kod zaproszenia", code, { code = it })
+            AuthField("Twoje imię", name, { name = it }, capitalize = true)
+            AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
+            PasswordField("Hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
+            PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
+            SubmitButton("Dołącz do kręgu", submit)
+        }
     }
 }
 
@@ -256,18 +295,20 @@ fun ResetPasswordScreen(onDone: () -> Unit, onBack: () -> Unit) {
         onDone()
     }
 
-    AuthLayout(top = 16.dp) {
-        BackButton(onBack)
+    AuthLayout {
+        AuthTopBar(onBack, pl.ambif.ambify.ui.help.Help.LOGIN)
         AuthHeader(
             "Nowe hasło",
-            "Kod resetu dostaniesz od Ownera lub Admina swojej społeczności (Konto → Społeczność → ⋮ → Resetuj hasło). " +
-                "Owner dostaje kod od Platform Admina. Kod jest ważny 24 godziny.",
+            "Kod resetu dostaniesz od Ownera lub Admina swojego kręgu (Konto → Krąg → ⋮ → Resetuj hasło). " +
+                "Owner dostaje kod od zespołu AMBiFy. Kod jest ważny 24 godziny.",
         )
-        AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
-        CodeField("Kod resetu", code, { code = it })
-        PasswordField("Nowe hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
-        PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
-        SubmitButton("Ustaw nowe hasło", submit)
+        AuthCard {
+            AuthField("E-mail", email, { email = it }, keyboardType = KeyboardType.Email)
+            CodeField("Kod resetu", code, { code = it })
+            PasswordField("Nowe hasło (min. ${AccountRules.MIN_PASSWORD_LENGTH} znaków)", password, { password = it })
+            PasswordField("Powtórz hasło", repeat, { repeat = it }, last = true, onDone = submit.run)
+            SubmitButton("Ustaw nowe hasło", submit)
+        }
     }
 }
 
@@ -281,22 +322,23 @@ private fun TestLogin(onSignedIn: () -> Unit) {
         onSignedIn()
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Text("Szybkie logowanie (test)", color = AuthColors.Gold, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text("Szybkie logowanie (test)", color = Luxury.GoldText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         listOf(
             "Owner" to "owner@test.ambify",
             "Admin" to "admin@test.ambify",
             "User" to "user@test.ambify",
             "Platform Admin" to "platform@test.ambify",
         ).forEach { (role, email) ->
-            FilledTonalButton(
+            OutlinedButton(
                 onClick = {
                     chosen = email
                     submit.run()
                 },
                 enabled = !submit.busy,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(containerColor = AuthColors.Tonal, contentColor = AuthColors.OnTonal),
+                shape = Luxury.SmallButtonShape,
+                border = BorderStroke(1.dp, Luxury.GoldLink),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Luxury.GoldText),
             ) { Text("Wejdź jako $role", fontSize = 16.sp) }
         }
         submit.error?.let { Text(it, color = AuthColors.Error, fontSize = 14.sp) }
@@ -334,39 +376,49 @@ internal fun checkPasswords(password: String, repeat: String) {
     if (password != repeat) throw ServerError("mismatch", "Hasła nie są takie same.")
 }
 
+/** B-006: the theme's own background (no black plate any more) — the water and wallpaper show as in the app. */
 @Composable
-private fun AuthLayout(top: androidx.compose.ui.unit.Dp = 56.dp, content: @Composable ColumnScope.() -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 28.dp, end = 28.dp, top = top, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            content = content,
+private fun AuthLayout(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        content = content,
+    )
+}
+
+/** Back arrow (or nothing), the small gold AMBiFy, and "?" on the right (board 6). */
+@Composable
+private fun AuthTopBar(onBack: (() -> Unit)?, help: pl.ambif.ambify.ui.help.HelpScreen?, wordmark: Boolean = true) {
+    Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = "Wróć", tint = Luxury.GoldText) }
+        if (wordmark) Text(
+            "AMBiFy", color = Luxury.GoldText, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp,
+            modifier = Modifier.padding(start = if (onBack == null) 6.dp else 0.dp),
         )
+        Spacer(Modifier.weight(1f))
+        help?.let { pl.ambif.ambify.ui.help.HelpButton(it) }
     }
 }
 
 @Composable
-private fun AuthHeader(title: String, subtitle: String, centered: Boolean = false, logo: Boolean = false) {
+private fun AuthHeader(title: String, subtitle: String) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (logo) BrandLogo(modifier = Modifier.size(76.dp), animated = false, cropToLogo = true)
-        Text(title, color = Color.White, fontSize = 28.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = AuthColors.Muted, fontSize = 15.sp, lineHeight = 21.sp, textAlign = if (centered) TextAlign.Center else TextAlign.Start)
+        Text(title, color = Luxury.Text, fontSize = 28.sp, fontFamily = Luxury.HeadingFont, fontWeight = FontWeight.SemiBold)
+        Text(subtitle, color = AuthColors.Muted, fontSize = 15.sp, lineHeight = 21.sp)
     }
 }
 
+/** The form in a gold card, like every card of the app. */
 @Composable
-private fun BackButton(onBack: () -> Unit) {
-    IconButton(onClick = onBack, modifier = Modifier.padding(start = 0.dp)) {
-        Icon(AppIcons.Back, contentDescription = "Wróć", tint = Color.White)
-    }
+private fun AuthCard(content: @Composable ColumnScope.() -> Unit) {
+    pl.ambif.ambify.ui.theme.LuxuryCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(18.dp), spacing = 12.dp, content = content)
 }
 
 @Composable
@@ -384,7 +436,7 @@ internal fun AuthField(
     onDone: () -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, color = AuthColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
+        Text(label, color = Luxury.GoldText, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -401,8 +453,8 @@ internal fun AuthField(
             ),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone() }),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
+                focusedTextColor = Luxury.Text,
+                unfocusedTextColor = Luxury.Text,
                 focusedContainerColor = AuthColors.Field,
                 unfocusedContainerColor = AuthColors.Field,
                 focusedBorderColor = AuthColors.Gold,
@@ -439,7 +491,7 @@ private fun PasswordField(label: String, value: String, onValueChange: (String) 
 private fun CodeField(label: String, value: String, onValueChange: (String) -> Unit) {
     AuthField(
         label, value, { onValueChange(it.uppercase().filter(Char::isLetterOrDigit).take(8)) },
-        textStyle = TextStyle(fontSize = 22.sp, fontFamily = FontFamily.Monospace, letterSpacing = 6.sp, textAlign = TextAlign.Center, color = Color.White),
+        textStyle = TextStyle(fontSize = 22.sp, fontFamily = FontFamily.Monospace, letterSpacing = 6.sp, textAlign = TextAlign.Center, color = Luxury.Text),
         borderColor = AuthColors.Gold,
     )
 }
@@ -447,23 +499,17 @@ private fun CodeField(label: String, value: String, onValueChange: (String) -> U
 @Composable
 private fun SubmitButton(text: String, submit: Submit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
-        submit.error?.let { Text(it, color = AuthColors.Error, fontSize = 15.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont) }
-        Button(
-            onClick = submit.run,
-            enabled = !submit.busy,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            shape = RoundedCornerShape(27.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AuthColors.Gold,
-                contentColor = AuthColors.OnGold,
-                disabledContainerColor = AuthColors.Gold.copy(alpha = 0.5f),
-                disabledContentColor = AuthColors.OnGold,
-            ),
+        submit.error?.let { pl.ambif.ambify.ui.components.MessageBar(pl.ambif.ambify.ui.components.MessageKind.ERROR, it) }
+        Box(
+            modifier = Modifier.fillMaxWidth().height(52.dp).clip(Luxury.ButtonShape)
+                .background(Luxury.GoldFill, alpha = if (submit.busy) 0.6f else 1f)
+                .clickable(enabled = !submit.busy, role = androidx.compose.ui.semantics.Role.Button, onClick = submit.run),
+            contentAlignment = Alignment.Center,
         ) {
             if (submit.busy) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = AuthColors.OnGold, strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Luxury.OnGold, strokeWidth = 2.dp)
             } else {
-                Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
+                Text(Luxury.label(text), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, fontFamily = Luxury.HeadingFont, color = Luxury.OnGold)
             }
         }
     }

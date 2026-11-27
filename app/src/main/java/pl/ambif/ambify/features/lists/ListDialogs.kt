@@ -517,7 +517,7 @@ private fun AccessEditor(
         }
         Text("Poziomy (każdy zawiera poprzedni): widzi → odhacza → dodaje → edytuje i usuwa cudze", fontSize = 12.sp, color = Muted, lineHeight = 17.sp)
         if (roles.isEmpty()) {
-            MessageBar(MessageKind.STATUS, "Role pojawią się po połączeniu", "Bez sieci lista będzie dla całej społeczności; dostęp zmienisz później.", icon = AppIcons.Offline)
+            MessageBar(MessageKind.STATUS, "Role pojawią się po połączeniu", "Bez sieci lista będzie dla całego kręgu; dostęp zmienisz później.", icon = AppIcons.Offline)
         } else {
             LuxurySectionTitle("Role")
             ui.roles.filter { it.owner }.forEach { owner ->
@@ -566,7 +566,7 @@ private fun AccessEditor(
             }
         }
         Text(
-            "Lista może tylko zawęzić to, na co pozwala tabela uprawnień społeczności (np. „Zadania dla innych” dalej wymaga zatwierdzenia).",
+            "Lista może tylko zawęzić to, na co pozwala tabela uprawnień kręgu (np. „Zadania dla innych” dalej wymaga zatwierdzenia).",
             fontSize = 11.sp, color = Faint, lineHeight = 15.sp,
         )
         PopupButtons {
@@ -786,7 +786,7 @@ private fun VariantChips(variants: List<String>, current: String, onPick: (Strin
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         variants.take(8).forEach { Chip(it, it == current.trim()) { onPick(it) } }
     }
-    Text("Podpowiedzi: rodzaje używane wcześniej w społeczności.", fontSize = 11.sp, color = Muted, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
+    Text("Podpowiedzi: rodzaje używane wcześniej w kręgu.", fontSize = 11.sp, color = Muted, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont)
 }
 
 // --- board 17: "Sortuj" of one level ---
@@ -1102,7 +1102,7 @@ private fun UnitFormsDialog(list: ListInfo, itemName: String, editing: ListUnit,
                 Text("$n ${forms[i]}", fontSize = 15.sp, color = Luxury.GoldText)
             }
         }
-        Text("Odmiana jest wspólna dla całej społeczności — poprawiasz ją raz.", fontSize = 12.sp, color = Faint)
+        Text("Odmiana jest wspólna dla całego kręgu — poprawiasz ją raz.", fontSize = 12.sp, color = Faint)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
             Box(modifier = Modifier.weight(1f)) {
@@ -1576,9 +1576,6 @@ private fun QuantityEditor(ui: ListsUi, list: ListInfo, lists: ListsController, 
         }
         Chip("+ własna", false) { forms = ListUnit("", emptyList()) }
     }
-    if (units.any { u -> Lists.BUILT_IN_UNITS.none { it.name == u.name } }) {
-        Text("Przytrzymaj własną jednostkę, żeby poprawić jej odmianę.", fontSize = 11.sp, color = Faint)
-    }
     forms?.let { editing ->
         UnitFormsDialog(list, initial.name, editing, onDismiss = { forms = null }) { saved ->
             lists.saveUnit(list.id, saved)
@@ -1603,7 +1600,7 @@ private fun QuantityEditor(ui: ListsUi, list: ListInfo, lists: ListsController, 
             label = "Zapamiętaj dla „${initial.name}”",
             checked = keep,
             enabled = true,
-            below = { Text("dla całej społeczności, na każdej liście zakupów", fontSize = 12.sp, color = Muted) },
+            below = { Text("dla całego kręgu, na każdej liście zakupów", fontSize = 12.sp, color = Muted) },
         ) { keep = it }
     }
     Text("Szybkie dopisywanie też rozumie jednostki: „ziemniaki 2 siatki”, „szynka 20 dag”.", fontSize = 12.sp, color = Muted)

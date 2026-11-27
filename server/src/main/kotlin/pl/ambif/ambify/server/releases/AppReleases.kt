@@ -128,7 +128,7 @@ internal fun downloadPage(release: AppRelease?, apkPath: String = AppPaths.APK, 
         """<a class="gold" href="$apkPath/${release.file.escaped()}" download>Pobierz AMBiFy ${release.versionName.escaped()}</a>
         <p class="muted">Android 12 lub nowszy · $size$date</p>"""
     }
-    val subtitle = if (kids) "Wersja dla telefonu dziecka" else "Aplikacja naszej społeczności"
+    val subtitle = if (kids) "Wersja dla telefonu dziecka" else "Aplikacja naszego kręgu"
     val warning = if (kids) {
         """<section class="card warn"><p class="muted" style="color:#E4DFD3">Ta wersja zapisuje zdarzenia telefonu dla rodzica. <b>Instaluj tylko na telefonie dziecka.</b> Na pozostałe telefony jest zwykła strona pobierania.</p></section>"""
     } else {

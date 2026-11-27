@@ -118,9 +118,9 @@ fun HandOverDialog(community: CommunitySummary, leave: Boolean, onDismiss: () ->
         Text(if (leave) "Opuścić „${community.name}”?" else "Przekaż rolę Ownera", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         MessageBar(
             MessageKind.INFO,
-            if (leave) "Najpierw wskaż, kto przejmie społeczność" else "Kto ma zostać Ownerem „${community.name}”?",
+            if (leave) "Najpierw wskaż, kto przejmie krąg" else "Kto ma zostać Ownerem „${community.name}”?",
             if (leave) "Ta osoba musi się zgodzić. Do tego czasu nadal jesteś Ownerem."
-            else "Ta osoba musi się zgodzić. Potem zostaniesz w społeczności jako $stayRole.",
+            else "Ta osoba musi się zgodzić. Potem zostaniesz w kręgu jako $stayRole.",
         )
         when {
             failed -> Text("Nie udało się wczytać osób. Sprawdź połączenie.", fontSize = 13.sp, color = Luxury.TextMuted)
@@ -187,7 +187,7 @@ fun DeleteCommunityDialog(community: CommunitySummary, onDismiss: () -> Unit, ou
         Text("Usunąć „${community.name}”?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
         MessageBar(
             MessageKind.ERROR, "Jesteś tu jedyną osobą",
-            "Opuszczenie usunie społeczność razem z jej listami, planami i ustawieniami. Tego nie da się cofnąć.",
+            "Opuszczenie usunie krąg razem z jego listami, planami i ustawieniami. Tego nie da się cofnąć.",
         )
         OutlinedTextField(
             value = name, onValueChange = { name = it }, singleLine = true,
@@ -199,13 +199,13 @@ fun DeleteCommunityDialog(community: CommunitySummary, onDismiss: () -> Unit, ou
         )
         if (tried && !same) FieldError("Wpisz dokładnie: ${community.name}")
         PopupButtons {
-            DangerButton("Usuń społeczność", {
+            DangerButton("Usuń krąg", {
                 tried = true
                 if (same) {
                     session.attempt(scope, outcome) {
                         deleteCommunity(community.id, name)
                         onDismiss()
-                        outcome(MessageKind.SUCCESS, "Usunięto społeczność", community.name)
+                        outcome(MessageKind.SUCCESS, "Usunięto krąg", community.name)
                     }
                 }
             })
@@ -226,7 +226,7 @@ fun LeaveCommunityDialog(community: CommunitySummary, onDismiss: () -> Unit, out
             "Do jej list, planów i Pulpitu. Wrócisz tylko z nowym kodem zaproszenia od Ownera lub Admina.",
         )
         PopupButtons {
-            DangerButton("Opuść społeczność", {
+            DangerButton("Opuść krąg", {
                 session.attempt(scope, outcome) {
                     leaveCommunity(community.id)
                     onDismiss()
@@ -246,7 +246,7 @@ fun PendingTransfer(transfer: OwnerTransfer, outcome: Outcome) {
     val scope = rememberCoroutineScope()
     val first = transfer.toName.substringBefore(' ')
     if (transfer.declined) {
-        MessageBar(MessageKind.WARNING, "$first nie przejmuje społeczności", "Wybierz kogoś innego albo zamknij.",
+        MessageBar(MessageKind.WARNING, "$first nie przejmuje kręgu", "Wybierz kogoś innego albo zamknij.",
             onClose = { session.attempt(scope, outcome) { cancelOwnerTransfer(transfer.communityId) } })
     } else {
         MessageBar(
@@ -275,7 +275,7 @@ fun TransferRequestCard(transfer: OwnerTransfer, outcome: Outcome) {
             answerOwnerTransfer(transfer.communityId, accept)
             if (accept) {
                 switchCommunity(transfer.communityId)
-                outcome(MessageKind.SUCCESS, "Jesteś Ownerem", "Społeczność „${transfer.communityName}” jest teraz Twoja.")
+                outcome(MessageKind.SUCCESS, "Jesteś Ownerem", "Krąg „${transfer.communityName}” jest teraz Twój.")
             } else {
                 outcome(MessageKind.INFO, "Odrzucono prośbę", "${transfer.fromName.substringBefore(' ')} wybierze kogoś innego.")
             }
@@ -284,12 +284,12 @@ fun TransferRequestCard(transfer: OwnerTransfer, outcome: Outcome) {
     LuxuryCard(contentPadding = PaddingValues(16.dp)) {
         LuxurySectionTitle("Prośba")
         Text(
-            "${transfer.fromName.substringBefore(' ')} chce przekazać Ci rolę Ownera społeczności „${transfer.communityName}”" +
+            "${transfer.fromName.substringBefore(' ')} chce przekazać Ci rolę Ownera kręgu „${transfer.communityName}”" +
                 if (transfer.leave) " i ją opuścić." else ".",
             fontSize = 16.sp, lineHeight = 22.sp,
         )
         Text(
-            "Owner zarządza ludźmi, rolami, modułami i premium." + if (transfer.leave) " ${transfer.fromName.substringBefore(' ')} straci dostęp do tej społeczności." else "",
+            "Owner zarządza ludźmi, rolami, modułami i premium." + if (transfer.leave) " ${transfer.fromName.substringBefore(' ')} straci dostęp do tego kręgu." else "",
             fontSize = 13.sp, color = Luxury.TextMuted,
         )
         GoldButton("Przejmij", enabled = !busy) { answer(true) }

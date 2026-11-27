@@ -157,7 +157,6 @@ internal fun MemoryDialog(
                     FramedButton("Zamknij", gold = false, modifier = Modifier.fillMaxWidth(), onClick = onDismiss)
                     return@LuxuryPopup
                 }
-                Text("Przytrzymaj, by usunąć z pamięci.", fontSize = 11.sp, color = Faint, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FramedButton("Anuluj", gold = false, modifier = Modifier.weight(1f), onClick = onDismiss)
                     Box(modifier = Modifier.weight(1f)) {
@@ -195,7 +194,7 @@ internal fun MemoryDialog(
     ) {
         if (!step2) {
             if (memory.isEmpty()) {
-                MessageBar(MessageKind.INFO, "Pamięć jest jeszcze pusta", "Zapełni się sama, gdy będziecie dodawać $what — wspólna dla całej społeczności.")
+                MessageBar(MessageKind.INFO, "Pamięć jest jeszcze pusta", "Zapełni się sama, gdy będziecie dodawać $what — wspólna dla całego kręgu.")
                 return@LuxuryPopup
             }
             Column {
@@ -227,7 +226,7 @@ internal fun MemoryDialog(
     forget?.let { entry ->
         LuxuryPopup(onDismiss = { forget = null }) {
             Text("Usunąć „${nameOf(entry.values)}” z pamięci?", fontSize = 20.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
-            Text("Zniknie z podpowiedzi u wszystkich w społeczności. Pozycje na listach zostają; dodany ponownie wróci do pamięci.", fontSize = 13.sp, color = Muted, lineHeight = 19.sp)
+            Text("Zniknie z podpowiedzi u wszystkich w kręgu. Pozycje na listach zostają; dodany ponownie wróci do pamięci.", fontSize = 13.sp, color = Muted, lineHeight = 19.sp)
             DangerButton("Usuń z pamięci", {
                 lists.forget(list.id, entry.values)
                 chosen.remove(entry.key)

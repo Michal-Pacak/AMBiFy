@@ -81,7 +81,7 @@ class AccountService(
 
     /** A new account together with its first (free) community, in which it becomes the Owner. */
     fun setup(request: SetupRequest): Tokens {
-        val familyName = Validate.name(request.familyName, "Nazwa społeczności")
+        val familyName = Validate.name(request.familyName, "Nazwa kręgu")
         val name = Validate.name(request.name, "Imię")
         val email = Validate.email(request.email)
         Validate.password(request.password)
@@ -141,10 +141,17 @@ class AccountService(
         }
     }
 
-    /** Swaps a refresh token for a new pair (the old refresh token stops working). */
+    /**
+     * Swaps a refresh token for a new pair. The token before stops working once the phone uses the new one (B-007:
+     * when the answer got lost — Wi-Fi to LTE, the app killed before saving — the phone still has the token before
+     * and must not be signed out for it); an unused new token keeps the one before alive for [PREVIOUS_TOKEN_DAYS].
+     */
     fun refresh(refreshToken: String): Tokens = transaction(database) {
         val now = clock()
-        val session = Sessions.selectAll().where { Sessions.tokenHash eq Secrets.sha256(refreshToken) }.singleOrNull()
+        val hash = Secrets.sha256(refreshToken)
+        val current = Sessions.selectAll().where { Sessions.tokenHash eq hash }.singleOrNull()
+        val session = current ?: Sessions.selectAll().where { Sessions.previousTokenHash eq hash }.singleOrNull()
+            ?.takeIf { now - (it[Sessions.renewedAt] ?: 0L) <= PREVIOUS_TOKEN_DAYS * DAY_MS }
         if (session == null || now - session[Sessions.lastUsedAt] > idleLimitMs()) {
             session?.let { expired -> Sessions.deleteWhere { id eq expired[Sessions.id] } }
             throw ApiException(HttpStatusCode.Unauthorized, "session_expired", "Sesja wygasła. Zaloguj się ponownie.")
@@ -152,6 +159,9 @@ class AccountService(
         val newToken = Secrets.token()
         Sessions.update({ Sessions.id eq session[Sessions.id] }) {
             it[tokenHash] = Secrets.sha256(newToken)
+            // Used the newest token: the one before may go. Used the one before: it stays until the new one is used.
+            it[previousTokenHash] = hash
+            it[renewedAt] = now
             it[lastUsedAt] = now
         }
         Tokens(tokens.issue(session[Sessions.userId], session[Sessions.id]), newToken)
@@ -243,6 +253,7 @@ class AccountService(
             CommunitySummary(
                 organizationId, row[Organizations.name], role(row[Memberships.role]), avatar,
                 photosBlocked = row[Organizations.photosBlocked], myPhotoHidden = row[Memberships.photoHiddenBy] != null,
+                circle = circleAvatar(row),
             )
         }
     }
@@ -276,7 +287,7 @@ class AccountService(
 
     /** Only the Owner renames the community. */
     fun renameCommunity(session: UserSession, name: String) {
-        val communityName = Validate.name(name, "Nazwa społeczności")
+        val communityName = Validate.name(name, "Nazwa kręgu")
         transaction(database) {
             val membership = requireAction(session, Action.RENAME_COMMUNITY)
             Organizations.update({ Organizations.id eq membership.organizationId }) { it[Organizations.name] = communityName }
@@ -392,11 +403,11 @@ class AccountService(
             val others = Memberships.selectAll()
                 .where { (Memberships.organizationId eq membership.organizationId) and (Memberships.userId neq session.userId) }.count()
             if (others > 0) {
-                throw ApiException(HttpStatusCode.Conflict, "not_alone", "W społeczności są jeszcze inne osoby — najpierw przekaż ją komuś.")
+                throw ApiException(HttpStatusCode.Conflict, "not_alone", "W kręgu są jeszcze inne osoby — najpierw przekaż go komuś.")
             }
             val name = Organizations.selectAll().where { Organizations.id eq membership.organizationId }.single()[Organizations.name]
             if (request.name.trim() != name.trim()) {
-                throw ApiException(HttpStatusCode.BadRequest, "name", "Wpisz dokładnie nazwę społeczności.")
+                throw ApiException(HttpStatusCode.BadRequest, "name", "Wpisz dokładnie nazwę kręgu.")
             }
             Invitations.deleteWhere { Invitations.organizationId eq membership.organizationId }
             Memberships.deleteWhere { Memberships.organizationId eq membership.organizationId }
@@ -414,7 +425,7 @@ class AccountService(
             if (membership.role.owner) {
                 throw ApiException(
                     HttpStatusCode.Conflict, "owner_cannot_leave",
-                    "Owner nie może opuścić społeczności — najpierw przekaż ją komuś.",
+                    "Owner nie może opuścić kręgu — najpierw przekaż go komuś.",
                 )
             }
             removeMembership(session.userId, membership.organizationId)
@@ -426,7 +437,7 @@ class AccountService(
      * a payment (not available yet), a founding credit from the Platform Admin, or being the Platform Admin.
      */
     fun createCommunity(session: UserSession, name: String): CommunitySummary {
-        val communityName = Validate.name(name, "Nazwa społeczności")
+        val communityName = Validate.name(name, "Nazwa kręgu")
         return transaction(database) {
             val user = user(session.userId)
             val owned = Memberships.join(CommunityRoles, JoinType.INNER, Memberships.role, CommunityRoles.id).selectAll()
@@ -440,7 +451,7 @@ class AccountService(
                 }
                 else -> throw ApiException(
                     HttpStatusCode.PaymentRequired, "payment_required",
-                    "Jesteś już Ownerem darmowej społeczności. Kolejna wymaga jednorazowej opłaty (wkrótce dostępne).",
+                    "Jesteś już Ownerem darmowego kręgu. Kolejny wymaga jednorazowej opłaty (wkrótce dostępne).",
                 )
             }
             val organizationId = insertCommunity(session.userId, communityName, paid)
@@ -453,7 +464,7 @@ class AccountService(
         val invitation = validInvitation(code.trim().uppercase())
         val organizationId = invitation[Invitations.organizationId]
         if (Memberships.selectAll().where { (Memberships.userId eq session.userId) and (Memberships.organizationId eq organizationId) }.count() > 0) {
-            throw ApiException(HttpStatusCode.Conflict, "already_member", "Już należysz do tej społeczności.")
+            throw ApiException(HttpStatusCode.Conflict, "already_member", "Już należysz do tego kręgu.")
         }
         acceptInvitation(invitation, session.userId)
         CommunitySummary(organizationId, communityName(organizationId), lowestRole(organizationId))
@@ -513,9 +524,24 @@ class AccountService(
         }
     }
 
-    /** A one-time code (valid 24 h) handed to someone of a lower role who forgot the password. */
+    /**
+     * A one-time code (valid 24 h) handed to someone of a lower role who forgot the password.
+     * B-013: the password is the whole account's, and whoever holds the code can sign in as that person. So a
+     * community may reset it only for someone who belongs to it alone (e.g. a child); for anyone else (other
+     * communities, the Platform Admin) only the person or the AMBiFy team can.
+     */
     fun createResetCode(session: UserSession, memberId: String): PasswordResetCode = transaction(database) {
         requireManageable(session, memberId, Action.REMOVE_MEMBERS, allowSelf = true)
+        if (memberId != session.userId) {
+            val circles = Memberships.selectAll().where { Memberships.userId eq memberId }.count()
+            val platformAdmin = Users.selectAll().where { Users.id eq memberId }.single()[Users.platformAdmin]
+            if (circles > 1 || platformAdmin) {
+                throw ApiException(
+                    HttpStatusCode.Conflict, "other_circles",
+                    "Ta osoba należy też do innych kręgów. Nowe hasło może ustawić tylko ona albo zespół AMBiFy.",
+                )
+            }
+        }
         insertResetCode(memberId)
     }
 
@@ -598,15 +624,15 @@ class AccountService(
     // --- modules ---
 
     fun modules(session: UserSession): CommunityModules = transaction(database) {
-        communityModules(membership(session).organizationId)
+        communityModules(membership(session).organizationId, session.userId)
     }
 
     /** The Owner or an Admin switches a module the community has on or off for everyone. */
     fun setModule(session: UserSession, module: ModuleId, enabled: Boolean): CommunityModules = transaction(database) {
         val manager = requireAction(session, Action.SWITCH_MODULES)
         val organizationId = manager.organizationId
-        if (module !in Entitlements.owned(grants(organizationId))) {
-            throw ApiException(HttpStatusCode.Forbidden, "not_owned", "Ta społeczność nie ma modułu ${module.label}.")
+        if (module !in Entitlements.owned(grantsFor(organizationId, session.userId))) {
+            throw ApiException(HttpStatusCode.Forbidden, "not_owned", "Ten krąg nie ma modułu ${module.label}.")
         }
         if (enabled) {
             DisabledModules.deleteWhere { (DisabledModules.organizationId eq organizationId) and (DisabledModules.module eq module.name) }
@@ -616,14 +642,14 @@ class AccountService(
                 it[DisabledModules.module] = module.name
             }
         }
-        communityModules(organizationId)
+        communityModules(organizationId, session.userId)
     }
 
     /** For module routes (from Stage 4 on): refuses a module the current community does not have switched on. */
     fun requireModule(session: UserSession, module: ModuleId) {
         transaction(database) {
-            if (module !in communityModules(membership(session).organizationId).enabled) {
-                throw ApiException(HttpStatusCode.Forbidden, "module_off", "Moduł ${module.label} nie jest włączony w tej społeczności.")
+            if (module !in communityModules(membership(session).organizationId, session.userId).enabled) {
+                throw ApiException(HttpStatusCode.Forbidden, "module_off", "Moduł ${module.label} nie jest włączony w tym kręgu.")
             }
         }
     }
@@ -830,7 +856,10 @@ class AccountService(
         val names = Organizations.selectAll().associate { it[Organizations.id] to it[Organizations.name] }
         val communities = Memberships.selectAll().groupBy({ it[Memberships.userId] }) { names[it[Memberships.organizationId]] }
         Users.selectAll().orderBy(Users.name).map { user ->
-            PlatformAccount(user[Users.name], user[Users.email], communities[user[Users.id]].orEmpty().filterNotNull().sorted())
+            PlatformAccount(
+                user[Users.name], user[Users.email], communities[user[Users.id]].orEmpty().filterNotNull().sorted(),
+                accountPremium = user[Users.accountPremium], foundingCredits = user[Users.foundingCredits],
+            )
         }
     }
 
@@ -862,6 +891,15 @@ class AccountService(
             requirePlatformAdmin(session)
             val user = userByEmail(email)
             Users.update({ Users.id eq user[Users.id] }) { it[foundingCredits] = user[Users.foundingCredits] + 1 }
+        }
+    }
+
+    /** Takes back one free extra community given by mistake (never below zero). */
+    fun removeFoundingCredit(session: UserSession, email: String) {
+        transaction(database) {
+            requirePlatformAdmin(session)
+            val user = userByEmail(email)
+            Users.update({ Users.id eq user[Users.id] }) { it[foundingCredits] = (user[Users.foundingCredits] - 1).coerceAtLeast(0) }
         }
     }
 
@@ -967,6 +1005,13 @@ class AccountService(
         }
     }
 
+    /** A circle's icon from its [Organizations] row. */
+    internal fun circleAvatar(row: ResultRow): pl.ambif.ambify.shared.CircleAvatar = pl.ambif.ambify.shared.CircleAvatar(
+        Avatars.initials(row[Organizations.name]),
+        row[Organizations.avatarColor],
+        row[Organizations.avatarPhotoId]?.let { AccountPaths.circlePhoto(row[Organizations.id], it) },
+    )
+
     internal fun ResultRow.memberAvatar(name: String): Avatar? {
         val shape = this[Memberships.avatarShape] ?: return null
         val color = this[Memberships.avatarColor] ?: return null
@@ -1050,10 +1095,17 @@ class AccountService(
             .map { it[OrganizationGrants.grantKey] }.toSet()
 
     /** Premium features that work now in the community. Must run in a transaction. */
-    internal fun communityFeatures(organizationId: String): List<Feature> = communityModules(organizationId).features
+    internal fun communityFeatures(organizationId: String, userId: String? = null): List<Feature> = communityModules(organizationId, userId).features
 
-    private fun communityModules(organizationId: String): CommunityModules {
-        val grants = grants(organizationId)
+    internal fun isPlatformAdmin(userId: String): Boolean =
+        Users.select(Users.platformAdmin).where { Users.id eq userId }.singleOrNull()?.get(Users.platformAdmin) == true
+
+    /** The grants as [userId] has them: the Platform Admin has every premium everywhere, always (Michał, 26.11). */
+    internal fun grantsFor(organizationId: String, userId: String?): Set<String> =
+        if (userId != null && isPlatformAdmin(userId)) Entitlements.grantKeys.toSet() else grants(organizationId)
+
+    private fun communityModules(organizationId: String, userId: String? = null): CommunityModules {
+        val grants = grantsFor(organizationId, userId)
         val disabled = DisabledModules.selectAll().where { DisabledModules.organizationId eq organizationId }
             .mapNotNull { row -> ModuleId.entries.firstOrNull { it.name == row[DisabledModules.module] } }.toSet()
         return CommunityModules(
@@ -1079,7 +1131,7 @@ class AccountService(
 
     /** The caller in the current community; fails for someone without a community. Must run in a transaction. */
     internal fun membership(session: UserSession): Membership = membershipOrNull(session)
-        ?: throw ApiException(HttpStatusCode.Conflict, "no_community", "Najpierw załóż społeczność albo dołącz do niej z kodem.")
+        ?: throw ApiException(HttpStatusCode.Conflict, "no_community", "Najpierw załóż krąg albo dołącz do niego z kodem.")
 
     /** How the caller's role may do [action] in their community. Must run in a transaction. */
     internal fun can(membership: Membership, action: Action): Mode =
@@ -1158,6 +1210,7 @@ class AccountService(
 
     private companion object {
         const val DAY_MS = 24 * 60 * 60 * 1000L
+        const val PREVIOUS_TOKEN_DAYS = 7L
         const val GRANTED = "GRANTED"
         const val OWNER_RANK = 1_000_000
         const val PENDING = "PENDING"

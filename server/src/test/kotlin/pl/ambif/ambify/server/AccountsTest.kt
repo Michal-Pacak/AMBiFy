@@ -136,11 +136,15 @@ class AccountsTest {
     @Test
     fun refreshRotatesTokenAndSignedOutDeviceLosesAccessAtOnce() = accountsApp {
         val owner = client.setupOwner()
+        val lost: Tokens = client.send("POST", AuthPaths.REFRESH, RefreshRequest(owner.refreshToken)).body()
+        // B-007: the answer never reached the phone, so it asks again with the token before — and stays signed in.
         val renewed: Tokens = client.send("POST", AuthPaths.REFRESH, RefreshRequest(owner.refreshToken)).body()
-        val oldAgain = client.send("POST", AuthPaths.REFRESH, RefreshRequest(owner.refreshToken))
+        val newest: Tokens = client.send("POST", AuthPaths.REFRESH, RefreshRequest(renewed.refreshToken)).body()
 
         assertNotEquals(owner.refreshToken, renewed.refreshToken)
-        assertEquals(HttpStatusCode.Unauthorized, oldAgain.status)
+        assertEquals(HttpStatusCode.Unauthorized, client.send("POST", AuthPaths.REFRESH, RefreshRequest(owner.refreshToken)).status, "the new one was used")
+        assertEquals(HttpStatusCode.Unauthorized, client.send("POST", AuthPaths.REFRESH, RefreshRequest(lost.refreshToken)).status, "the lost one never works")
+        assertEquals(HttpStatusCode.OK, client.send<Unit>("GET", AccountPaths.ME, token = newest.accessToken).status)
 
         val member = client.inviteAndJoin(renewed)
         val ania = client.send<Unit>("GET", AccountPaths.ME, token = member.accessToken).body<Me>()

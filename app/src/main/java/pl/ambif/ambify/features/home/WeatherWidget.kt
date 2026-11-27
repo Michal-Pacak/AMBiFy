@@ -96,6 +96,7 @@ internal fun WeatherWidget(
     interactive: Boolean,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpen: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val source = remember { WeatherSource(context) }
@@ -154,7 +155,12 @@ internal fun WeatherWidget(
         }
         HorizontalPager(state = pager, userScrollEnabled = interactive, modifier = Modifier.fillMaxWidth()) { index ->
             val forecast = forecasts.getOrNull(index)?.second
-            Box(Modifier.fillMaxWidth().padding(end = 8.dp)) {
+            // A tap (outside the arrows and the gear) opens the 16-day forecast (0.7.8, board 5).
+            Box(
+                Modifier.fillMaxWidth()
+                    .then(if (interactive && onOpen != null) Modifier.clickable(onClickLabel = "Prognoza na 16 dni", onClick = onOpen) else Modifier)
+                    .padding(end = 8.dp),
+            ) {
                 if (forecast == null) Text("Wczytywanie pogody…", fontSize = 13.sp, color = Luxury.TextMuted, modifier = Modifier.padding(vertical = 8.dp))
                 else WeatherPage(forecast, widget, half, now)
             }
@@ -173,59 +179,99 @@ internal fun WeatherWidget(
     }
 }
 
+/** Night between today's sunset and the next sunrise (a clear sky shows the moon). */
+private fun Forecast.isNight(now: LocalDateTime): Boolean {
+    val up = daily.sunrise.getOrNull(0)?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return now.hour !in 6..19
+    val down = daily.sunset.getOrNull(0)?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return now.hour !in 6..19
+    return now.isBefore(up) || now.isAfter(down)
+}
+
+/**
+ * One place (0.7.8, canvas boards 2 and 7): Mała = now; Średnia = now with the temperature in the middle, 4 hours
+ * and Jutro, no rain % under the hours; Duża = also feels-like, humidity, pressure, sunrise–sunset, rain % and the
+ * next 3 days. Temperatures in their colours; frost at ≤ −10°, heat haze at ≥ 32°.
+ */
 @Composable
 private fun WeatherPage(forecast: Forecast, widget: DashboardWidget, half: Boolean, now: LocalDateTime) {
     val today = forecast.today()
     val code = forecast.current.code
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val iconSize = if (half) 32.dp else 44.dp
-            Column(modifier = Modifier.weight(1f)) {
-                // The cloud next to the degrees, not in the middle of degrees + description (Michał, 23.11).
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(weatherIcon(code), contentDescription = weatherWords(code), tint = Luxury.GoldText, modifier = Modifier.size(iconSize))
-                    Text(deg(forecast.current.temperature), fontSize = if (half) 30.sp else 38.sp, fontWeight = FontWeight.Medium, color = Luxury.GoldLight, lineHeight = 40.sp)
+    val t = forecast.current.temperature
+    val night = forecast.isNight(now)
+    val large = widget.height == WidgetHeight.LARGE
+    Box {
+        if (t <= -10) FrostOverlay(Modifier.matchParentSize())
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (half) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WeatherIcon(code, 32.dp, night)
+                    Box { Temp(t, 30.sp); if (t >= 32) HeatHaze(Modifier.matchParentSize()) }
                 }
-                if (!half) Text("odczuwalna ${deg(forecast.current.feelsLike)} · ${weatherWords(code)}", fontSize = 12.sp, color = Luxury.TextMuted)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    MinMax(today, size = 12)
+                    today.rain?.let { Text("· $it%", fontSize = 12.sp, color = Rain) }
+                }
+                forecast.warning(now)?.let { Text(it, fontSize = 11.sp, color = Warn, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                return@Column
             }
-            if (!half) {
-                Column(horizontalAlignment = Alignment.End) {
+            // Icon left, temperature in the middle, the rest right (Michał, 26.11).
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.weight(1f)) { WeatherIcon(code, 48.dp, night) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box { Temp(t, 44.sp); if (t >= 32) HeatHaze(Modifier.matchParentSize()) }
+                    if (large) Text("odczuwalna ${deg(forecast.current.feelsLike)}", fontSize = 12.sp, color = Luxury.TextMuted)
+                }
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     MinMax(today)
                     today.rain?.let { Text("deszcz $it%", fontSize = 12.sp, color = Rain) }
                     Text("wiatr ${Math.round(forecast.current.wind)} km/h", fontSize = 12.sp, color = Luxury.TextMuted)
                 }
             }
-        }
-        if (half) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                MinMax(today, size = 12)
-                today.rain?.let { Text("· $it%", fontSize = 12.sp, color = Rain) }
+            if (large) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    forecast.current.humidity?.let { Detail("wilgotność", "$it%", Modifier.weight(1f)) }
+                    forecast.current.pressure?.let { Detail("ciśnienie", "${Math.round(it)} hPa", Modifier.weight(1f)) }
+                    forecast.sun()?.let { Detail("słońce", it, Modifier.weight(1f)) }
+                }
             }
-        }
-        // At half width the height does nothing (Michał, 23.11): always now, min/max, rain and the warning.
-        if (half || widget.showsHours()) {
-            forecast.warning(now)?.let { warning ->
-                if (half) Text(warning, fontSize = 11.sp, color = Warn, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                else MessageBar(MessageKind.WARNING, warning)
-            }
-            if (!half) {
-                LuxuryDivider()
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    forecast.hours(now).forEach { hour ->
-                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("%d:00".format(hour.time.hour), fontSize = 12.sp, color = Luxury.TextMuted)
-                            Icon(weatherIcon(hour.code), contentDescription = weatherWords(hour.code), tint = Luxury.TextMuted, modifier = Modifier.size(18.dp))
-                            Text(deg(hour.temperature), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                            Text(if (hour.rain >= 10) "${hour.rain}%" else " ", fontSize = 11.sp, color = Rain)
-                        }
+            if (!widget.showsHours()) return@Column
+            forecast.warning(now)?.let { MessageBar(MessageKind.WARNING, it) }
+            LuxuryDivider()
+            Row(modifier = Modifier.fillMaxWidth()) {
+                forecast.hours(now).forEach { hour ->
+                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("%d:00".format(hour.time.hour), fontSize = 12.sp, color = Luxury.TextMuted)
+                        WeatherIcon(hour.code, 24.dp, night = hour.time.hour !in 6..19)
+                        Temp(hour.temperature, 15.sp)
+                        if (large) Text(if (hour.rain >= 10) "${hour.rain}%" else " ", fontSize = 11.sp, color = Rain)
                     }
-                    if (widget.height == WidgetHeight.LARGE) {
-                        val tomorrow = forecast.tomorrow()
-                        Column(modifier = Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Jutro", fontSize = 12.sp, color = Luxury.TextMuted)
-                            Icon(weatherIcon(tomorrow.code ?: 3), contentDescription = weatherWords(tomorrow.code ?: 3), tint = Luxury.TextMuted, modifier = Modifier.size(18.dp))
-                            Text(listOfNotNull(tomorrow.min, tomorrow.max).joinToString("/") { deg(it) }, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(tomorrow.rain?.takeIf { it >= 10 }?.let { "$it%" } ?: " ", fontSize = 11.sp, color = Rain)
+                }
+                val tomorrow = forecast.tomorrow()
+                Column(modifier = Modifier.weight(1.25f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Jutro", fontSize = 12.sp, color = Luxury.TextMuted)
+                    WeatherIcon(tomorrow.code ?: 3, 24.dp)
+                    Row {
+                        tomorrow.min?.let { Temp(it, 14.sp) }
+                        Text("/", fontSize = 14.sp, color = Luxury.TextMuted)
+                        tomorrow.max?.let { Temp(it, 14.sp) }
+                    }
+                    if (large) Text(tomorrow.rain?.takeIf { it >= 10 }?.let { "$it%" } ?: " ", fontSize = 11.sp, color = Rain)
+                }
+            }
+            if (large) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    forecast.days().drop(2).take(3).forEach { day ->
+                        // Day over icon + min/max: three days fit side by side without wrapping.
+                        Column(
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Luxury.Outline.copy(alpha = 0.25f)).padding(horizontal = 4.dp, vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(dayShort(day.date), fontSize = 12.sp, color = Luxury.TextMuted, maxLines = 1)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                WeatherIcon(day.code ?: 3, 18.dp)
+                                day.min?.let { Temp(it, 13.sp) }
+                                Text("/", fontSize = 13.sp, color = Luxury.TextMuted)
+                                day.max?.let { Temp(it, 13.sp) }
+                            }
                         }
                     }
                 }
@@ -235,9 +281,28 @@ private fun WeatherPage(forecast: Forecast, widget: DashboardWidget, half: Boole
 }
 
 @Composable
+private fun Detail(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(10.dp)).background(Luxury.Outline.copy(alpha = 0.25f)).padding(vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(label, fontSize = 11.sp, color = Luxury.TextMuted)
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+    }
+}
+
+/** "pt.", "sob." */
+internal fun dayShort(date: java.time.LocalDate): String =
+    listOf("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")[date.dayOfWeek.value - 1]
+
+@Composable
 private fun MinMax(day: Forecast.Day, size: Int = 15) {
-    val text = listOfNotNull(day.min, day.max).joinToString(" / ") { deg(it) }
-    if (text.isNotEmpty()) Text(text, fontSize = size.sp, color = if (size < 15) Luxury.TextMuted else Luxury.Text)
+    if (day.min == null && day.max == null) return
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        day.min?.let { Temp(it, size.sp, FontWeight.Normal) }
+        if (day.min != null && day.max != null) Text(" / ", fontSize = size.sp, color = Luxury.TextMuted)
+        day.max?.let { Temp(it, size.sp, FontWeight.Normal) }
+    }
 }
 
 // --- settings (board 13 C) ---
@@ -263,9 +328,9 @@ internal fun WeatherSettings(widget: DashboardWidget, frame: SettingsFrame, onSa
         half = half, onHalf = { half = it }, height = height, onHeight = { height = it },
         heightNote = {
             when (it) {
-                WidgetHeight.SMALL -> "Tylko teraz: temperatura, min/max i deszcz."
-                WidgetHeight.MEDIUM -> "Do tego najbliższe godziny co 3 h i ostrzeżenie."
-                WidgetHeight.LARGE -> "Do tego jutro."
+                WidgetHeight.SMALL -> "Tylko teraz: temperatura, min/max, deszcz i wiatr."
+                WidgetHeight.MEDIUM -> "Do tego 4 godziny co 3 h, jutro i ostrzeżenie."
+                WidgetHeight.LARGE -> "Do tego odczuwalna, wilgotność, ciśnienie, wschód i zachód słońca, deszcz co godzinę i 3 kolejne dni."
             }
         },
         ready = places.isNotEmpty(),
@@ -274,7 +339,6 @@ internal fun WeatherSettings(widget: DashboardWidget, frame: SettingsFrame, onSa
         preview = { WeatherWidget(draft, store = null, interactive = false, onSettings = {}) },
     ) {
         LuxurySectionTitle("Miejsca · do ${WeatherPlace.MAX}")
-        if (places.isNotEmpty()) Text("Stuknij nazwę, żeby ją zmienić · przeciągnij za uchwyt, żeby zmienić kolejność", fontSize = 12.sp, color = Luxury.TextMuted)
         val rowPx = with(LocalDensity.current) { 56.dp.toPx() }
         Column {
             places.forEachIndexed { index, place ->

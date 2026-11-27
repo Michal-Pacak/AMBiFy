@@ -237,7 +237,7 @@ internal data class ListsUi(
     fun name(id: String?): String = when (id) {
         null -> ""
         me.id -> "Ty"
-        else -> member(id)?.name ?: "ktoś spoza społeczności"
+        else -> member(id)?.name ?: "ktoś spoza kręgu"
     }
     val reminders: Boolean get() = Feature.LISTS_REMINDERS in features
     val tasksForOthers: Mode get() = me.permissions[Action.LISTS_TASKS_OTHERS] ?: Mode.DENIED
@@ -285,7 +285,7 @@ internal data class ListsUi(
     fun people(list: ListInfo): List<Member> = members.filter { levelOf(list, it).atLeast(AccessLevel.SEE) }
     fun whoSees(list: ListInfo): String {
         val people = people(list)
-        return if (people.size == members.size && members.isNotEmpty()) "widzi cała społeczność"
+        return if (people.size == members.size && members.isNotEmpty()) "widzi cały krąg"
         else "widzi: " + people.joinToString(", ") { if (it.id == me.id) "Ty" else it.name }
     }
 }
@@ -495,10 +495,11 @@ private fun ListsOverview(ui: ListsUi, onOpen: (ListInfo) -> Unit, onDialog: (Li
         Row(verticalAlignment = Alignment.Bottom) {
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 Text("Listy", fontSize = 26.sp, fontFamily = pl.ambif.ambify.ui.theme.Luxury.HeadingFont, fontWeight = FontWeight.Medium)
-                Text("Społeczność: ${ui.me.familyName.orEmpty()}", fontSize = 13.sp, color = Muted)
+                Text(ui.me.familyName.orEmpty(), fontSize = 13.sp, color = Muted)
             }
             SyncMark(ui.status)
             IconButton(onClick = { onDialog(ListDialog.SortLists) }) { Icon(AppIcons.Sort, contentDescription = "Sortuj listy", tint = Muted) }
+            pl.ambif.ambify.ui.help.HelpButton(pl.ambif.ambify.ui.help.Help.LISTS)
         }
         SyncBar(ui, onRetry)
         val visible = ui.data.lists.filter { !it.archived }
@@ -519,7 +520,7 @@ private fun ListsOverview(ui: ListsUi, onOpen: (ListInfo) -> Unit, onDialog: (Li
         if (visible.isEmpty()) {
             FullScreenMessage(
                 MessageKind.INFO, "Nie ma jeszcze list",
-                if (ui.canCreate) "Załóż pierwszą: zakupy, zadania domowe albo terminy opłat." else "Gdy ktoś założy listę dla Ciebie albo dla całej społeczności, pojawi się tutaj.",
+                if (ui.canCreate) "Załóż pierwszą: zakupy, zadania domowe albo terminy opłat." else "Gdy ktoś założy listę dla Ciebie albo dla całego kręgu, pojawi się tutaj.",
                 icon = AppIcons.TaskBox,
             )
         }
@@ -533,9 +534,7 @@ private fun ListsOverview(ui: ListsUi, onOpen: (ListInfo) -> Unit, onDialog: (Li
             }
         }
         if (ui.canCreate) GoldButton("+  Nowa lista") { onDialog(ListDialog.NewList) }
-        if (visible.any { ui.manageable(it) }) {
-            Text("Przytrzymaj listę: Ustawienia · Dostęp · Archiwizuj · Usuń", fontSize = 11.sp, color = Faint, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        }
+        // The hint "Przytrzymaj listę…" is in the help now (0.7.8).
         val archived = ui.data.lists.filter { it.archived && (filter == null || it.type == filter) }
         if (archived.isNotEmpty()) {
             Text(

@@ -1,5 +1,6 @@
 package pl.ambif.ambify.server
 
+import pl.ambif.ambify.server.reports.reportRoutes
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -64,6 +65,7 @@ fun main() {
             dataDir.resolve("lists-files"),
             dataDir.resolve("avatars"),
             dataDir.resolve("wallpapers"),
+            dataDir.resolve("reports"),
         )
     }.start(wait = true)
 }
@@ -81,6 +83,8 @@ fun Application.module(
     photosDir: File = File("avatars"),
     /** 0.7.7: wallpaper photos of own themes, next to the database too. */
     wallpapersDir: File = File("wallpapers"),
+    /** 0.7.9: screenshots of bug reports, next to the database too. */
+    reportsDir: File = File("reports"),
 ) {
     val accounts = AccountService(database, tokens)
     val timetable = TimetableService(database, accounts, vault)
@@ -88,6 +92,7 @@ fun Application.module(
     val lists = ListService(database, accounts, files = listFiles)
     val photos = pl.ambif.ambify.server.accounts.ProfilePhotos(database, accounts, photosDir)
     val themes = pl.ambif.ambify.server.accounts.ThemeService(database, accounts, wallpapersDir)
+    val reports = pl.ambif.ambify.server.reports.ReportService(database, accounts, reportsDir, { releases.latest()?.versionName })
     install(ContentNegotiation) {
         json()
     }
@@ -105,6 +110,7 @@ fun Application.module(
         listRoutes(lists, listFiles)
         releaseRoutes(releases)
         monitorRoutes(monitor)
+        reportRoutes(reports)
         // Light status for the app; any failing check turns it into "degraded".
         get(ApiPaths.HEALTH) {
             val results = diagnostics.run(call.appInfo())

@@ -1,5 +1,7 @@
 package pl.ambif.ambify.server
 
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.core.eq
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,7 +66,21 @@ class ListsTest {
             accounts.register(RegisterRequest(accounts.createInvitation(owner).code, name, email, "haslo1234", "X"))
             return accounts.session(accounts.login(LoginRequest(email, "haslo1234", "X")))
         }
-        return World(database, accounts, lists, owner, join("Bartosz", "bartosz@example.com"), join("Filip", "filip@example.com"), store)
+        val world = World(database, accounts, lists, owner, join("Bartosz", "bartosz@example.com"), join("Filip", "filip@example.com"), store)
+        // Michał set the server up, so he is its Platform Admin — who has every premium (26.11); here he is a plain Owner.
+        world.setAdmin(false)
+        return world
+    }
+
+    private fun World.setAdmin(on: Boolean) = org.jetbrains.exposed.v1.jdbc.transactions.transaction(database) {
+        pl.ambif.ambify.server.accounts.Users.update({ pl.ambif.ambify.server.accounts.Users.id eq owner.userId }) { it[pl.ambif.ambify.server.accounts.Users.platformAdmin] = on }
+    }
+
+    /** A premium grant, given the way the Platform Admin gives it. */
+    private fun World.grant(key: String) {
+        setAdmin(true)
+        accounts.setGrant(owner, accounts.me(owner).communityId!!, key, true)
+        setAdmin(false)
     }
 
     private fun change(kind: ListChangeKind, listId: String, itemId: String? = null, madeAt: Long = now, block: ListChange.() -> ListChange = { this }) =
@@ -264,7 +280,7 @@ class ListsTest {
         val me = w.accounts.me(w.owner).id
         val reminder = ItemValues("Mleko", reminders = listOf(ListReminder(me, ReminderKind.NOTIFICATION)))
         assertFalse(w.add(w.owner, "i3", reminder).ok)
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_REMINDERS", true)
+        w.grant("LISTS_REMINDERS")
         assertTrue(w.add(w.owner, "i4", reminder).ok)
 
         // "Zakończ zakupy": checked items leave the list for the history.
@@ -494,7 +510,7 @@ class ListsTest {
         fun sub(id: String, parent: String, name: String) =
             w.send(w.owner, change(ListChangeKind.ADD_ITEM, "L1", id) { copy(values = ItemValues(name), parentId = parent) }).results.single()
         assertFalse(sub("s1", "p", "Szczoteczka").ok)
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_SUBITEMS", true)
+        w.grant("LISTS_SUBITEMS")
         assertTrue(sub("s1", "p", "Szczoteczka").ok)
         assertTrue(sub("s2", "p", "Pasta").ok)
         assertFalse(sub("s3", "s1", "Nasadka").ok, "no sub-list in a sub-list")
@@ -523,7 +539,7 @@ class ListsTest {
         fun move(who: UserSession, id: String, to: String?) =
             w.send(who, change(ListChangeKind.MOVE_ITEM, "L1", id) { copy(parentId = to) }).results.single()
         assertFalse(move(w.owner, "a", "g").ok, "premium")
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_SUBITEMS", true)
+        w.grant("LISTS_SUBITEMS")
         assertTrue(move(w.owner, "a", "g").ok)
         assertTrue(move(w.owner, "b", "g").ok)
         assertEquals(setOf("a", "b"), w.send(w.user).items.filter { it.parentId == "g" }.map { it.id }.toSet())
@@ -547,7 +563,7 @@ class ListsTest {
         w.add(w.owner, "vac", ItemValues("Odkurzyć"), listId = "T")
         val onlyFilip = change(ListChangeKind.ITEM_ACCESS, "T", "bulb") { copy(access = listOf(ListAccess(userId = w.third.userId, level = AccessLevel.CHECK))) }
         assertFalse(w.send(w.owner, onlyFilip).results.single().ok, "premium")
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_SUBITEMS", true)
+        w.grant("LISTS_SUBITEMS")
         assertFalse(w.send(w.user, change(ListChangeKind.ITEM_ACCESS, "T", "bulb") { copy(access = emptyList()) }).results.single().ok, "only the creator")
         val before = w.send(w.user)
         assertTrue(w.send(w.owner, onlyFilip.copy(id = "again")).results.single().ok)
@@ -574,7 +590,7 @@ class ListsTest {
         w.shoppingList()
         val link = ItemLink("https://www.allegro.pl/oferta/123")
         assertFalse(w.add(w.owner, "i1", ItemValues("Odkurzacz", links = listOf(link))).ok)
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_ATTACHMENTS", true)
+        w.grant("LISTS_ATTACHMENTS")
         assertTrue(w.add(w.owner, "i1", ItemValues("Odkurzacz", links = listOf(link))).ok)
         assertFalse(w.add(w.owner, "i2", ItemValues("X", links = listOf(ItemLink("javascript:alert(1)")))).ok)
         assertFalse(w.add(w.owner, "i3", ItemValues("X", links = (1..6).map { ItemLink("https://a.pl/$it") })).ok)
@@ -613,7 +629,7 @@ class ListsTest {
         w.shoppingList()
         w.add(w.user, "i1", ItemValues("Płytki"))
         assertTrue(w.upload(w.user, "i1", "f0", "a.jpg", "image/jpeg", jpeg).isFailure)
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_ATTACHMENTS", true)
+        w.grant("LISTS_ATTACHMENTS")
 
         val before = w.send(w.third).items.single().rev
         val photo = w.upload(w.user, "i1", "f1", "IMG_1.jpg", "image/jpeg", jpeg).getOrThrow()
@@ -656,7 +672,7 @@ class ListsTest {
         val w = world()
         val bartosz = w.accounts.me(w.user).id
         w.shoppingList(everyone = false, members = listOf(bartosz))
-        w.accounts.setGrant(w.owner, w.accounts.me(w.owner).communityId!!, "LISTS_ATTACHMENTS", true)
+        w.grant("LISTS_ATTACHMENTS")
         w.add(w.user, "i1", ItemValues("Kawa"))
         w.upload(w.user, "i1", "f1", "a.jpg", "image/jpeg", jpeg).getOrThrow()
         assertTrue(runCatching { w.lists.file(w.third, "f1") }.isFailure)
